@@ -1,0 +1,6 @@
+{
+    "superadmin": {
+        "type": "superadmin",
+        "path": "superadmin.json"
+    }
+}

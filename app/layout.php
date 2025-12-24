@@ -1,0 +1,258 @@
+<?php
+declare(strict_types=1);
+
+function set_flash(string $type, string $message): void
+{
+    if (!isset($_SESSION['flashes'])) {
+        $_SESSION['flashes'] = [];
+    }
+    $_SESSION['flashes'][] = ['type' => $type, 'message' => $message];
+}
+
+function consume_flashes(): array
+{
+    $flashes = $_SESSION['flashes'] ?? [];
+    unset($_SESSION['flashes']);
+    return $flashes;
+}
+
+function render_layout(string $title, callable $content): void
+{
+    $appName = get_app_config()['appName'] ?? 'YOJAK';
+    $lang = get_language();
+    $user = current_user();
+    $flashes = consume_flashes();
+    ?>
+    <!DOCTYPE html>
+    <html lang="<?= sanitize($lang); ?>">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title><?= sanitize($title); ?></title>
+        <style>
+            :root {
+                --primary: #1f6feb;
+                --primary-dark: #144ea3;
+                --background: #0d1117;
+                --surface: #161b22;
+                --text: #e6edf3;
+                --muted: #8b949e;
+                --danger: #f85149;
+                --success: #2ea043;
+            }
+            * { box-sizing: border-box; }
+            body {
+                margin: 0;
+                font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+                background: linear-gradient(180deg, #0b1a2a, #0d1117 60%);
+                color: var(--text);
+                min-height: 100vh;
+            }
+            a { color: var(--primary); text-decoration: none; }
+            header {
+                background: rgba(22,27,34,0.9);
+                backdrop-filter: blur(8px);
+                border-bottom: 1px solid #30363d;
+                position: sticky;
+                top: 0;
+                z-index: 10;
+            }
+            .nav {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 12px 18px;
+                max-width: 1100px;
+                margin: 0 auto;
+            }
+            .brand {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-weight: 700;
+                font-size: 18px;
+                letter-spacing: 0.6px;
+            }
+            .brand-logo {
+                width: 36px;
+                height: 36px;
+                background: linear-gradient(135deg, #1f6feb, #2ea043);
+                border-radius: 10px;
+                display: grid;
+                place-items: center;
+                font-weight: 800;
+                color: #fff;
+                box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            }
+            .nav-links {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+            .nav-links a, .nav-links form button {
+                color: var(--text);
+                padding: 8px 12px;
+                border-radius: 8px;
+                border: 1px solid transparent;
+                background: transparent;
+                cursor: pointer;
+                font-weight: 600;
+            }
+            .nav-links a:hover, .nav-links form button:hover {
+                background: #21262d;
+            }
+            .nav-links .primary {
+                background: var(--primary);
+                border-color: var(--primary);
+                color: #fff;
+                box-shadow: 0 4px 12px rgba(31,111,235,0.3);
+            }
+            .container {
+                max-width: 1100px;
+                margin: 24px auto;
+                padding: 0 16px 32px;
+            }
+            .hero {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 16px;
+                align-items: center;
+            }
+            .card {
+                background: var(--surface);
+                border: 1px solid #30363d;
+                border-radius: 14px;
+                padding: 18px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+            }
+            .card h1, .card h2, .card h3 { margin-top: 0; }
+            .muted { color: var(--muted); }
+            .buttons {
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin-top: 12px;
+            }
+            .btn {
+                background: var(--primary);
+                border: 1px solid var(--primary-dark);
+                color: #fff;
+                padding: 10px 14px;
+                border-radius: 10px;
+                cursor: pointer;
+                font-weight: 700;
+                box-shadow: 0 6px 18px rgba(31,111,235,0.25);
+            }
+            .btn.secondary {
+                background: #21262d;
+                border-color: #30363d;
+            }
+            .btn.danger {
+                background: var(--danger);
+                border-color: #c03a34;
+            }
+            form .field {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                margin-bottom: 12px;
+            }
+            input, select {
+                padding: 10px 12px;
+                border-radius: 10px;
+                border: 1px solid #30363d;
+                background: #0d1117;
+                color: var(--text);
+            }
+            .flashes {
+                margin-bottom: 16px;
+                display: grid;
+                gap: 8px;
+            }
+            .flash {
+                padding: 10px 12px;
+                border-radius: 10px;
+                border: 1px solid #30363d;
+                background: #111820;
+                font-weight: 600;
+            }
+            .flash.success { border-color: var(--success); color: #8ce99a; }
+            .flash.error { border-color: var(--danger); color: #f77676; }
+            .lang-toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .pill {
+                padding: 6px 10px;
+                border-radius: 999px;
+                border: 1px solid #30363d;
+                background: #111820;
+                font-size: 12px;
+                color: var(--muted);
+            }
+            .error-card { border-color: var(--danger); }
+            @media (max-width: 600px) {
+                .nav { flex-direction: column; align-items: flex-start; gap: 10px; }
+                .nav-links { width: 100%; }
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <div class="nav">
+                <div class="brand">
+                    <div class="brand-logo">YJ</div>
+                    <div><?= sanitize($appName); ?></div>
+                </div>
+                <div class="nav-links">
+                    <a href="/site/index.php"><?= sanitize(t('nav_home')); ?></a>
+                    <?php if ($user && ($user['type'] ?? '') === 'superadmin'): ?>
+                        <a href="/superadmin/dashboard.php"><?= sanitize(t('nav_dashboard')); ?></a>
+                        <a href="/superadmin/profile.php"><?= sanitize(t('profile')); ?></a>
+                        <form method="post" action="/auth/logout.php" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                            <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
+                        </form>
+                    <?php else: ?>
+                        <a href="/auth/login.php" class="primary"><?= sanitize(t('nav_auth')); ?></a>
+                    <?php endif; ?>
+                    <form method="get" class="lang-toggle">
+                        <span class="pill"><?= sanitize(t('language')); ?></span>
+                        <select name="lang" onchange="this.form.submit()">
+                            <option value="en" <?= $lang === 'en' ? 'selected' : ''; ?>><?= sanitize(t('english')); ?></option>
+                            <option value="hi" <?= $lang === 'hi' ? 'selected' : ''; ?>><?= sanitize(t('hindi')); ?></option>
+                        </select>
+                    </form>
+                </div>
+            </div>
+        </header>
+        <main class="container">
+            <?php if ($flashes): ?>
+                <div class="flashes">
+                    <?php foreach ($flashes as $flash): ?>
+                        <div class="flash <?= sanitize($flash['type']); ?>"><?= sanitize($flash['message']); ?></div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            <?php $content(); ?>
+        </main>
+    </body>
+    </html>
+    <?php
+}
+
+function safe_page(callable $callback): void
+{
+    try {
+        $callback();
+    } catch (Throwable $e) {
+        logEvent(DATA_PATH . '/logs/php_errors.log', [
+            'event' => 'page_exception',
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        render_error_page();
+    }
+}

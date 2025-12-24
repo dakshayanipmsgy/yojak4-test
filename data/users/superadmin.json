@@ -1,0 +1,11 @@
+{
+    "type": "superadmin",
+    "username": "superadmin",
+    "passwordHash": "$2y$12$Kvlv1KkanSOj9atW8.CfGeWWhmNOk6U/UOsX3HaHa6j9W.mbHZctu",
+    "mustResetPassword": true,
+    "createdAt": "2025-12-25T01:14:07+05:30",
+    "updatedAt": "2025-12-25T01:14:07+05:30",
+    "lastLoginAt": null,
+    "failedLoginCount": 0,
+    "status": "active"
+}
