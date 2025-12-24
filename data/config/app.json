@@ -1,0 +1,14 @@
+{
+  "appName": "YOJAK",
+  "timezone": "Asia/Kolkata",
+  "langDefault": "hi",
+  "security": {
+    "csrfSecretRotationDays": 30,
+    "rateLimit": {
+      "windowSeconds": 900,
+      "maxAttempts": 8,
+      "blockSeconds": 1800
+    }
+  },
+  "restrictions": "No bid values or rates are allowed anywhere in the application."
+}
