@@ -26,6 +26,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/security/ratelimits',
         DATA_PATH . '/logs',
         DATA_PATH . '/locks',
+        DATA_PATH . '/ai',
     ];
 
     foreach ($directories as $dir) {
@@ -216,4 +217,3 @@ function render_error_page(string $message = ''): void
         <?php
     });
 }
-

@@ -10,6 +10,7 @@ require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/departments.php';
+require_once __DIR__ . '/ai.php';
 
 set_default_timezone();
 start_app_session();
