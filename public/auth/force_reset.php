@@ -3,17 +3,28 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../app/bootstrap.php';
 
 safe_page(function () {
-    $user = require_role('superadmin');
-    $record = get_user_record($user['username']);
+    $user = require_login();
+    $errors = [];
+    $record = null;
+    $redirectAfter = '/auth/login.php';
+    $isDepartment = ($user['type'] ?? '') === 'department';
+
+    if (($user['type'] ?? '') === 'superadmin') {
+        $record = get_user_record($user['username']);
+        $redirectAfter = '/superadmin/dashboard.php';
+    } elseif ($isDepartment) {
+        $record = load_active_department_user($user['username']);
+        $redirectAfter = '/department/dashboard.php';
+    }
+
     if (!$record) {
         logout_user();
         redirect('/auth/login.php');
     }
     if (empty($record['mustResetPassword'])) {
-        redirect('/superadmin/dashboard.php');
+        redirect($redirectAfter);
     }
 
-    $errors = [];
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_csrf();
         $newPassword = $_POST['password_new'] ?? '';
@@ -27,14 +38,18 @@ safe_page(function () {
         }
 
         if (!$errors) {
-            update_password($record['username'], $newPassword);
+            if (($record['type'] ?? '') === 'superadmin') {
+                update_password($record['username'], $newPassword);
+            } elseif ($isDepartment) {
+                update_department_user_password($record['deptId'], $record['fullUserId'], $newPassword);
+            }
             logEvent(DATA_PATH . '/logs/auth.log', [
                 'event' => 'password_reset',
-                'username' => $record['username'],
+                'username' => $record['username'] ?? ($record['fullUserId'] ?? 'unknown'),
                 'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
             ]);
             set_flash('success', t('reset_success'));
-            redirect('/superadmin/dashboard.php');
+            redirect($redirectAfter);
         }
     }
 

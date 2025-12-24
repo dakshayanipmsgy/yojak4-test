@@ -193,6 +193,27 @@ function render_layout(string $title, callable $content): void
                 color: var(--muted);
             }
             .error-card { border-color: var(--danger); }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 12px;
+            }
+            th, td {
+                padding: 10px;
+                border-bottom: 1px solid #30363d;
+                text-align: left;
+            }
+            th { color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px; }
+            tr:hover td { background: #0f1520; }
+            .tag {
+                display: inline-block;
+                padding: 4px 8px;
+                border-radius: 999px;
+                border: 1px solid #30363d;
+                font-size: 12px;
+                color: var(--muted);
+            }
+            .tag.success { border-color: var(--success); color: #8ce99a; }
             @media (max-width: 600px) {
                 .nav { flex-direction: column; align-items: flex-start; gap: 10px; }
                 .nav-links { width: 100%; }
@@ -210,8 +231,15 @@ function render_layout(string $title, callable $content): void
                     <a href="/site/index.php"><?= sanitize(t('nav_home')); ?></a>
                     <?php if ($user && ($user['type'] ?? '') === 'superadmin'): ?>
                         <a href="/superadmin/dashboard.php"><?= sanitize(t('nav_dashboard')); ?></a>
+                        <a href="/superadmin/departments.php"><?= sanitize('Departments'); ?></a>
                         <a href="/superadmin/profile.php"><?= sanitize(t('profile')); ?></a>
                         <form method="post" action="/auth/logout.php" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                            <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
+                        </form>
+                    <?php elseif ($user && ($user['type'] ?? '') === 'department'): ?>
+                        <a href="/department/dashboard.php"><?= sanitize('Department'); ?></a>
+                        <form method="post" action="/department/logout.php" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
                         </form>
