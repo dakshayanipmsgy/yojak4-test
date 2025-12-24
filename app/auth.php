@@ -139,8 +139,11 @@ function login_user(array $user): void
 {
     session_regenerate_id(true);
     $_SESSION['user'] = [
-        'username' => $user['username'],
+        'username' => $user['username'] ?? ($user['fullUserId'] ?? ''),
         'type' => $user['type'],
+        'deptId' => $user['deptId'] ?? null,
+        'roleId' => $user['roleId'] ?? null,
+        'displayName' => $user['displayName'] ?? ($user['username'] ?? ''),
         'mustResetPassword' => $user['mustResetPassword'] ?? false,
         'lastLoginAt' => $user['lastLoginAt'] ?? null,
     ];
@@ -188,6 +191,26 @@ function authenticate_superadmin(string $username, string $password): bool
     return password_verify($password, $record['passwordHash'] ?? '');
 }
 
+function authenticate_department_user(string $identifier, string $password): ?array
+{
+    $parsed = parse_department_login_identifier($identifier);
+    if (!$parsed || $parsed['roleId'] !== 'admin') {
+        return null;
+    }
+    $department = load_department($parsed['deptId']);
+    if (!$department || ($department['status'] ?? '') !== 'active') {
+        return null;
+    }
+    $record = load_active_department_user($parsed['fullUserId']);
+    if (!$record || ($record['status'] ?? '') !== 'active') {
+        return null;
+    }
+    if (!password_verify($password, $record['passwordHash'] ?? '')) {
+        return null;
+    }
+    return $record;
+}
+
 function update_last_login(string $username): void
 {
     $record = get_user_record($username);
@@ -223,4 +246,3 @@ function update_password(string $username, string $newPassword): void
     persist_user_record($record);
     $_SESSION['user']['mustResetPassword'] = false;
 }
-
