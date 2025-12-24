@@ -1,5 +1,0 @@
-/data/logs/*.log
-/data/sessions/*
-/data/security/ratelimits/*.json
-/vendor/
-.DS_Store
