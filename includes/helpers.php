@@ -161,7 +161,6 @@ function ensureDataScaffolding(): void {
     ensureDirectory(dataPath('logs'));
     ensureDirectory(dataPath('locks'));
     ensureDirectory(dataPath('sessions'));
-    ensureDirectory(dataPath('departments'));
 }
 
 function translations(): array {
@@ -321,7 +320,6 @@ function renderLayoutStart(string $title, string $lang, array $config, ?array $u
     $otherLang = $lang === 'en' ? 'hi' : 'en';
     $langName = $lang === 'en' ? t('langEnglish', 'en') : t('langHindi', 'hi');
     $navNote = t('navNote', $lang);
-    $userType = $user['type'] ?? null;
     echo "<!DOCTYPE html><html lang=\"{$lang}\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
     echo "<title>{$displayTitle} | {$appName}</title>";
     echo '<style>' . baseStyles() . '</style>';
@@ -332,24 +330,17 @@ function renderLayoutStart(string $title, string $lang, array $config, ?array $u
         echo '<div class="nav-links">';
         echo '<a href="/site/index.php">' . t('welcome', $lang) . '</a>';
         if ($user) {
-            if ($userType === 'superadmin') {
-                echo '<a href="/superadmin/dashboard.php">' . t('dashboard', $lang) . '</a>';
-                echo '<a href="/superadmin/departments.php">Departments</a>';
-                echo '<a href="/superadmin/profile.php">' . t('profile', $lang) . '</a>';
-            } elseif ($userType === 'department') {
-                echo '<a href="/department/dashboard.php">Dept Dashboard</a>';
-            }
+            echo '<a href="/superadmin/dashboard.php">' . t('dashboard', $lang) . '</a>';
+            echo '<a href="/superadmin/profile.php">' . t('profile', $lang) . '</a>';
         } else {
             echo '<a href="/auth/login.php">' . t('login', $lang) . '</a>';
-            echo '<a href="/department/login.php">Department Login</a>';
         }
         echo '</div>';
         echo '<div class="nav-actions">';
         echo '<span class="nav-note">' . escape($navNote) . '</span>';
         echo '<a class="chip" href="?lang=' . $otherLang . '" aria-label="' . escape(t('rememberLanguage', $lang)) . '">' . escape($toggleLabel) . '</a>';
         if ($user) {
-            $logoutAction = $userType === 'department' ? '/department/logout.php' : '/auth/logout.php';
-            echo '<form class="inline" method="POST" action="' . $logoutAction . '">' . csrfInput() . '<button class="ghost" type="submit">' . t('logout', $lang) . '</button></form>';
+            echo '<form class="inline" method="POST" action="/auth/logout.php">' . csrfInput() . '<button class="ghost" type="submit">' . t('logout', $lang) . '</button></form>';
         }
         echo '</div>';
         echo '</header>';
@@ -410,21 +401,6 @@ function baseStyles(): string {
     .form-actions { display:flex; justify-content: flex-end; }
     .friendly-error { text-align:center; padding: 32px; }
     .nav-note { font-size:12px; color: var(--muted); }
-    .table { width:100%; border-collapse: collapse; margin-top: 12px; }
-    .table th, .table td { text-align:left; padding: 12px; border-bottom:1px solid var(--border); }
-    .table th { color: var(--muted); font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; }
-    .table tr:hover td { background: rgba(255,255,255,0.02); }
-    .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background: rgba(6,182,212,0.15); color:#67e8f9; font-weight:600; font-size:12px; }
-    .pill.danger { background: rgba(239,68,68,0.15); color:#fecdd3; }
-    .pill.muted { background: rgba(148,163,184,0.15); color:#cbd5e1; }
-    .stack { display:flex; flex-direction:column; gap:6px; }
-    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .row .input-group { flex:1; margin:0; }
-    .ghost-btn { background: transparent; border:1px solid var(--border); color: var(--text); padding:8px 14px; border-radius: 10px; cursor:pointer; }
-    .ghost-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .hint { font-size:12px; color: var(--muted); }
-    .section-title { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .card-subtitle { color: var(--muted); margin-top:0; }
     @media(max-width: 640px) {
         .topbar { flex-wrap: wrap; gap:10px; }
         .nav-links { width:100%; }

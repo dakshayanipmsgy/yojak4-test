@@ -2,7 +2,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/helpers.php';
-require_once __DIR__ . '/departments.php';
 
 function currentUser(): ?array {
     if (!isset($_SESSION['username'])) {
@@ -40,28 +39,17 @@ function userPath(string $username): ?string {
     if ($username === 'superadmin') {
         return dataPath('users/superadmin.json');
     }
-
-    $parsed = parseDepartmentUserId($username);
-    if ($parsed) {
-        return departmentUserPath($parsed['deptId'], $parsed['fullUserId'], 'active');
-    }
-
     return null;
 }
 
-function requireAuth($role = 'superadmin'): array {
+function requireAuth(string $role = 'superadmin'): array {
     $user = currentUser();
-    $expectedRoles = is_array($role) ? $role : [$role];
-    $expectedRoles = array_filter($expectedRoles);
     if (!$user) {
-        $loginPath = (in_array('department', $expectedRoles, true) && !in_array('superadmin', $expectedRoles, true))
-            ? '/department/login.php'
-            : '/auth/login.php';
-        header('Location: ' . $loginPath);
+        header('Location: /auth/login.php');
         exit;
     }
 
-    if (!empty($expectedRoles) && !in_array($user['type'] ?? '', $expectedRoles, true)) {
+    if ($role && (($user['type'] ?? '') !== $role)) {
         header('HTTP/1.1 403 Forbidden');
         echo 'Access denied';
         exit;
@@ -190,7 +178,6 @@ function authenticate(string $username, string $password, array $config): array 
     logEvent('auth.log', [
         'event' => 'login_success',
         'username' => $username,
-        'type' => $user['type'] ?? null,
     ]);
 
     return ['success' => true, 'user' => $user];
@@ -208,3 +195,4 @@ function requirePostCsrf(?string $token): void {
         exit;
     }
 }
+

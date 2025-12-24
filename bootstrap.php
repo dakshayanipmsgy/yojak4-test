@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/departments.php';
 require_once __DIR__ . '/includes/safe_page.php';
 
 // Enforce timezone before any timestamps are generated.
