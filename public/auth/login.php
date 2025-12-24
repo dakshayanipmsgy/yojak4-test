@@ -7,6 +7,10 @@ if ($user) {
         header('Location: /auth/force_reset.php');
         exit;
     }
+    if (($user['type'] ?? '') === 'department') {
+        header('Location: /department/dashboard.php');
+        exit;
+    }
     header('Location: /superadmin/dashboard.php');
     exit;
 }
