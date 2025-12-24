@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../../bootstrap.php';
 
-$user = requireAuth(['superadmin', 'department']);
+$user = requireAuth('superadmin');
 
 $errors = [];
 $success = false;
@@ -33,8 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         saveUser($user);
         logEvent('auth.log', ['event' => 'password_reset', 'username' => $user['username']]);
         $success = true;
-        $redirectPath = ($user['type'] ?? '') === 'department' ? '/department/dashboard.php' : '/superadmin/dashboard.php';
-        header('Location: ' . $redirectPath);
+        header('Location: /superadmin/dashboard.php');
         exit;
     }
 }
