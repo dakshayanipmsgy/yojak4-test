@@ -139,9 +139,10 @@ function login_user(array $user): void
 {
     session_regenerate_id(true);
     $_SESSION['user'] = [
-        'username' => $user['username'] ?? ($user['fullUserId'] ?? ''),
+        'username' => $user['username'] ?? ($user['fullUserId'] ?? ($user['mobile'] ?? '')),
         'type' => $user['type'],
         'deptId' => $user['deptId'] ?? null,
+        'yojId' => $user['yojId'] ?? null,
         'roleId' => $user['roleId'] ?? null,
         'displayName' => $user['displayName'] ?? ($user['username'] ?? ''),
         'mustResetPassword' => $user['mustResetPassword'] ?? false,
@@ -175,8 +176,20 @@ function require_login(): array
 
 function require_role(string $role): array
 {
-    $user = require_login();
+    $user = current_user();
+    if (!$user) {
+        if ($role === 'contractor') {
+            redirect('/contractor/login.php');
+        }
+        if ($role === 'department') {
+            redirect('/department/login.php');
+        }
+        redirect('/auth/login.php');
+    }
     if (($user['type'] ?? '') !== $role) {
+        if ($role === 'contractor') {
+            redirect('/contractor/login.php');
+        }
         redirect('/auth/login.php');
     }
     return $user;
@@ -245,4 +258,26 @@ function update_password(string $username, string $newPassword): void
     $record['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
     persist_user_record($record);
     $_SESSION['user']['mustResetPassword'] = false;
+}
+
+function authenticate_contractor_user(string $mobile, string $password): ?array
+{
+    $contractor = find_contractor_by_mobile($mobile);
+    if (!$contractor || ($contractor['status'] ?? '') !== 'approved') {
+        return null;
+    }
+    if (!password_verify($password, $contractor['passwordHash'] ?? '')) {
+        return null;
+    }
+    return $contractor;
+}
+
+function update_contractor_last_login(string $yojId): void
+{
+    $contractor = load_contractor($yojId);
+    if (!$contractor) {
+        return;
+    }
+    $contractor['lastLoginAt'] = now_kolkata()->format(DateTime::ATOM);
+    save_contractor($contractor);
 }

@@ -231,6 +231,7 @@ function render_layout(string $title, callable $content): void
                     <a href="/site/index.php"><?= sanitize(t('nav_home')); ?></a>
                     <?php if ($user && ($user['type'] ?? '') === 'superadmin'): ?>
                         <a href="/superadmin/dashboard.php"><?= sanitize(t('nav_dashboard')); ?></a>
+                        <a href="/superadmin/contractors.php"><?= sanitize('Contractors'); ?></a>
                         <a href="/superadmin/departments.php"><?= sanitize('Departments'); ?></a>
                         <a href="/superadmin/profile.php"><?= sanitize(t('profile')); ?></a>
                         <form method="post" action="/auth/logout.php" style="display:inline;">
@@ -243,7 +244,15 @@ function render_layout(string $title, callable $content): void
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
                         </form>
+                    <?php elseif ($user && ($user['type'] ?? '') === 'contractor'): ?>
+                        <a href="/contractor/dashboard.php"><?= sanitize('Contractor'); ?></a>
+                        <a href="/contractor/vault.php"><?= sanitize('Vault'); ?></a>
+                        <form method="post" action="/contractor/logout.php" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                            <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
+                        </form>
                     <?php else: ?>
+                        <a href="/contractor/login.php"><?= sanitize('Contractor Login'); ?></a>
                         <a href="/auth/login.php" class="primary"><?= sanitize(t('nav_auth')); ?></a>
                     <?php endif; ?>
                     <form method="get" class="lang-toggle">
