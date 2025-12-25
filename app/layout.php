@@ -233,6 +233,11 @@ function render_layout(string $title, callable $content): void
                         <a href="/superadmin/dashboard.php"><?= sanitize(t('nav_dashboard')); ?></a>
                         <a href="/superadmin/contractors.php"><?= sanitize('Contractors'); ?></a>
                         <a href="/superadmin/departments.php"><?= sanitize('Departments'); ?></a>
+                        <a href="/superadmin/employees.php"><?= sanitize('Employees'); ?></a>
+                        <a href="/superadmin/stats.php"><?= sanitize('Stats'); ?></a>
+                        <a href="/superadmin/reset_requests.php"><?= sanitize('Reset Approvals'); ?></a>
+                        <a href="/superadmin/backup.php"><?= sanitize('Backups'); ?></a>
+                        <a href="/superadmin/factory_reset.php"><?= sanitize('Factory Reset'); ?></a>
                         <a href="/superadmin/profile.php"><?= sanitize(t('profile')); ?></a>
                         <form method="post" action="/auth/logout.php" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
@@ -263,6 +268,24 @@ function render_layout(string $title, callable $content): void
                         <a href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
                         <a href="/contractor/tender_archive.php"><?= sanitize('Tender Archive'); ?></a>
                         <form method="post" action="/contractor/logout.php" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                            <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
+                        </form>
+                    <?php elseif ($user && ($user['type'] ?? '') === 'employee'): ?>
+                        <a href="/staff/dashboard.php"><?= sanitize('Staff'); ?></a>
+                        <?php if (in_array('tickets', $user['permissions'] ?? [], true)): ?>
+                            <a href="/staff/tickets.php"><?= sanitize('Tickets'); ?></a>
+                        <?php endif; ?>
+                        <?php if (in_array('audit_view', $user['permissions'] ?? [], true)): ?>
+                            <a href="/staff/audit.php"><?= sanitize('Audit'); ?></a>
+                        <?php endif; ?>
+                        <?php if (in_array('stats_view', $user['permissions'] ?? [], true)): ?>
+                            <a href="/superadmin/stats.php"><?= sanitize('Stats'); ?></a>
+                        <?php endif; ?>
+                        <?php if (in_array('reset_approvals', $user['permissions'] ?? [], true)): ?>
+                            <a href="/superadmin/reset_requests.php"><?= sanitize('Reset Approvals'); ?></a>
+                        <?php endif; ?>
+                        <form method="post" action="/auth/logout.php" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
                         </form>

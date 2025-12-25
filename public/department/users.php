@@ -140,9 +140,9 @@ safe_page(function () {
                         <?php foreach ($resetRequests as $req): ?>
                             <tr>
                                 <td><?= sanitize($req['requestId'] ?? ''); ?></td>
-                                <td><?= sanitize($req['userId'] ?? ''); ?></td>
+                                <td><?= sanitize($req['fullUserId'] ?? ''); ?></td>
                                 <td><span class="tag"><?= sanitize($req['status'] ?? ''); ?></span></td>
-                                <td><?= sanitize($req['createdAt'] ?? ''); ?></td>
+                                <td><?= sanitize($req['requestedAt'] ?? ''); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>

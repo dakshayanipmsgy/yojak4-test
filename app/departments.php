@@ -320,7 +320,7 @@ function create_department_admin(string $deptId, string $adminShortId, string $p
     return $user;
 }
 
-function update_department_user_password(string $deptId, string $fullUserId, string $newPassword): void
+function update_department_user_password(string $deptId, string $fullUserId, string $newPassword, bool $mustReset = false): void
 {
     $record = load_active_department_user($fullUserId);
     if (!$record || $record['deptId'] !== $deptId) {
@@ -328,11 +328,13 @@ function update_department_user_password(string $deptId, string $fullUserId, str
     }
 
     $record['passwordHash'] = password_hash($newPassword, PASSWORD_DEFAULT);
-    $record['mustResetPassword'] = false;
+    $record['mustResetPassword'] = $mustReset;
     $record['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
 
     writeJsonAtomic(department_user_path($deptId, $fullUserId, false), $record);
-    $_SESSION['user']['mustResetPassword'] = false;
+    if (!$mustReset) {
+        $_SESSION['user']['mustResetPassword'] = false;
+    }
 }
 
 function update_department_last_login(string $fullUserId): void
@@ -385,10 +387,6 @@ function ensure_department_env(string $deptId): void
 
     if (!file_exists(department_requirements_path($deptId) . '/sets.json')) {
         writeJsonAtomic(department_requirements_path($deptId) . '/sets.json', []);
-    }
-
-    if (!file_exists(department_reset_requests_path($deptId))) {
-        writeJsonAtomic(department_reset_requests_path($deptId), []);
     }
 
     if (!file_exists(department_dak_path($deptId) . '/index.json')) {
@@ -1014,32 +1012,97 @@ function move_dak_item(string $deptId, string $dakId, string $location): bool
     return $found;
 }
 
+function password_reset_index_path(): string
+{
+    return DATA_PATH . '/security/password_resets/index.json';
+}
+
+function ensure_password_reset_index(): void
+{
+    $dir = dirname(password_reset_index_path());
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+    if (!file_exists(password_reset_index_path())) {
+        writeJsonAtomic(password_reset_index_path(), []);
+    }
+}
+
+function load_all_password_reset_requests(): array
+{
+    ensure_password_reset_index();
+    $requests = readJson(password_reset_index_path());
+    return is_array($requests) ? array_values($requests) : [];
+}
+
+function save_all_password_reset_requests(array $requests): void
+{
+    ensure_password_reset_index();
+    writeJsonAtomic(password_reset_index_path(), array_values($requests));
+}
+
+function find_password_reset_request(string $requestId): ?array
+{
+    foreach (load_all_password_reset_requests() as $request) {
+        if (($request['requestId'] ?? '') === $requestId) {
+            return $request;
+        }
+    }
+    return null;
+}
+
 function load_password_reset_requests(string $deptId): array
 {
-    ensure_department_env($deptId);
-    $path = department_reset_requests_path($deptId);
-    $requests = readJson($path);
-    return is_array($requests) ? array_values($requests) : [];
+    $requests = load_all_password_reset_requests();
+    return array_values(array_filter($requests, fn($req) => ($req['deptId'] ?? '') === $deptId));
 }
 
 function add_password_reset_request(string $deptId, string $fullUserId, string $requestedBy): array
 {
-    $requests = load_password_reset_requests($deptId);
-    $existing = array_values(array_filter($requests, fn($req) => ($req['userId'] ?? '') === $fullUserId && ($req['status'] ?? '') === 'pending'));
+    ensure_department_env($deptId);
+    $requests = load_all_password_reset_requests();
+    $existing = array_values(array_filter(
+        $requests,
+        fn($req) => ($req['fullUserId'] ?? '') === $fullUserId
+            && ($req['deptId'] ?? '') === $deptId
+            && ($req['status'] ?? '') === 'pending'
+    ));
     if ($existing) {
         return $existing[0];
     }
     $req = [
         'requestId' => 'RESET-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
-        'userId' => $fullUserId,
         'deptId' => $deptId,
+        'fullUserId' => strtolower($fullUserId),
         'status' => 'pending',
         'requestedBy' => $requestedBy,
-        'createdAt' => now_kolkata()->format(DateTime::ATOM),
+        'requestedAt' => now_kolkata()->format(DateTime::ATOM),
+        'decidedAt' => null,
+        'decidedBy' => null,
     ];
     $requests[] = $req;
-    writeJsonAtomic(department_reset_requests_path($deptId), $requests);
+    save_all_password_reset_requests($requests);
     return $req;
+}
+
+function update_password_reset_status(string $requestId, string $status, string $decidedBy): ?array
+{
+    $requests = load_all_password_reset_requests();
+    $updated = null;
+    foreach ($requests as &$req) {
+        if (($req['requestId'] ?? '') === $requestId) {
+            $req['status'] = $status;
+            $req['decidedAt'] = now_kolkata()->format(DateTime::ATOM);
+            $req['decidedBy'] = $decidedBy;
+            $updated = $req;
+            break;
+        }
+    }
+    unset($req);
+    if ($updated) {
+        save_all_password_reset_requests($requests);
+    }
+    return $updated;
 }
 
 function department_health_scan(string $deptId): array
