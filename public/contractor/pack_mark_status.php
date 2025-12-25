@@ -10,10 +10,11 @@ safe_page(function () {
     require_csrf();
     $user = require_role('contractor');
     $yojId = $user['yojId'];
-    ensure_packs_env($yojId);
-
     $packId = trim($_POST['packId'] ?? '');
-    $pack = $packId !== '' ? load_pack($yojId, $packId) : null;
+    $context = detect_pack_context($packId);
+    ensure_packs_env($yojId, $context);
+
+    $pack = $packId !== '' ? load_pack($yojId, $packId, $context) : null;
     if (!$pack || ($pack['yojId'] ?? '') !== $yojId) {
         render_error_page('Pack not found.');
         return;
@@ -36,7 +37,7 @@ safe_page(function () {
 
     $pack['items'] = $items;
     $pack['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
-    save_pack($pack);
+    save_pack($pack, $context);
 
     pack_log([
         'event' => 'statuses_updated',

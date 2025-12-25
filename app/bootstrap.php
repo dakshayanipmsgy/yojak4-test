@@ -12,6 +12,7 @@ require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/departments.php';
 require_once __DIR__ . '/contractors.php';
 require_once __DIR__ . '/offline_tenders.php';
+require_once __DIR__ . '/workorders.php';
 require_once __DIR__ . '/tender_archive.php';
 require_once __DIR__ . '/packs.php';
 require_once __DIR__ . '/ai.php';

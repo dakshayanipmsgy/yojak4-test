@@ -3,26 +3,31 @@ declare(strict_types=1);
 
 const PACKS_LOG = DATA_PATH . '/logs/packs.log';
 
-function packs_root(string $yojId): string
+function packs_root(string $yojId, string $context = 'tender'): string
 {
-    return contractors_approved_path($yojId) . '/packs';
+    return contractors_approved_path($yojId) . ($context === 'workorder' ? '/packs_workorder' : '/packs');
 }
 
-function packs_upload_root(string $yojId): string
+function packs_upload_root(string $yojId, string $context = 'tender'): string
 {
-    return PUBLIC_PATH . '/uploads/contractors/' . $yojId . '/packs';
+    return PUBLIC_PATH . '/uploads/contractors/' . $yojId . ($context === 'workorder' ? '/packs_workorder' : '/packs');
 }
 
-function packs_index_path(string $yojId): string
+function packs_index_path(string $yojId, string $context = 'tender'): string
 {
-    return packs_root($yojId) . '/index.json';
+    return packs_root($yojId, $context) . '/index.json';
 }
 
-function ensure_packs_env(string $yojId): void
+function detect_pack_context(string $packId): string
+{
+    return str_starts_with($packId, 'WOPK-') ? 'workorder' : 'tender';
+}
+
+function ensure_packs_env(string $yojId, string $context = 'tender'): void
 {
     $directories = [
-        packs_root($yojId),
-        packs_upload_root($yojId),
+        packs_root($yojId, $context),
+        packs_upload_root($yojId, $context),
     ];
 
     foreach ($directories as $dir) {
@@ -31,8 +36,8 @@ function ensure_packs_env(string $yojId): void
         }
     }
 
-    if (!file_exists(packs_index_path($yojId))) {
-        writeJsonAtomic(packs_index_path($yojId), []);
+    if (!file_exists(packs_index_path($yojId, $context))) {
+        writeJsonAtomic(packs_index_path($yojId, $context), []);
     }
 
     if (!file_exists(PACKS_LOG)) {
@@ -40,55 +45,61 @@ function ensure_packs_env(string $yojId): void
     }
 }
 
-function packs_index(string $yojId): array
+function packs_index(string $yojId, string $context = 'tender'): array
 {
-    $index = readJson(packs_index_path($yojId));
+    $index = readJson(packs_index_path($yojId, $context));
     return is_array($index) ? array_values($index) : [];
 }
 
-function save_packs_index(string $yojId, array $entries): void
+function save_packs_index(string $yojId, array $entries, string $context = 'tender'): void
 {
-    writeJsonAtomic(packs_index_path($yojId), array_values($entries));
+    writeJsonAtomic(packs_index_path($yojId, $context), array_values($entries));
 }
 
-function pack_dir(string $yojId, string $packId): string
+function pack_dir(string $yojId, string $packId, string $context = 'tender'): string
 {
-    return packs_root($yojId) . '/' . $packId;
+    return packs_root($yojId, $context) . '/' . $packId;
 }
 
-function pack_path(string $yojId, string $packId): string
+function pack_path(string $yojId, string $packId, string $context = 'tender'): string
 {
-    return pack_dir($yojId, $packId) . '/pack.json';
+    return pack_dir($yojId, $packId, $context) . '/pack.json';
 }
 
-function pack_upload_dir(string $yojId, string $packId, ?string $itemId = null): string
+function pack_upload_dir(string $yojId, string $packId, ?string $itemId = null, string $context = 'tender'): string
 {
-    $base = packs_upload_root($yojId) . '/' . $packId . '/items';
+    $base = packs_upload_root($yojId, $context) . '/' . $packId . '/items';
     if ($itemId !== null) {
         $base .= '/' . $itemId;
     }
     return $base;
 }
 
-function pack_generated_dir(string $yojId, string $packId): string
+function pack_generated_dir(string $yojId, string $packId, string $context = 'tender'): string
 {
-    return packs_upload_root($yojId) . '/' . $packId . '/generated';
+    return packs_upload_root($yojId, $context) . '/' . $packId . '/generated';
 }
 
-function generate_pack_id(string $yojId): string
+function generate_pack_id(string $yojId, string $context = 'tender'): string
 {
-    ensure_packs_env($yojId);
+    ensure_packs_env($yojId, $context);
     do {
         $suffix = strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
-        $candidate = 'PACK-' . $suffix;
-    } while (file_exists(pack_path($yojId, $candidate)));
+        $prefix = $context === 'workorder' ? 'WOPK-' : 'PACK-';
+        $candidate = $prefix . $suffix;
+    } while (file_exists(pack_path($yojId, $candidate, $context)));
 
     return $candidate;
 }
 
-function load_pack(string $yojId, string $packId): ?array
+function load_pack(string $yojId, string $packId, string $context = 'tender'): ?array
 {
-    $path = pack_path($yojId, $packId);
+    $path = pack_path($yojId, $packId, $context);
+    if (!file_exists($path) && $context === 'tender') {
+        $altContext = detect_pack_context($packId);
+        $path = pack_path($yojId, $packId, $altContext);
+        $context = $altContext;
+    }
     if (!file_exists($path)) {
         return null;
     }
@@ -207,18 +218,18 @@ function pack_summary(array $pack): array
     ];
 }
 
-function save_pack(array $pack): void
+function save_pack(array $pack, string $context = 'tender'): void
 {
     if (empty($pack['packId']) || empty($pack['yojId'])) {
         throw new InvalidArgumentException('Pack id or contractor id missing');
     }
 
-    ensure_packs_env($pack['yojId']);
+    ensure_packs_env($pack['yojId'], $context);
 
     $pack['status'] = resolve_pack_status($pack);
     $pack['updatedAt'] = $pack['updatedAt'] ?? now_kolkata()->format(DateTime::ATOM);
 
-    $path = pack_path($pack['yojId'], $pack['packId']);
+    $path = pack_path($pack['yojId'], $pack['packId'], $context);
     $dir = dirname($path);
     if (!is_dir($dir)) {
         mkdir($dir, 0775, true);
@@ -226,7 +237,7 @@ function save_pack(array $pack): void
 
     writeJsonAtomic($path, $pack);
 
-    $index = packs_index($pack['yojId']);
+    $index = packs_index($pack['yojId'], $context);
     $summary = pack_summary($pack);
     $found = false;
     foreach ($index as &$entry) {
@@ -242,15 +253,15 @@ function save_pack(array $pack): void
         $index[] = $summary;
     }
 
-    save_packs_index($pack['yojId'], $index);
+    save_packs_index($pack['yojId'], $index, $context);
 }
 
-function find_pack_by_source(string $yojId, string $type, string $sourceId): ?array
+function find_pack_by_source(string $yojId, string $type, string $sourceId, string $context = 'tender'): ?array
 {
-    foreach (packs_index($yojId) as $entry) {
+    foreach (packs_index($yojId, $context) as $entry) {
         $source = $entry['sourceTender'] ?? [];
         if (($source['type'] ?? '') === $type && ($source['id'] ?? '') === $sourceId) {
-            return load_pack($yojId, $entry['packId']);
+            return load_pack($yojId, $entry['packId'], $context);
         }
     }
     return null;
