@@ -148,6 +148,13 @@ function login_user(array $user): void
         'mustResetPassword' => $user['mustResetPassword'] ?? false,
         'lastLoginAt' => $user['lastLoginAt'] ?? null,
     ];
+
+    if (($user['type'] ?? '') === 'employee') {
+        $_SESSION['user']['empId'] = $user['empId'] ?? null;
+        $_SESSION['user']['role'] = $user['role'] ?? null;
+        $_SESSION['user']['permissions'] = $user['permissions'] ?? [];
+        $_SESSION['user']['status'] = $user['status'] ?? null;
+    }
 }
 
 function logout_user(): void
@@ -189,6 +196,9 @@ function require_role(string $role): array
     if (($user['type'] ?? '') !== $role) {
         if ($role === 'contractor') {
             redirect('/contractor/login.php');
+        }
+        if ($role === 'employee') {
+            redirect('/auth/login.php');
         }
         redirect('/auth/login.php');
     }
@@ -280,4 +290,18 @@ function update_contractor_last_login(string $yojId): void
     }
     $contractor['lastLoginAt'] = now_kolkata()->format(DateTime::ATOM);
     save_contractor($contractor);
+}
+
+function authenticate_employee(string $username, string $password): ?array
+{
+    $record = find_employee_by_username($username);
+    if (!$record || ($record['status'] ?? '') !== 'active') {
+        return null;
+    }
+
+    if (!password_verify($password, $record['passwordHash'] ?? '')) {
+        return null;
+    }
+
+    return $record;
 }

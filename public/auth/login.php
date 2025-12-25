@@ -6,6 +6,7 @@ safe_page(function () {
     $title = get_app_config()['appName'] . ' | ' . t('login');
     $errors = [];
     $username = '';
+    $employee = null;
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_csrf();
@@ -24,10 +25,11 @@ safe_page(function () {
                     'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
                 ]);
             } else {
+                $authenticated = false;
                 if (authenticate_superadmin($username, $password)) {
-                    record_rate_limit_attempt($rateKey, true);
                     $record = get_user_record($username);
                     if ($record) {
+                        record_rate_limit_attempt($rateKey, true);
                         update_last_login($username);
                         login_user($record);
                         logEvent(DATA_PATH . '/logs/auth.log', [
@@ -41,7 +43,26 @@ safe_page(function () {
                         set_flash('success', t('login_success'));
                         redirect('/superadmin/dashboard.php');
                     }
-                } else {
+                    $authenticated = true;
+                }
+
+                if (!$authenticated) {
+                    $employee = authenticate_employee($username, $password);
+                    if ($employee) {
+                        record_rate_limit_attempt($rateKey, true);
+                        update_employee_last_login($employee['empId'] ?? '');
+                        login_user($employee);
+                        logEvent(DATA_PATH . '/logs/auth.log', [
+                            'event' => 'employee_login_success',
+                            'username' => $username,
+                            'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+                        ]);
+                        set_flash('success', t('login_success'));
+                        redirect('/staff/dashboard.php');
+                    }
+                }
+
+                if (!$authenticated && empty($employee)) {
                     record_rate_limit_attempt($rateKey, false);
                     handle_failed_login($username);
                     logEvent(DATA_PATH . '/logs/auth.log', [
@@ -55,11 +76,16 @@ safe_page(function () {
         }
     } else {
         $user = current_user();
-        if ($user && ($user['type'] ?? '') === 'superadmin') {
-            if (!empty($user['mustResetPassword'])) {
-                redirect('/auth/force_reset.php');
+        if ($user) {
+            if (($user['type'] ?? '') === 'superadmin') {
+                if (!empty($user['mustResetPassword'])) {
+                    redirect('/auth/force_reset.php');
+                }
+                redirect('/superadmin/dashboard.php');
             }
-            redirect('/superadmin/dashboard.php');
+            if (($user['type'] ?? '') === 'employee') {
+                redirect('/staff/dashboard.php');
+            }
         }
     }
 
@@ -67,7 +93,7 @@ safe_page(function () {
         ?>
         <div class="card">
             <h2><?= sanitize(t('login')); ?></h2>
-            <p class="muted"><?= sanitize('Sign in with your superadmin account to proceed.'); ?></p>
+            <p class="muted"><?= sanitize('Sign in with your superadmin or Yojak staff account to proceed.'); ?></p>
             <?php if ($errors): ?>
                 <div class="flashes">
                     <?php foreach ($errors as $error): ?>
@@ -75,7 +101,7 @@ safe_page(function () {
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
-            <div class="pill"><?= sanitize('Superadmin only for now.'); ?></div>
+            <div class="pill"><?= sanitize('Superadmin & approved staff only.'); ?></div>
             <form method="post" action="/auth/login.php">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                 <div class="field">

@@ -24,6 +24,9 @@ function ensure_data_structure(): void
         DATA_PATH . '/users',
         DATA_PATH . '/sessions',
         DATA_PATH . '/security/ratelimits',
+        DATA_PATH . '/security/password_resets',
+        DATA_PATH . '/staff/employees',
+        DATA_PATH . '/backups',
         DATA_PATH . '/logs',
         DATA_PATH . '/locks',
         DATA_PATH . '/ai',
@@ -80,6 +83,27 @@ function ensure_data_structure(): void
             ],
         ];
         writeJsonAtomic($userIndexPath, $index);
+    }
+
+    $staffIndexPath = DATA_PATH . '/staff/employees/index.json';
+    if (!file_exists($staffIndexPath)) {
+        writeJsonAtomic($staffIndexPath, []);
+    }
+
+    $passwordResetIndex = DATA_PATH . '/security/password_resets/index.json';
+    if (!file_exists($passwordResetIndex)) {
+        writeJsonAtomic($passwordResetIndex, []);
+    }
+
+    $logFiles = [
+        DATA_PATH . '/logs/superadmin.log',
+        DATA_PATH . '/logs/backup.log',
+        DATA_PATH . '/logs/reset.log',
+    ];
+    foreach ($logFiles as $logFile) {
+        if (!file_exists($logFile)) {
+            touch($logFile);
+        }
     }
 }
 
