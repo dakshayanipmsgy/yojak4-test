@@ -248,6 +248,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/contractor/dashboard.php"><?= sanitize('Contractor'); ?></a>
                         <a href="/contractor/vault.php"><?= sanitize('Vault'); ?></a>
                         <a href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
+                        <a href="/contractor/tender_archive.php"><?= sanitize('Tender Archive'); ?></a>
                         <form method="post" action="/contractor/logout.php" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
