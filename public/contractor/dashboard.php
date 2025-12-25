@@ -20,8 +20,8 @@ safe_page(function () {
             <h3><?= sanitize('Shortcuts'); ?></h3>
             <div class="buttons">
                 <a class="btn" href="/contractor/vault_upload.php"><?= sanitize('Upload Document'); ?></a>
-                <span class="btn secondary"><?= sanitize('Offline Tender Prep (coming soon)'); ?></span>
-                <span class="btn secondary"><?= sanitize('Reminders (coming soon)'); ?></span>
+                <a class="btn secondary" href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
+                <span class="btn secondary"><?= sanitize('Reminders'); ?></span>
             </div>
         </div>
         <?php
