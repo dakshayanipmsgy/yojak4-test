@@ -240,6 +240,16 @@ function render_layout(string $title, callable $content): void
                         </form>
                     <?php elseif ($user && ($user['type'] ?? '') === 'department'): ?>
                         <a href="/department/dashboard.php"><?= sanitize('Department'); ?></a>
+                        <a href="/department/roles.php"><?= sanitize('Roles'); ?></a>
+                        <a href="/department/users.php"><?= sanitize('Users'); ?></a>
+                        <a href="/department/templates.php"><?= sanitize('Templates'); ?></a>
+                        <a href="/department/quick_doc.php"><?= sanitize('Quick Doc'); ?></a>
+                        <a href="/department/docs_inbox.php"><?= sanitize('Docs'); ?></a>
+                        <a href="/department/tenders.php"><?= sanitize('Tenders'); ?></a>
+                        <a href="/department/workorders.php"><?= sanitize('Workorders'); ?></a>
+                        <a href="/department/requirements.php"><?= sanitize('Requirements'); ?></a>
+                        <a href="/department/dak.php"><?= sanitize('DAK'); ?></a>
+                        <a href="/department/health.php"><?= sanitize('Health'); ?></a>
                         <form method="post" action="/department/logout.php" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
