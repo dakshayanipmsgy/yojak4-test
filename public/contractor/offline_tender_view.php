@@ -32,9 +32,11 @@ safe_page(function () {
     $user = require_role('contractor');
     $yojId = $user['yojId'];
     ensure_offline_tender_env($yojId);
+    ensure_packs_env($yojId);
 
     $offtdId = trim($_GET['id'] ?? '');
     $tender = $offtdId !== '' ? load_offline_tender($yojId, $offtdId) : null;
+    $existingPack = $offtdId !== '' ? find_pack_by_source($yojId, 'OFFTD', $offtdId) : null;
 
     if (!$tender || ($tender['yojId'] ?? '') !== $yojId) {
         render_error_page('Tender not found.');
@@ -65,15 +67,24 @@ safe_page(function () {
             </div>
             <div style="display:flex; flex-wrap:wrap; gap:8px;">
                 <form method="post" action="/contractor/offline_tender_run_ai.php">
-                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                    <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
-                    <button class="btn" type="submit"><?= sanitize('Run AI'); ?></button>
-                </form>
-                <form method="post" action="/contractor/offline_tender_add_reminders.php">
-                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                    <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
-                    <button class="btn secondary" type="submit"><?= sanitize('Create reminders'); ?></button>
-                </form>
+                        <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                        <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                        <button class="btn" type="submit"><?= sanitize('Run AI'); ?></button>
+                    </form>
+                    <?php if ($existingPack): ?>
+                        <a class="btn secondary" href="/contractor/pack_view.php?packId=<?= sanitize($existingPack['packId']); ?>"><?= sanitize('Open Tender Pack'); ?></a>
+                    <?php else: ?>
+                        <form method="post" action="/contractor/pack_create.php">
+                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                            <input type="hidden" name="offtdId" value="<?= sanitize($tender['id']); ?>">
+                            <button class="btn" type="submit"><?= sanitize('Create Tender Pack'); ?></button>
+                        </form>
+                    <?php endif; ?>
+                    <form method="post" action="/contractor/offline_tender_add_reminders.php">
+                        <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                        <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                        <button class="btn secondary" type="submit"><?= sanitize('Create reminders'); ?></button>
+                    </form>
                 <form method="post" action="/contractor/offline_tender_update.php" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                     <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
