@@ -5,10 +5,11 @@ require_once __DIR__ . '/../../app/bootstrap.php';
 safe_page(function () {
     $user = require_role('contractor');
     $yojId = $user['yojId'];
-    ensure_packs_env($yojId);
-
     $packId = trim($_GET['packId'] ?? '');
-    $pack = $packId !== '' ? load_pack($yojId, $packId) : null;
+    $context = detect_pack_context($packId);
+    ensure_packs_env($yojId, $context);
+
+    $pack = $packId !== '' ? load_pack($yojId, $packId, $context) : null;
     if (!$pack || ($pack['yojId'] ?? '') !== $yojId) {
         render_error_page('Pack not found.');
         return;

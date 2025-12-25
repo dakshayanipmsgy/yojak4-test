@@ -10,11 +10,12 @@ safe_page(function () {
     require_csrf();
     $user = require_role('contractor');
     $yojId = $user['yojId'];
-    ensure_packs_env($yojId);
-
     $packId = trim($_POST['packId'] ?? '');
     $itemId = trim($_POST['itemId'] ?? '');
-    $pack = $packId !== '' ? load_pack($yojId, $packId) : null;
+    $context = detect_pack_context($packId);
+    ensure_packs_env($yojId, $context);
+
+    $pack = $packId !== '' ? load_pack($yojId, $packId, $context) : null;
     if (!$pack || ($pack['yojId'] ?? '') !== $yojId) {
         render_error_page('Pack not found.');
         return;
@@ -40,7 +41,7 @@ safe_page(function () {
     $files = $_FILES['documents'];
     $allowed = allowed_vault_mimes();
     $maxSize = 10 * 1024 * 1024;
-    $destDir = pack_upload_dir($yojId, $packId, $itemId);
+    $destDir = pack_upload_dir($yojId, $packId, $itemId, $context);
     if (!is_dir($destDir)) {
         mkdir($destDir, 0775, true);
     }
@@ -111,7 +112,7 @@ safe_page(function () {
     unset($existing);
 
     $pack['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
-    save_pack($pack);
+    save_pack($pack, $context);
 
     pack_log([
         'event' => 'item_uploaded',

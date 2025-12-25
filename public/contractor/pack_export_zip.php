@@ -6,10 +6,11 @@ safe_page(function () {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     $user = require_role('contractor');
     $yojId = $user['yojId'];
-    ensure_packs_env($yojId);
-
     $packId = trim(($method === 'POST' ? ($_POST['packId'] ?? '') : ($_GET['packId'] ?? '')));
-    $pack = $packId !== '' ? load_pack($yojId, $packId) : null;
+    $context = detect_pack_context($packId);
+    ensure_packs_env($yojId, $context);
+
+    $pack = $packId !== '' ? load_pack($yojId, $packId, $context) : null;
     if (!$pack || ($pack['yojId'] ?? '') !== $yojId) {
         render_error_page('Pack not found.');
         return;
@@ -34,7 +35,7 @@ safe_page(function () {
 
     $zip->addFromString('pack_index.html', pack_index_html($pack));
 
-    $baseUpload = packs_upload_root($yojId);
+    $baseUpload = packs_upload_root($yojId, $context);
     foreach ($pack['items'] ?? [] as $item) {
         foreach ($item['fileRefs'] ?? [] as $ref) {
             $relative = $ref['path'] ?? '';

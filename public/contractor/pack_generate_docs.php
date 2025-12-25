@@ -10,10 +10,11 @@ safe_page(function () {
     require_csrf();
     $user = require_role('contractor');
     $yojId = $user['yojId'];
-    ensure_packs_env($yojId);
-
     $packId = trim($_POST['packId'] ?? '');
-    $pack = $packId !== '' ? load_pack($yojId, $packId) : null;
+    $context = detect_pack_context($packId);
+    ensure_packs_env($yojId, $context);
+
+    $pack = $packId !== '' ? load_pack($yojId, $packId, $context) : null;
     if (!$pack || ($pack['yojId'] ?? '') !== $yojId) {
         render_error_page('Pack not found.');
         return;
@@ -32,7 +33,7 @@ safe_page(function () {
         return;
     }
 
-    $generatedDir = pack_generated_dir($yojId, $packId);
+    $generatedDir = pack_generated_dir($yojId, $packId, $context);
     if (!is_dir($generatedDir)) {
         mkdir($generatedDir, 0775, true);
     }
@@ -52,14 +53,14 @@ safe_page(function () {
         $body = '';
         if ($type === 'cover') {
             $body = '<h1>Cover Letter</h1>'
-                . '<p>Date: ' . htmlspecialchars($now->format('Y-m-d')) . '</p>'
+                . '<p>Date: __________</p>'
                 . '<p>Subject: Submission of tender documents for ' . htmlspecialchars($tenderTitle) . ' (' . htmlspecialchars($sourceId) . ')</p>'
                 . '<p>Dear Sir/Madam,</p>'
                 . '<p>We hereby submit the enclosed documents as part of the tender pack. All documents are true and correct to the best of our knowledge.</p>'
                 . '<p>Regards,<br>Authorized Signatory</p>';
         } elseif ($type === 'undertaking') {
             $body = '<h1>Undertaking / Declaration</h1>'
-                . '<p>Date: ' . htmlspecialchars($now->format('Y-m-d')) . '</p>'
+                . '<p>Date: __________</p>'
                 . '<p>We undertake that the information and documents provided in this tender pack for ' . htmlspecialchars($tenderTitle) . ' are authentic and valid.</p>'
                 . '<p>We agree to abide by all terms and conditions of the tender.</p>'
                 . '<p>Authorized Signatory</p>';
@@ -88,7 +89,7 @@ safe_page(function () {
 
     $pack['generatedDocs'] = $newDocs;
     $pack['updatedAt'] = $generatedAt;
-    save_pack($pack);
+    save_pack($pack, $context);
 
     pack_log([
         'event' => 'docs_generated',

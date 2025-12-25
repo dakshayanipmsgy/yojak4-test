@@ -248,6 +248,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/contractor/dashboard.php"><?= sanitize('Contractor'); ?></a>
                         <a href="/contractor/packs.php"><?= sanitize('Tender Packs'); ?></a>
                         <a href="/contractor/vault.php"><?= sanitize('Vault'); ?></a>
+                        <a href="/contractor/workorders.php"><?= sanitize('Workorders'); ?></a>
                         <a href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
                         <a href="/contractor/tender_archive.php"><?= sanitize('Tender Archive'); ?></a>
                         <form method="post" action="/contractor/logout.php" style="display:inline;">
