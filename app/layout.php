@@ -234,6 +234,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/superadmin/contractors.php"><?= sanitize('Contractors'); ?></a>
                         <a href="/superadmin/departments.php"><?= sanitize('Departments'); ?></a>
                         <a href="/superadmin/employees.php"><?= sanitize('Employees'); ?></a>
+                        <a href="/superadmin/tender_discovery.php"><?= sanitize('Tender Discovery'); ?></a>
                         <a href="/superadmin/stats.php"><?= sanitize('Stats'); ?></a>
                         <a href="/superadmin/reset_requests.php"><?= sanitize('Reset Approvals'); ?></a>
                         <a href="/superadmin/backup.php"><?= sanitize('Backups'); ?></a>
@@ -265,6 +266,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/contractor/vault.php"><?= sanitize('Vault'); ?></a>
                         <a href="/contractor/bills.php"><?= sanitize('Bills'); ?></a>
                         <a href="/contractor/workorders.php"><?= sanitize('Workorders'); ?></a>
+                        <a href="/contractor/discovered_tenders.php"><?= sanitize('Discovered'); ?></a>
                         <a href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
                         <a href="/contractor/tender_archive.php"><?= sanitize('Tender Archive'); ?></a>
                         <form method="post" action="/contractor/logout.php" style="display:inline;">

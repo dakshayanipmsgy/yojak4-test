@@ -90,6 +90,9 @@ function save_offline_tender(array $tender): void
     if (empty($tender['id']) || empty($tender['yojId'])) {
         throw new InvalidArgumentException('Tender id or contractor id missing');
     }
+
+    $sourceDiscId = $tender['source']['discId'] ?? ($tender['sourceDiscId'] ?? null);
+    $sourceOriginalUrl = $tender['source']['originalUrl'] ?? ($tender['sourceOriginalUrl'] ?? null);
     $path = offline_tender_path($tender['yojId'], $tender['id']);
     $dir = dirname($path);
     if (!is_dir($dir)) {
@@ -107,6 +110,8 @@ function save_offline_tender(array $tender): void
             $entry['openingDate'] = $tender['extracted']['openingDate'] ?? ($entry['openingDate'] ?? null);
             $entry['updatedAt'] = $tender['updatedAt'] ?? now_kolkata()->format(DateTime::ATOM);
             $entry['deletedAt'] = $tender['deletedAt'] ?? null;
+            $entry['sourceDiscId'] = $sourceDiscId ?? ($entry['sourceDiscId'] ?? null);
+            $entry['sourceOriginalUrl'] = $sourceOriginalUrl ?? ($entry['sourceOriginalUrl'] ?? null);
             $found = true;
             break;
         }
@@ -122,6 +127,8 @@ function save_offline_tender(array $tender): void
             'openingDate' => $tender['extracted']['openingDate'] ?? null,
             'updatedAt' => $tender['updatedAt'] ?? now_kolkata()->format(DateTime::ATOM),
             'deletedAt' => $tender['deletedAt'] ?? null,
+            'sourceDiscId' => $sourceDiscId,
+            'sourceOriginalUrl' => $sourceOriginalUrl,
         ];
     }
 
@@ -172,6 +179,17 @@ function add_tender_reminder(string $yojId, string $tenderId, string $title, str
 function offline_tender_log(array $context): void
 {
     logEvent(OFFLINE_TENDER_LOG, $context);
+}
+
+function find_offline_tender_by_discovery(string $yojId, string $discId): ?array
+{
+    $index = offline_tenders_index($yojId);
+    foreach ($index as $entry) {
+        if (($entry['sourceDiscId'] ?? null) === $discId) {
+            return load_offline_tender($yojId, $entry['id'] ?? '');
+        }
+    }
+    return null;
 }
 
 function offline_tender_defaults(): array
@@ -354,4 +372,3 @@ function merge_checklist(array $existing, array $incoming): array
 
     return $merged;
 }
-

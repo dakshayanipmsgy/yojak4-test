@@ -30,6 +30,8 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs',
         DATA_PATH . '/locks',
         DATA_PATH . '/ai',
+        DATA_PATH . '/discovery',
+        DATA_PATH . '/discovery/discovered',
     ];
 
     foreach ($directories as $dir) {
@@ -99,6 +101,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/superadmin.log',
         DATA_PATH . '/logs/backup.log',
         DATA_PATH . '/logs/reset.log',
+        DATA_PATH . '/logs/tender_discovery.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {

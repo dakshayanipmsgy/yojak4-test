@@ -49,6 +49,7 @@ safe_page(function () {
         $extracted = $tender['extracted'] ?? offline_tender_defaults();
         $checklist = $tender['checklist'] ?? [];
         $ai = $tender['ai'] ?? ['parsedOk' => false, 'errors' => [], 'rawText' => '', 'lastRunAt' => null];
+        $source = $tender['source'] ?? [];
         ?>
         <div class="card" style="display:grid; gap:10px;">
             <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
@@ -94,6 +95,18 @@ safe_page(function () {
                         <?= sanitize('Upload more PDFs'); ?>
                     </label>
                 </form>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <?php if (($source['type'] ?? '') === 'tender_discovery' && !empty($source['discId'])): ?>
+                    <span class="pill">Source: <?= sanitize($source['discId']); ?></span>
+                    <a class="pill" href="/contractor/discovered_tender_view.php?id=<?= sanitize(urlencode($source['discId'])); ?>">Discovered tender</a>
+                    <?php if (!empty($source['originalUrl'])): ?>
+                        <a class="pill" href="<?= sanitize($source['originalUrl']); ?>" target="_blank" rel="noopener"><?= sanitize('View notice'); ?></a>
+                    <?php endif; ?>
+                <?php endif; ?>
+                <?php if (!empty($tender['location'])): ?>
+                    <span class="pill"><?= sanitize($tender['location']); ?></span>
+                <?php endif; ?>
             </div>
             <?php if (!empty($ai['errors'])): ?>
                 <div class="flashes">
