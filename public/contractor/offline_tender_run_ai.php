@@ -13,6 +13,8 @@ safe_page(function () {
     ensure_offline_tender_env($yojId);
 
     $offtdId = trim($_POST['id'] ?? '');
+    $runMode = trim($_POST['run_mode'] ?? 'strict');
+    $lenient = $runMode === 'lenient';
     $tender = $offtdId !== '' ? load_offline_tender($yojId, $offtdId) : null;
     if (!$tender || ($tender['yojId'] ?? '') !== $yojId) {
         render_error_page('Tender not found.');
@@ -22,25 +24,41 @@ safe_page(function () {
     $config = load_ai_config();
     if (($config['provider'] ?? '') === '' || ($config['textModel'] ?? '') === '' || empty($config['hasApiKey'])) {
         set_flash('error', 'AI is not configured. Please contact support. Superadmin can configure this in AI Studio (/superadmin/ai_studio.php).');
+        ai_log([
+            'event' => 'ai_missing_config',
+            'purpose' => 'offline_tender_extract',
+            'yojId' => $yojId,
+            'offtdId' => $offtdId,
+        ]);
         redirect('/contractor/offline_tender_view.php?id=' . urlencode($offtdId));
         return;
     }
 
-    [$systemPrompt, $userPrompt] = offline_tender_ai_prompt($tender);
+    [$systemPrompt, $userPrompt] = offline_tender_ai_prompt($tender, $lenient);
     $aiResult = ai_call([
         'systemPrompt' => $systemPrompt,
         'userPrompt' => $userPrompt,
         'expectJson' => true,
         'purpose' => 'offline_tender_extract',
+        'runMode' => $runMode,
     ]);
 
     $now = now_kolkata()->format(DateTime::ATOM);
-    $ai = [
-        'lastRunAt' => $now,
-        'rawText' => $aiResult['rawText'] ?? '',
-        'parsedOk' => (bool)($aiResult['ok'] ?? false),
-        'errors' => $aiResult['errors'] ?? [],
-    ];
+    $aiState = $tender['ai'] ?? [];
+    $aiState['lastRunAt'] = $now;
+    $aiState['provider'] = $config['provider'] ?? '';
+    $aiState['httpStatus'] = $aiResult['httpStatus'] ?? null;
+    $aiState['requestId'] = $aiResult['requestId'] ?? null;
+    $aiState['rawText'] = $aiResult['rawText'] ?? '';
+    $aiState['parsedOk'] = (bool)($aiResult['parsedOk'] ?? false);
+    $aiState['parseStage'] = $aiResult['parseStage'] ?? 'fallback_manual';
+    $aiState['errors'] = $aiResult['errors'] ?? [];
+    $aiState['providerError'] = $aiResult['providerError'] ?? null;
+    $aiState['providerOk'] = (bool)($aiResult['providerOk'] ?? false);
+    $aiState['runMode'] = $runMode;
+    if (!empty($aiResult['rawEnvelope']) && is_array($aiResult['rawEnvelope'])) {
+        $aiState['rawEnvelope'] = $aiResult['rawEnvelope'];
+    }
 
     $newExtracted = offline_tender_defaults();
     $newChecklist = $tender['checklist'] ?? [];
@@ -69,14 +87,14 @@ safe_page(function () {
         $newChecklist = merge_checklist($newChecklist, $incomingChecklist);
     }
 
-    if (!$ai['parsedOk']) {
-        $newExtracted = offline_tender_defaults();
+    if ($aiState['parsedOk']) {
+        $aiState['candidateExtracted'] = $newExtracted;
+        $aiState['candidateChecklist'] = $newChecklist;
+        $aiState['candidateReadyAt'] = $now;
     }
 
-    $tender['ai'] = $ai;
-    $tender['extracted'] = $newExtracted;
-    $tender['checklist'] = $newChecklist;
-    $tender['status'] = $ai['parsedOk'] ? 'ai_extracted' : 'editing';
+    $tender['ai'] = $aiState;
+    $tender['status'] = $aiState['parsedOk'] ? 'ai_ready' : 'editing';
     $tender['updatedAt'] = $now;
 
     save_offline_tender($tender);
@@ -85,14 +103,18 @@ safe_page(function () {
         'event' => 'ai_run',
         'yojId' => $yojId,
         'offtdId' => $offtdId,
-        'parsedOk' => $ai['parsedOk'],
-        'errorCount' => count($ai['errors']),
+        'parsedOk' => $aiState['parsedOk'],
+        'providerOk' => $aiState['providerOk'] ?? false,
+        'httpStatus' => $aiState['httpStatus'] ?? null,
+        'errorCount' => count($aiState['errors']),
     ]);
 
-    if ($ai['parsedOk']) {
-        set_flash('success', 'AI extraction completed. Review and save any changes.');
+    if ($aiState['parsedOk']) {
+        set_flash('success', 'AI responded successfully. Review the extracted values and apply them when ready.');
+    } elseif (!empty($aiState['providerOk'])) {
+        set_flash('error', 'AI responded, but the output was not in JSON format. Review the debug details below and try again.');
     } else {
-        set_flash('error', 'AI response could not be parsed. Fields reset to manual entry; please review the AI text below.');
+        set_flash('error', 'The AI provider returned an error. Please review the debug details and retry.');
     }
 
     redirect('/contractor/offline_tender_view.php?id=' . urlencode($offtdId));

@@ -48,8 +48,24 @@ safe_page(function () {
     render_layout($title, function () use ($tender) {
         $extracted = $tender['extracted'] ?? offline_tender_defaults();
         $checklist = $tender['checklist'] ?? [];
-        $ai = $tender['ai'] ?? ['parsedOk' => false, 'errors' => [], 'rawText' => '', 'lastRunAt' => null];
+        $aiDefaults = [
+            'parsedOk' => false,
+            'providerOk' => false,
+            'errors' => [],
+            'rawText' => '',
+            'lastRunAt' => null,
+            'httpStatus' => null,
+            'parseStage' => 'fallback_manual',
+            'provider' => '',
+            'requestId' => null,
+            'rawEnvelope' => null,
+            'runMode' => 'strict',
+        ];
+        $ai = array_merge($aiDefaults, $tender['ai'] ?? []);
+        $ai['rawEnvelope'] = is_array($ai['rawEnvelope'] ?? null) ? $ai['rawEnvelope'] : [];
         $source = $tender['source'] ?? [];
+        $aiHttpBadge = $ai['httpStatus'] ? 'HTTP ' . $ai['httpStatus'] : 'HTTP ?';
+        $aiParseBadge = $ai['parsedOk'] ? 'Parsed' : ($ai['providerOk'] ? 'Needs Review' : 'Provider Error');
         ?>
         <div class="card" style="display:grid; gap:10px;">
             <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
@@ -68,24 +84,39 @@ safe_page(function () {
             </div>
             <div style="display:flex; flex-wrap:wrap; gap:8px;">
                 <form method="post" action="/contractor/offline_tender_run_ai.php">
+                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                    <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                    <input type="hidden" name="run_mode" value="strict">
+                    <button class="btn" type="submit"><?= sanitize('Re-run AI (JSON strict)'); ?></button>
+                </form>
+                <form method="post" action="/contractor/offline_tender_run_ai.php">
+                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                    <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                    <input type="hidden" name="run_mode" value="lenient">
+                    <button class="btn secondary" type="submit"><?= sanitize('Re-run AI (lenient)'); ?></button>
+                </form>
+                <?php if (!empty($ai['parsedOk']) && is_array($ai['candidateExtracted'] ?? null)): ?>
+                    <form method="post" action="/contractor/offline_tender_update.php">
                         <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                         <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
-                        <button class="btn" type="submit"><?= sanitize('Run AI'); ?></button>
+                        <input type="hidden" name="mode" value="apply_ai">
+                        <button class="btn" type="submit"><?= sanitize('Apply extracted fields'); ?></button>
                     </form>
-                    <?php if ($existingPack): ?>
-                        <a class="btn secondary" href="/contractor/pack_view.php?packId=<?= sanitize($existingPack['packId']); ?>"><?= sanitize('Open Tender Pack'); ?></a>
-                    <?php else: ?>
-                        <form method="post" action="/contractor/pack_create.php">
-                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                            <input type="hidden" name="offtdId" value="<?= sanitize($tender['id']); ?>">
-                            <button class="btn" type="submit"><?= sanitize('Create Tender Pack'); ?></button>
-                        </form>
-                    <?php endif; ?>
-                    <form method="post" action="/contractor/offline_tender_add_reminders.php">
+                <?php endif; ?>
+                <?php if ($existingPack): ?>
+                    <a class="btn secondary" href="/contractor/pack_view.php?packId=<?= sanitize($existingPack['packId']); ?>"><?= sanitize('Open Tender Pack'); ?></a>
+                <?php else: ?>
+                    <form method="post" action="/contractor/pack_create.php">
                         <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                        <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
-                        <button class="btn secondary" type="submit"><?= sanitize('Create reminders'); ?></button>
+                        <input type="hidden" name="offtdId" value="<?= sanitize($tender['id']); ?>">
+                        <button class="btn" type="submit"><?= sanitize('Create Tender Pack'); ?></button>
                     </form>
+                <?php endif; ?>
+                <form method="post" action="/contractor/offline_tender_add_reminders.php">
+                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                    <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                    <button class="btn secondary" type="submit"><?= sanitize('Create reminders'); ?></button>
+                </form>
                 <form method="post" action="/contractor/offline_tender_update.php" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                     <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
@@ -107,16 +138,30 @@ safe_page(function () {
                 <?php if (!empty($tender['location'])): ?>
                     <span class="pill"><?= sanitize($tender['location']); ?></span>
                 <?php endif; ?>
+                <span class="pill"><?= sanitize($aiHttpBadge); ?></span>
+                <span class="pill" style="<?= $ai['parsedOk'] ? 'background:#183d2f;color:#9ef0c0;' : ($ai['providerOk'] ? 'background:#3d2f18;color:#f2c265;' : 'background:#3d1818;color:#f77676;'); ?>">
+                    <?= sanitize($aiParseBadge); ?>
+                </span>
+                <span class="pill muted">Stage: <?= sanitize($ai['parseStage'] ?? 'fallback_manual'); ?></span>
+                <?php if (!empty($ai['lastRunAt'])): ?>
+                    <span class="pill muted">Last AI: <?= sanitize($ai['lastRunAt']); ?></span>
+                <?php endif; ?>
             </div>
-            <?php if (!empty($ai['errors'])): ?>
+            <?php if (!empty($ai['lastRunAt']) && (!empty($ai['errors']) || empty($ai['parsedOk']))): ?>
                 <div class="flashes">
                     <div class="flash error">
-                        <?= sanitize('AI parsing failed. You can edit manually or paste/review the AI text below.'); ?>
-                        <ul style="margin:6px 0 0 16px;">
-                            <?php foreach ($ai['errors'] as $err): ?>
-                                <li><?= sanitize($err); ?></li>
-                            <?php endforeach; ?>
-                        </ul>
+                        <?php if (!empty($ai['providerOk'])): ?>
+                            <?= sanitize('AI responded, but the output was not in the expected format. You can edit manually, or re-run AI. The raw AI text is shown below.'); ?>
+                        <?php else: ?>
+                            <?= sanitize('The AI provider reported a problem. Please review the debug info below and retry.'); ?>
+                        <?php endif; ?>
+                        <?php if (!empty($ai['errors'])): ?>
+                            <ul style="margin:6px 0 0 16px;">
+                                <?php foreach ($ai['errors'] as $err): ?>
+                                    <li><?= sanitize($err); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
                     </div>
                 </div>
             <?php endif; ?>
@@ -187,9 +232,35 @@ safe_page(function () {
                     </ul>
                 </div>
                 <details style="border:1px solid #30363d; border-radius:10px; padding:10px; background:#0f1520;">
-                    <summary style="cursor:pointer;"><?= sanitize('Paste/Review AI text'); ?></summary>
-                    <p class="muted" style="margin-top:8px;"><?= sanitize('If parsing failed, copy the AI output here to manually adjust fields.'); ?></p>
-                    <textarea readonly rows="6" style="width:100%; resize:vertical; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:10px; padding:8px;"><?= sanitize($ai['rawText'] ?? ''); ?></textarea>
+                    <summary style="cursor:pointer;"><?= sanitize('Show AI Debug'); ?></summary>
+                    <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start;">
+                        <div>
+                            <div class="pill" style="margin-bottom:6px;"><?= sanitize('Provider: ' . ($ai['provider'] ?: 'not run')); ?></div>
+                            <div class="pill" style="margin-bottom:6px;"><?= sanitize('Model: ' . (($ai['rawEnvelope']['model'] ?? '') ?: 'unknown')); ?></div>
+                            <div class="pill" style="margin-bottom:6px;"><?= sanitize('HTTP: ' . ($ai['httpStatus'] ?? 'n/a')); ?></div>
+                            <div class="pill" style="margin-bottom:6px;"><?= sanitize('Parsed: ' . ($ai['parsedOk'] ? 'yes' : 'no')); ?></div>
+                            <div class="pill muted" style="margin-bottom:6px;"><?= sanitize('Parse stage: ' . ($ai['parseStage'] ?? 'fallback_manual')); ?></div>
+                            <?php if (!empty($ai['requestId'])): ?>
+                                <div class="pill muted"><?= sanitize('Request ID: ' . $ai['requestId']); ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <div>
+                            <h4 style="margin:0 0 6px 0;"><?= sanitize('Errors / notes'); ?></h4>
+                            <?php if (!empty($ai['errors'])): ?>
+                                <ul style="padding-left:16px;margin:0;color:#f77676;">
+                                    <?php foreach ($ai['errors'] as $err): ?>
+                                        <li><?= sanitize($err); ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php else: ?>
+                                <p class="muted" style="margin:0;"><?= sanitize('No errors captured.'); ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px;">
+                        <h4 style="margin:0 0 6px 0;"><?= sanitize('Raw AI text'); ?></h4>
+                        <textarea readonly rows="6" style="width:100%; resize:vertical; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:10px; padding:8px;"><?= sanitize($ai['rawText'] ?? ''); ?></textarea>
+                    </div>
                 </details>
             </div>
             <div class="card" style="display:grid; gap:10px;">

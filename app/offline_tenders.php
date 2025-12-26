@@ -246,10 +246,13 @@ function offline_tender_extract_text(array $sourceFiles): string
     return implode("\n", $snippets);
 }
 
-function offline_tender_ai_prompt(array $tender): array
+function offline_tender_ai_prompt(array $tender, bool $lenient = false): array
 {
-    $system = 'You are a tender extraction assistant. Return ONLY JSON. '
-        . 'Do not include any prose. Ensure all keys exist. Dates must be ISO8601 strings.';
+    $jsonDiscipline = $lenient
+        ? 'Provide one clean JSON object; brief context text is acceptable but keep the JSON block valid and free of code fences.'
+        : 'Return ONLY JSON with no prose, code fences, or prefixes.';
+    $system = 'You are a tender extraction assistant. ' . $jsonDiscipline . ' '
+        . 'Ensure all keys exist. Dates must be ISO8601 strings.';
 
     $expected = [
         'publishDate' => 'date string or null',
@@ -272,6 +275,8 @@ function offline_tender_ai_prompt(array $tender): array
         . " Return strict JSON matching this schema: " . json_encode($expected) . "."
         . " Keep bid values/rates out."
         . " Use Asia/Kolkata context for date assumptions."
+        . " Do not wrap the JSON in markdown."
+        . ($lenient ? " You may include short notes, but include one standalone JSON object we can parse." : " Respond with only the JSON object.")
         . " Source text:\n" . offline_tender_extract_text($tender['sourceFiles'] ?? []);
 
     return [$system, $userPrompt];

@@ -23,6 +23,26 @@ safe_page(function () {
 
     $errors = [];
 
+    if ($mode === 'apply_ai') {
+        $ai = $tender['ai'] ?? [];
+        $candidateExtracted = $ai['candidateExtracted'] ?? null;
+        if (empty($ai['parsedOk']) || !is_array($candidateExtracted)) {
+            set_flash('error', 'No AI extraction is ready to apply. Please run AI again.');
+            redirect('/contractor/offline_tender_view.php?id=' . urlencode($offtdId));
+            return;
+        }
+        $tender['extracted'] = $candidateExtracted;
+        if (isset($ai['candidateChecklist']) && is_array($ai['candidateChecklist'])) {
+            $tender['checklist'] = $ai['candidateChecklist'];
+        }
+        $tender['status'] = 'ai_extracted';
+        $tender['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
+        save_offline_tender($tender);
+        set_flash('success', 'AI extracted fields applied. You can still edit them below.');
+        redirect('/contractor/offline_tender_view.php?id=' . urlencode($offtdId));
+        return;
+    }
+
     if ($mode === 'upload') {
         $files = $_FILES['additional_documents'] ?? null;
         if (!$files || !isset($files['name']) || !is_array($files['name'])) {
