@@ -10,8 +10,8 @@ safe_page(function () {
 
     $discId = trim($_GET['id'] ?? '');
     $record = $discId !== '' ? tender_discovery_load_discovered($discId) : null;
-    if (!$record) {
-        render_error_page('Discovered tender not found.');
+    if (!$record || !empty($record['deletedAt'])) {
+        render_error_page('Discovered tender not available.');
         return;
     }
 

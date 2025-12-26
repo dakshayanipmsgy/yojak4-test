@@ -28,6 +28,7 @@ function ensure_tender_discovery_env(): void
     $directories = [
         DATA_PATH . '/discovery',
         DATA_PATH . '/discovery/discovered',
+        DATA_PATH . '/discovery/discovered_deleted',
     ];
 
     foreach ($directories as $dir) {
@@ -142,7 +143,14 @@ function tender_discovery_index(): array
 {
     ensure_tender_discovery_env();
     $index = readJson(tender_discovery_index_path());
-    return is_array($index) ? array_values($index) : [];
+    $index = is_array($index) ? array_values($index) : [];
+    foreach ($index as &$entry) {
+        if (!array_key_exists('deletedAt', $entry)) {
+            $entry['deletedAt'] = null;
+        }
+    }
+    unset($entry);
+    return $index;
 }
 
 function tender_discovery_save_index(array $entries): void
@@ -391,6 +399,13 @@ function tender_discovery_save_discovered(array $record, array &$index): void
         mkdir($dir, 0775, true);
     }
 
+    if (!array_key_exists('deletedAt', $record)) {
+        $record['deletedAt'] = null;
+    }
+    if (!array_key_exists('seenByAdminAt', $record)) {
+        $record['seenByAdminAt'] = null;
+    }
+
     writeJsonAtomic($path, $record);
 
     $index[] = [
@@ -401,6 +416,7 @@ function tender_discovery_save_discovered(array $record, array &$index): void
         'createdAt' => $record['createdAt'],
         'dedupeKey' => $record['dedupeKey'],
         'location' => $record['location'] ?? 'Jharkhand',
+        'deletedAt' => $record['deletedAt'],
     ];
     tender_discovery_save_index($index);
 }
@@ -413,7 +429,58 @@ function tender_discovery_load_discovered(string $discId): ?array
         return null;
     }
     $data = readJson($path);
-    return $data ?: null;
+    if (!$data) {
+        return null;
+    }
+    if (!array_key_exists('deletedAt', $data)) {
+        $data['deletedAt'] = null;
+    }
+    if (!array_key_exists('seenByAdminAt', $data)) {
+        $data['seenByAdminAt'] = null;
+    }
+    return $data;
+}
+
+function tender_discovery_soft_delete(string $discId): bool
+{
+    ensure_tender_discovery_env();
+    $record = tender_discovery_load_discovered($discId);
+    if (!$record) {
+        return false;
+    }
+    if (!empty($record['deletedAt'])) {
+        return true;
+    }
+
+    $timestamp = now_kolkata()->format(DateTime::ATOM);
+    $record['deletedAt'] = $timestamp;
+    writeJsonAtomic(tender_discovery_discovered_path($discId), $record);
+
+    $index = tender_discovery_index();
+    foreach ($index as &$entry) {
+        if (($entry['discId'] ?? '') === $discId) {
+            $entry['deletedAt'] = $timestamp;
+            break;
+        }
+    }
+    unset($entry);
+    tender_discovery_save_index($index);
+
+    return true;
+}
+
+function tender_discovery_mark_seen_by_admin(string $discId): void
+{
+    ensure_tender_discovery_env();
+    $record = tender_discovery_load_discovered($discId);
+    if (!$record) {
+        return;
+    }
+    if (!empty($record['seenByAdminAt'])) {
+        return;
+    }
+    $record['seenByAdminAt'] = now_kolkata()->format(DateTime::ATOM);
+    writeJsonAtomic(tender_discovery_discovered_path($discId), $record);
 }
 
 function tender_discovery_run(array $sources): array
@@ -479,6 +546,8 @@ function tender_discovery_run(array $sources): array
                     'dedupeKey' => $dedupeKey,
                     'raw' => $item['raw'] ?? [],
                     'createdAt' => $now,
+                    'deletedAt' => null,
+                    'seenByAdminAt' => null,
                 ];
                 tender_discovery_save_discovered($record, $index);
                 $dedupeMap[$dedupeKey] = $discId;

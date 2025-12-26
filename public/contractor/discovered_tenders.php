@@ -25,8 +25,11 @@ safe_page(function () {
         if ($discId === '') {
             continue;
         }
+        if (!empty($entry['deletedAt'])) {
+            continue;
+        }
         $record = tender_discovery_load_discovered($discId);
-        if (!$record) {
+        if (!$record || !empty($record['deletedAt'])) {
             continue;
         }
 
