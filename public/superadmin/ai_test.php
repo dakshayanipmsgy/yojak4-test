@@ -28,11 +28,14 @@ safe_page(function () {
         'parsedOk' => false,
         'providerOk' => false,
         'rawText' => '',
+        'rawBody' => '',
         'json' => null,
         'errors' => ['Configuration missing.'],
         'httpStatus' => null,
         'parseStage' => 'fallback_manual',
         'requestId' => null,
+        'latencyMs' => null,
+        'modelUsed' => null,
     ];
 
     if (($config['provider'] ?? '') && ($config['textModel'] ?? '') && ($config['apiKey'] ?? '')) {
@@ -67,6 +70,8 @@ safe_page(function () {
     $displayKey = mask_api_key_display($config['apiKey'] ?? null);
 
     render_layout($title, function () use ($config, $callResult, $progress, $displayKey, $mode) {
+        $rawSnippet = substr($callResult['rawBody'] ?? ($callResult['rawText'] ?? ''), 0, 800);
+        $textLength = strlen((string)($callResult['rawText'] ?? ''));
         ?>
         <div class="card">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -94,6 +99,12 @@ safe_page(function () {
         <div class="card" style="margin-top:14px;">
             <h4 style="margin-top:0;"><?= sanitize('Raw Response'); ?></h4>
             <textarea readonly rows="8" style="width:100%;background:#0f1520;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;resize:vertical;"><?= sanitize($callResult['rawText'] ?: 'No response received.'); ?></textarea>
+            <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
+                <div class="pill"><?= sanitize('HTTP: ' . ($callResult['httpStatus'] ?? 'n/a')); ?></div>
+                <div class="pill"><?= sanitize('Latency: ' . (($callResult['latencyMs'] ?? null) !== null ? ($callResult['latencyMs'] . ' ms') : 'n/a')); ?></div>
+                <div class="pill"><?= sanitize('Text length: ' . $textLength); ?></div>
+                <div class="pill"><?= sanitize('Model used: ' . ($callResult['modelUsed'] ?? ($config['textModel'] ?? 'unknown'))); ?></div>
+            </div>
             <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">
                 <div>
                     <h4 style="margin:0 0 6px 0;"><?= sanitize('Parsed JSON'); ?></h4>
@@ -102,6 +113,10 @@ safe_page(function () {
                     <?php else: ?>
                         <p class="muted" style="margin:0;"><?= sanitize('No JSON parsed. Raw text is available for manual inspection.'); ?></p>
                     <?php endif; ?>
+                    <details style="margin-top:10px;">
+                        <summary class="muted" style="cursor:pointer;"><?= sanitize('Raw body snippet (collapsed)'); ?></summary>
+                        <pre style="background:#0f1520;border:1px solid #30363d;border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap;"><?= sanitize($rawSnippet ?: 'No body captured.'); ?></pre>
+                    </details>
                 </div>
                 <div>
                     <h4 style="margin:0 0 6px 0;"><?= sanitize('Errors & notes'); ?></h4>

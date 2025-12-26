@@ -252,8 +252,144 @@ function ai_provider_log_raw(array $context): void
     logEvent(AI_PROVIDER_RAW_LOG, $context);
 }
 
+function ai_detect_provider_error_payload(array $decoded): ?string
+{
+    if (isset($decoded['error'])) {
+        $error = $decoded['error'];
+        if (is_string($error)) {
+            return $error;
+        }
+        if (is_array($error)) {
+            $message = $error['message'] ?? $error['code'] ?? $error['reason'] ?? null;
+            if (is_string($message)) {
+                return $message;
+            }
+            return 'Provider error payload present.';
+        }
+    }
+
+    if (isset($decoded['errors'])) {
+        $errors = $decoded['errors'];
+        if (is_string($errors)) {
+            return $errors;
+        }
+        if (is_array($errors)) {
+            if (isset($errors[0])) {
+                $first = $errors[0];
+                if (is_string($first)) {
+                    return $first;
+                }
+                if (is_array($first)) {
+                    $message = $first['message'] ?? $first['detail'] ?? $first['code'] ?? null;
+                    if (is_string($message)) {
+                        return $message;
+                    }
+                }
+            }
+            $message = $errors['message'] ?? $errors['detail'] ?? null;
+            if (is_string($message)) {
+                return $message;
+            }
+            return 'Provider errors payload present.';
+        }
+    }
+
+    return null;
+}
+
+function ai_flatten_text_parts(array $parts): string
+{
+    $collected = [];
+    foreach ($parts as $part) {
+        if (is_string($part)) {
+            $collected[] = trim($part);
+            continue;
+        }
+        if (!is_array($part)) {
+            continue;
+        }
+        if (isset($part['text']) && $part['text'] !== '') {
+            $collected[] = trim((string)$part['text']);
+            continue;
+        }
+        if (isset($part['json']) && $part['json'] !== '') {
+            $jsonValue = $part['json'];
+            $collected[] = is_string($jsonValue) ? trim($jsonValue) : json_encode($jsonValue, JSON_UNESCAPED_SLASHES);
+            continue;
+        }
+        if (isset($part['functionCall']['args'])) {
+            $args = $part['functionCall']['args'];
+            $collected[] = is_string($args) ? trim($args) : json_encode($args, JSON_UNESCAPED_SLASHES);
+        }
+    }
+
+    $collected = array_values(array_filter($collected, static fn(string $value): bool => $value !== ''));
+    return trim(implode("\n", $collected));
+}
+
+function ai_extract_openai_text(array $decoded): string
+{
+    if (empty($decoded['choices']) || !is_array($decoded['choices'])) {
+        return '';
+    }
+
+    foreach ($decoded['choices'] as $choice) {
+        if (!is_array($choice) || empty($choice['message']) || !is_array($choice['message'])) {
+            continue;
+        }
+
+        $message = $choice['message'];
+        $content = $message['content'] ?? null;
+        $text = '';
+
+        if (is_string($content)) {
+            $text = trim($content);
+        } elseif (is_array($content)) {
+            $text = ai_flatten_text_parts($content);
+        }
+
+        if ($text === '' && isset($message['tool_calls'][0]['function']['arguments'])) {
+            $text = trim((string)$message['tool_calls'][0]['function']['arguments']);
+        }
+
+        if ($text !== '') {
+            return $text;
+        }
+    }
+
+    return '';
+}
+
+function ai_extract_gemini_text(array $decoded): string
+{
+    $candidates = $decoded['candidates'] ?? null;
+    if (!is_array($candidates)) {
+        return '';
+    }
+
+    foreach ($candidates as $candidate) {
+        if (!is_array($candidate)) {
+            continue;
+        }
+
+        $content = $candidate['content'] ?? null;
+        if (is_array($content)) {
+            $parts = $content['parts'] ?? ($content[0]['parts'] ?? []);
+            if (is_array($parts)) {
+                $text = ai_flatten_text_parts($parts);
+                if ($text !== '') {
+                    return $text;
+                }
+            }
+        }
+    }
+
+    return '';
+}
+
 function ai_provider_response_openai(array $config, string $systemPrompt, string $userPrompt): array
 {
+    $startedAt = microtime(true);
     $payload = [
         'model' => $config['textModel'],
         'messages' => [
@@ -277,42 +413,52 @@ function ai_provider_response_openai(array $config, string $systemPrompt, string
     $curlError = curl_error($ch);
     curl_close($ch);
 
+    $latencyMs = (int)round((microtime(true) - $startedAt) * 1000);
+
     $providerError = null;
     $text = '';
     $decoded = null;
     $requestId = null;
+    $modelUsed = $config['textModel'] ?? '';
+    $rawBody = (string)($response === false ? '' : $response);
 
     if ($response === false) {
-        $providerError = 'Request failed: ' . $curlError;
+        $providerError = 'Request failed: ' . ($curlError !== '' ? $curlError : 'transport error');
     } else {
-        $decoded = json_decode((string)$response, true);
-        $requestId = $decoded['id'] ?? null;
-        if ($httpCode >= 200 && $httpCode < 300) {
-            if (isset($decoded['error']['message'])) {
-                $providerError = 'Provider signaled error: ' . $decoded['error']['message'];
+        $decoded = json_decode($rawBody, true);
+        if (is_array($decoded)) {
+            $requestId = $decoded['id'] ?? null;
+            $modelUsed = $decoded['model'] ?? $modelUsed;
+            $errorPayload = ai_detect_provider_error_payload($decoded);
+            if ($httpCode >= 200 && $httpCode < 300) {
+                $providerError = $errorPayload;
+                $text = ai_extract_openai_text($decoded);
             } else {
-                $text = (string)($decoded['choices'][0]['message']['content'] ?? '');
-                if ($text === '') {
-                    $providerError = 'Provider returned HTTP ' . $httpCode . ' but no content payload.';
-                }
+                $providerError = $errorPayload ?? ('HTTP ' . $httpCode);
             }
-        } else {
-            $providerError = $decoded['error']['message'] ?? ('HTTP ' . $httpCode);
+        } elseif ($httpCode < 200 || $httpCode >= 300) {
+            $providerError = 'HTTP ' . $httpCode;
         }
     }
+
+    $ok = $providerError === null && $httpCode >= 200 && $httpCode < 300;
 
     return [
         'provider' => 'openai',
         'httpStatus' => $httpCode ?? 0,
-        'rawBody' => (string)$response,
+        'rawBody' => $rawBody,
         'text' => $text,
         'providerError' => $providerError,
         'requestId' => $requestId,
+        'ok' => $ok,
+        'modelUsed' => $modelUsed,
+        'latencyMs' => $latencyMs,
     ];
 }
 
 function ai_provider_response_gemini(array $config, string $systemPrompt, string $userPrompt): array
 {
+    $startedAt = microtime(true);
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($config['textModel']) . ':generateContent?key=' . urlencode((string)($config['apiKey'] ?? ''));
     $payload = [
         'system_instruction' => [
@@ -346,37 +492,46 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
     $curlError = curl_error($ch);
     curl_close($ch);
 
+    $latencyMs = (int)round((microtime(true) - $startedAt) * 1000);
+
     $providerError = null;
     $text = '';
     $decoded = null;
     $requestId = null;
+    $modelUsed = $config['textModel'] ?? '';
+    $rawBody = (string)($response === false ? '' : $response);
 
     if ($response === false) {
-        $providerError = 'Request failed: ' . $curlError;
+        $providerError = 'Request failed: ' . ($curlError !== '' ? $curlError : 'transport error');
     } else {
-        $decoded = json_decode((string)$response, true);
-        $requestId = $decoded['responseId'] ?? null;
-        if ($httpCode >= 200 && $httpCode < 300) {
-            if (isset($decoded['error']['message'])) {
-                $providerError = 'Provider signaled error: ' . $decoded['error']['message'];
+        $decoded = json_decode($rawBody, true);
+        if (is_array($decoded)) {
+            $requestId = $decoded['responseId'] ?? null;
+            $modelUsed = $decoded['model'] ?? $modelUsed;
+            $errorPayload = ai_detect_provider_error_payload($decoded);
+            if ($httpCode >= 200 && $httpCode < 300) {
+                $providerError = $errorPayload;
+                $text = ai_extract_gemini_text($decoded);
             } else {
-                $text = (string)($decoded['candidates'][0]['content']['parts'][0]['text'] ?? '');
-                if ($text === '') {
-                    $providerError = 'Provider returned HTTP ' . $httpCode . ' but no content payload.';
-                }
+                $providerError = $errorPayload ?? ('HTTP ' . $httpCode);
             }
-        } else {
-            $providerError = $decoded['error']['message'] ?? ('HTTP ' . $httpCode);
+        } elseif ($httpCode < 200 || $httpCode >= 300) {
+            $providerError = 'HTTP ' . $httpCode;
         }
     }
+
+    $ok = $providerError === null && $httpCode >= 200 && $httpCode < 300;
 
     return [
         'provider' => 'gemini',
         'httpStatus' => $httpCode ?? 0,
-        'rawBody' => (string)$response,
+        'rawBody' => $rawBody,
         'text' => $text,
         'providerError' => $providerError,
         'requestId' => $requestId,
+        'ok' => $ok,
+        'modelUsed' => $modelUsed,
+        'latencyMs' => $latencyMs,
     ];
 }
 
@@ -387,6 +542,7 @@ function ai_call(array $params): array
         'providerOk' => false,
         'parsedOk' => false,
         'rawText' => '',
+        'text' => '',
         'json' => null,
         'errors' => [],
         'httpStatus' => null,
@@ -394,6 +550,9 @@ function ai_call(array $params): array
         'parseStage' => 'fallback_manual',
         'providerError' => null,
         'rawEnvelope' => null,
+        'rawBody' => '',
+        'latencyMs' => null,
+        'modelUsed' => null,
     ];
 
     $config = load_ai_config(true);
@@ -435,15 +594,19 @@ function ai_call(array $params): array
     if ($providerResult !== null) {
         $result['httpStatus'] = $providerResult['httpStatus'];
         $result['rawText'] = $providerResult['text'] ?? '';
+        $result['text'] = $result['rawText'];
         $result['requestId'] = $providerResult['requestId'] ?? null;
         $result['providerError'] = $providerResult['providerError'] ?? null;
-        $result['providerOk'] = ($providerResult['providerError'] ?? null) === null && ($providerResult['httpStatus'] ?? 0) >= 200 && ($providerResult['httpStatus'] ?? 0) < 300;
+        $result['providerOk'] = (bool)($providerResult['ok'] ?? false);
+        $result['rawBody'] = $providerResult['rawBody'] ?? '';
+        $result['latencyMs'] = $providerResult['latencyMs'] ?? null;
+        $result['modelUsed'] = $providerResult['modelUsed'] ?? ($config['textModel'] ?? null);
         $result['rawEnvelope'] = [
             'provider' => $provider,
-            'model' => $config['textModel'],
+            'model' => $result['modelUsed'],
             'httpStatus' => $providerResult['httpStatus'] ?? null,
             'requestId' => $providerResult['requestId'] ?? null,
-            'latencyMs' => null,
+            'latencyMs' => $providerResult['latencyMs'] ?? null,
         ];
 
         if ($result['providerError']) {
@@ -472,10 +635,10 @@ function ai_call(array $params): array
     }
 
     $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
-    $result['ok'] = $result['parsedOk'];
+    $result['ok'] = $result['parsedOk'] || (!$expectJson && $result['providerOk']);
 
     if (is_array($result['rawEnvelope'])) {
-        $result['rawEnvelope']['latencyMs'] = $durationMs;
+        $result['rawEnvelope']['latencyMs'] = $result['rawEnvelope']['latencyMs'] ?? $durationMs;
     }
 
     ai_log([
