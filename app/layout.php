@@ -293,6 +293,7 @@ function render_layout(string $title, callable $content): void
                         </form>
                     <?php else: ?>
                         <a href="/contractor/login.php"><?= sanitize('Contractor Login'); ?></a>
+                        <a href="/department/login.php"><?= sanitize('Department Login'); ?></a>
                         <a href="/auth/login.php" class="primary"><?= sanitize(t('nav_auth')); ?></a>
                     <?php endif; ?>
                     <form method="get" class="lang-toggle">
