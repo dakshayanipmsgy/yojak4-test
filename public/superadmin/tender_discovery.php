@@ -9,10 +9,36 @@ safe_page(function () {
     $sources = tender_discovery_sources();
     $state = tender_discovery_state();
     $lastSummary = $state['lastSummary'] ?? null;
+    $index = tender_discovery_index();
+
+    $sourceNames = [];
+    foreach ($sources as $src) {
+        $sourceNames[$src['sourceId']] = $src['name'] ?? $src['sourceId'];
+    }
+
+    $latestDiscovered = [];
+    foreach ($index as $entry) {
+        $discId = $entry['discId'] ?? '';
+        if ($discId === '' || !empty($entry['deletedAt'])) {
+            continue;
+        }
+        $latestDiscovered[] = [
+            'discId' => $discId,
+            'title' => $entry['title'] ?? '',
+            'deadlineAt' => $entry['deadlineAt'] ?? null,
+            'createdAt' => $entry['createdAt'] ?? '',
+            'sourceName' => $sourceNames[$entry['sourceId'] ?? ''] ?? ($entry['sourceId'] ?? ''),
+        ];
+    }
+
+    usort($latestDiscovered, function ($a, $b) {
+        return strcmp($b['createdAt'] ?? '', $a['createdAt'] ?? '');
+    });
+    $latestDiscovered = array_slice($latestDiscovered, 0, 20);
 
     $title = get_app_config()['appName'] . ' | Tender Discovery';
 
-    render_layout($title, function () use ($sources, $state, $lastSummary) {
+    render_layout($title, function () use ($sources, $state, $lastSummary, $latestDiscovered) {
         $cronToken = $state['cronToken'] ?? '';
         ?>
         <div class="card" style="display:grid; gap:14px;">
@@ -122,6 +148,46 @@ safe_page(function () {
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
+        </div>
+
+        <div class="card" style="margin-top:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <h3 style="margin:0;">Discovered Tenders (latest)</h3>
+                <a class="btn secondary" href="/superadmin/discovered_tenders.php">View all discovered tenders</a>
+            </div>
+            <div style="overflow:auto;">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Deadline</th>
+                        <th>Source</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (!$latestDiscovered): ?>
+                        <tr>
+                            <td colspan="5">
+                                <p class="muted" style="margin:0;">No discovered tenders yet.</p>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
+                    <?php foreach ($latestDiscovered as $row): ?>
+                        <tr>
+                            <td><?= sanitize($row['title'] ?? ''); ?></td>
+                            <td><?= sanitize($row['deadlineAt'] ?? 'Not provided'); ?></td>
+                            <td><?= sanitize($row['sourceName'] ?? ''); ?></td>
+                            <td><?= sanitize($row['createdAt'] ?? ''); ?></td>
+                            <td>
+                                <a class="btn secondary" href="/superadmin/discovered_tender_view.php?id=<?= sanitize(urlencode($row['discId'] ?? '')); ?>">View</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
         <script>
             function addSourceRow() {
