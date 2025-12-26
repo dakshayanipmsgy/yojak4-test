@@ -10,6 +10,18 @@ safe_page(function () {
 
     $config = load_ai_config(true);
     $errors = [];
+    $lastProviderCall = null;
+
+    if (file_exists(AI_PROVIDER_RAW_LOG)) {
+        $lines = file(AI_PROVIDER_RAW_LOG, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($lines) {
+            $lastLine = trim((string)end($lines));
+            $decoded = json_decode($lastLine, true);
+            if (is_array($decoded)) {
+                $lastProviderCall = $decoded;
+            }
+        }
+    }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_csrf();
@@ -48,7 +60,7 @@ safe_page(function () {
     $displayKey = mask_api_key_display($config['apiKey'] ?? null);
     $title = get_app_config()['appName'] . ' | AI Studio';
 
-    render_layout($title, function () use ($config, $displayKey) {
+    render_layout($title, function () use ($config, $displayKey, $lastProviderCall) {
         ?>
         <div class="card">
             <div style="display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;justify-content:space-between;">
@@ -93,7 +105,8 @@ safe_page(function () {
                 <p class="muted" style="margin-top:6px;"><?= sanitize('Uses the saved text model and masks sensitive values. Shows raw and parsed JSON output.'); ?></p>
                 <form id="ai-test-form" action="/superadmin/ai_test.php" method="post" style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                    <button class="btn secondary" type="submit"><?= sanitize('Test AI'); ?></button>
+                    <button class="btn secondary" type="submit" name="mode" value="connectivity"><?= sanitize('Test AI'); ?></button>
+                    <button class="btn" type="submit" name="mode" value="json_strict"><?= sanitize('Test JSON Mode'); ?></button>
                     <span class="pill"><?= sanitize('Non-destructive sample prompt'); ?></span>
                 </form>
             </div>
@@ -118,6 +131,30 @@ safe_page(function () {
                 });
             }
         </script>
+        <?php if ($lastProviderCall): ?>
+            <div class="card" style="margin-top:14px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                    <div>
+                        <h3 style="margin:0 0 4px 0;"><?= sanitize('Last provider call (redacted)'); ?></h3>
+                        <p class="muted" style="margin:0;"><?= sanitize('Snapshot omits API keys and shows only safe envelope data.'); ?></p>
+                    </div>
+                    <span class="pill"><?= sanitize('Auto-logged'); ?></span>
+                </div>
+                <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
+                    <div class="pill"><?= sanitize('Provider: ' . ($lastProviderCall['provider'] ?? 'unknown')); ?></div>
+                    <div class="pill"><?= sanitize('Model: ' . ($lastProviderCall['model'] ?? 'unknown')); ?></div>
+                    <div class="pill"><?= sanitize('HTTP: ' . ($lastProviderCall['httpStatus'] ?? 'n/a')); ?></div>
+                    <div class="pill"><?= sanitize('Parsed: ' . (!empty($lastProviderCall['parsedOk']) ? 'yes' : 'no')); ?></div>
+                    <?php if (!empty($lastProviderCall['requestId'])): ?>
+                        <div class="pill muted"><?= sanitize('Request ID: ' . $lastProviderCall['requestId']); ?></div>
+                    <?php endif; ?>
+                </div>
+                <div style="margin-top:10px;">
+                    <label class="muted"><?= sanitize('Response snippet'); ?></label>
+                    <pre style="background:#0f1520;border:1px solid #30363d;border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap;"><?= sanitize($lastProviderCall['responseSnippet'] ?? ''); ?></pre>
+                </div>
+            </div>
+        <?php endif; ?>
         <?php
     });
 });
