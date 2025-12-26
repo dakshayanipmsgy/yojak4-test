@@ -78,6 +78,14 @@ function ai_config_defaults(): array
         'apiKey' => null,
         'textModel' => '',
         'imageModel' => '',
+        'purposeModels' => [
+            'offlineTenderExtract' => [
+                'primaryModel' => '',
+                'fallbackModel' => '',
+                'useStreamingFallback' => true,
+                'retryOnceOnEmpty' => true,
+            ],
+        ],
         'updatedAt' => null,
     ];
 }
@@ -91,6 +99,11 @@ function load_ai_config(bool $includeKey = false): array
     } else {
         $config = array_merge(ai_config_defaults(), $config);
     }
+    $defaults = ai_config_defaults();
+    $config['purposeModels'] = array_merge(
+        $defaults['purposeModels'],
+        is_array($config['purposeModels'] ?? null) ? $config['purposeModels'] : []
+    );
     $config['hasApiKey'] = !empty($config['apiKey']);
     if ($includeKey) {
         $config['apiKey'] = reveal_api_key($config['apiKey']);
@@ -100,17 +113,44 @@ function load_ai_config(bool $includeKey = false): array
     return $config;
 }
 
-function save_ai_config(string $provider, string $apiKey, string $textModel, string $imageModel): void
+function save_ai_config(string $provider, string $apiKey, string $textModel, string $imageModel, array $purposeModels = []): void
 {
     ensure_ai_storage();
+    $defaults = ai_config_defaults();
+    $existing = load_ai_config(true);
+    $existingPurpose = is_array($existing['purposeModels'] ?? null) ? $existing['purposeModels'] : [];
+    $mergedPurposeModels = array_merge($defaults['purposeModels'], $existingPurpose, $purposeModels);
     $payload = [
         'provider' => $provider,
         'apiKey' => obfuscate_api_key($apiKey),
         'textModel' => $textModel,
         'imageModel' => $imageModel,
+        'purposeModels' => $mergedPurposeModels,
         'updatedAt' => now_kolkata()->format(DateTime::ATOM),
     ];
     writeJsonAtomic(AI_CONFIG_PATH, $payload);
+}
+
+function ai_resolve_purpose_models(array $config, string $purpose): array
+{
+    $defaults = ai_config_defaults();
+    $purposeModels = $config['purposeModels'] ?? [];
+    $resolved = array_merge($defaults['purposeModels'], is_array($purposeModels) ? $purposeModels : []);
+    $purposeKey = $purpose === 'offline_tender_extract' ? 'offlineTenderExtract' : $purpose;
+    $selected = $resolved[$purposeKey] ?? [
+        'primaryModel' => $config['textModel'] ?? '',
+        'fallbackModel' => '',
+        'useStreamingFallback' => false,
+        'retryOnceOnEmpty' => false,
+    ];
+    $primary = ($selected['primaryModel'] ?? '') ?: ($config['textModel'] ?? '');
+    $fallback = $selected['fallbackModel'] ?? '';
+    return [
+        'primaryModel' => $primary,
+        'fallbackModel' => $fallback,
+        'useStreamingFallback' => (bool)($selected['useStreamingFallback'] ?? false),
+        'retryOnceOnEmpty' => (bool)($selected['retryOnceOnEmpty'] ?? false),
+    ];
 }
 
 function strip_code_fences(string $text): string
@@ -387,11 +427,71 @@ function ai_extract_gemini_text(array $decoded): string
     return '';
 }
 
-function ai_provider_response_openai(array $config, string $systemPrompt, string $userPrompt, float $temperature = 0.2, int $maxTokens = 500): array
+function ai_gemini_finish_reason(array $decoded): ?string
+{
+    $candidates = $decoded['candidates'] ?? [];
+    if (is_array($candidates)) {
+        foreach ($candidates as $candidate) {
+            if (!is_array($candidate)) {
+                continue;
+            }
+            if (!empty($candidate['finishReason'])) {
+                return (string)$candidate['finishReason'];
+            }
+        }
+    }
+    return null;
+}
+
+function ai_gemini_block_reason(array $decoded): ?string
+{
+    if (!empty($decoded['promptFeedback']['blockReason'])) {
+        return (string)$decoded['promptFeedback']['blockReason'];
+    }
+    $candidates = $decoded['candidates'] ?? [];
+    if (is_array($candidates)) {
+        foreach ($candidates as $candidate) {
+            if (!empty($candidate['safetyRatings'])) {
+                foreach ((array)$candidate['safetyRatings'] as $rating) {
+                    if (!empty($rating['blocked'])) {
+                        return 'safety_blocked';
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}
+
+function ai_gemini_safety_summary($ratings): string
+{
+    if (!is_array($ratings)) {
+        return '';
+    }
+    $summary = [];
+    foreach ($ratings as $rating) {
+        if (!is_array($rating)) {
+            continue;
+        }
+        $category = $rating['category'] ?? ($rating['harmCategory'] ?? ($rating['name'] ?? 'unknown'));
+        $probability = $rating['probability'] ?? ($rating['probabilityScore'] ?? ($rating['severity'] ?? ($rating['blocked'] ?? '')));
+        $entry = trim((string)$category);
+        if ($probability !== '' && $probability !== null) {
+            $entry .= ':' . (is_bool($probability) ? ($probability ? 'blocked' : 'ok') : (string)$probability);
+        }
+        if ($entry !== '') {
+            $summary[] = $entry;
+        }
+    }
+    return implode(', ', $summary);
+}
+
+function ai_provider_response_openai(array $config, string $systemPrompt, string $userPrompt, float $temperature = 0.2, int $maxTokens = 500, ?string $modelOverride = null): array
 {
     $startedAt = microtime(true);
+    $model = $modelOverride ?: ($config['textModel'] ?? '');
     $payload = [
-        'model' => $config['textModel'],
+        'model' => $model,
         'messages' => [
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $userPrompt],
@@ -419,7 +519,7 @@ function ai_provider_response_openai(array $config, string $systemPrompt, string
     $text = '';
     $decoded = null;
     $requestId = null;
-    $modelUsed = $config['textModel'] ?? '';
+    $modelUsed = $model;
     $rawBody = (string)($response === false ? '' : $response);
 
     if ($response === false) {
@@ -453,13 +553,19 @@ function ai_provider_response_openai(array $config, string $systemPrompt, string
         'ok' => $ok,
         'modelUsed' => $modelUsed,
         'latencyMs' => $latencyMs,
+        'temperatureUsed' => $temperature,
+        'maxTokensUsed' => $maxTokens,
     ];
 }
 
-function ai_provider_response_gemini(array $config, string $systemPrompt, string $userPrompt, float $temperature = 0.2, int $maxTokens = 500): array
+function ai_provider_response_gemini(array $config, string $systemPrompt, string $userPrompt, float $temperature = 0.2, int $maxTokens = 500, array $options = []): array
 {
     $startedAt = microtime(true);
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($config['textModel']) . ':generateContent?key=' . urlencode((string)($config['apiKey'] ?? ''));
+    $model = $options['modelOverride'] ?? ($config['textModel'] ?? '');
+    $stream = (bool)($options['stream'] ?? false);
+    $attemptType = $options['attemptType'] ?? 'primary';
+    $urlBase = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($model);
+    $url = $urlBase . ($stream ? ':streamGenerateContent' : ':generateContent') . '?key=' . urlencode((string)($config['apiKey'] ?? ''));
     $payload = [
         'system_instruction' => [
             'parts' => [
@@ -483,6 +589,7 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Content-Type: application/json',
+        'Accept: ' . ($stream ? 'text/event-stream' : 'application/json'),
     ]);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
@@ -498,29 +605,78 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
     $text = '';
     $decoded = null;
     $requestId = null;
-    $modelUsed = $config['textModel'] ?? '';
+    $modelUsed = $model;
     $rawBody = (string)($response === false ? '' : $response);
+    $finishReason = null;
+    $blockReason = null;
+    $safetySummary = '';
 
     if ($response === false) {
         $providerError = 'Request failed: ' . ($curlError !== '' ? $curlError : 'transport error');
     } else {
-        $decoded = json_decode($rawBody, true);
-        if (is_array($decoded)) {
-            $requestId = $decoded['responseId'] ?? null;
-            $modelUsed = $decoded['model'] ?? $modelUsed;
-            $errorPayload = ai_detect_provider_error_payload($decoded);
-            if ($httpCode >= 200 && $httpCode < 300) {
-                $providerError = $errorPayload;
-                $text = ai_extract_gemini_text($decoded);
-            } else {
-                $providerError = $errorPayload ?? ('HTTP ' . $httpCode);
+        if ($stream) {
+            $lines = preg_split('/\\r?\\n/', $rawBody) ?: [];
+            foreach ($lines as $line) {
+                $line = trim((string)$line);
+                if ($line === '' || $line === 'data: [DONE]') {
+                    continue;
+                }
+                $jsonLine = strpos($line, 'data:') === 0 ? trim(substr($line, 5)) : $line;
+                $candidateDecoded = json_decode($jsonLine, true);
+                if (!is_array($candidateDecoded)) {
+                    continue;
+                }
+                $decoded = $candidateDecoded;
+                $requestId = $candidateDecoded['responseId'] ?? $requestId;
+                $modelUsed = $candidateDecoded['model'] ?? $modelUsed;
+                $chunkText = ai_extract_gemini_text($candidateDecoded);
+                if ($chunkText !== '') {
+                    $text .= ($text !== '' ? "\n" : '') . $chunkText;
+                }
+                $finishReason = $finishReason ?: ai_gemini_finish_reason($candidateDecoded);
+                $blockReason = $blockReason ?: ai_gemini_block_reason($candidateDecoded);
+                $safetySummary = $safetySummary ?: ai_gemini_safety_summary($candidateDecoded['promptFeedback']['safetyRatings'] ?? ($candidateDecoded['candidates'][0]['safetyRatings'] ?? []));
+                $errorPayload = ai_detect_provider_error_payload($candidateDecoded);
+                if ($errorPayload && $providerError === null) {
+                    $providerError = $errorPayload;
+                }
             }
-        } elseif ($httpCode < 200 || $httpCode >= 300) {
-            $providerError = 'HTTP ' . $httpCode;
+            if ($httpCode < 200 || $httpCode >= 300) {
+                $providerError = $providerError ?? ('HTTP ' . $httpCode);
+            } elseif ($providerError === null && $blockReason) {
+                $providerError = 'Prompt blocked: ' . $blockReason;
+            }
+        } else {
+            $decoded = json_decode($rawBody, true);
+            if (is_array($decoded)) {
+                $requestId = $decoded['responseId'] ?? null;
+                $modelUsed = $decoded['model'] ?? $modelUsed;
+                $finishReason = ai_gemini_finish_reason($decoded);
+                $blockReason = ai_gemini_block_reason($decoded);
+                $safetySummary = ai_gemini_safety_summary($decoded['promptFeedback']['safetyRatings'] ?? ($decoded['candidates'][0]['safetyRatings'] ?? []));
+                $errorPayload = ai_detect_provider_error_payload($decoded);
+                $hasCandidates = !empty($decoded['candidates']) && is_array($decoded['candidates']);
+                if ($httpCode >= 200 && $httpCode < 300) {
+                    if ($blockReason) {
+                        $providerError = 'Prompt blocked: ' . $blockReason;
+                    } elseif (!$hasCandidates && !empty($decoded['promptFeedback'])) {
+                        $providerError = 'Prompt feedback indicated an issue.';
+                    } else {
+                        $providerError = $errorPayload;
+                        $text = ai_extract_gemini_text($decoded);
+                    }
+                } else {
+                    $providerError = $errorPayload ?? ('HTTP ' . $httpCode);
+                }
+            } elseif ($httpCode < 200 || $httpCode >= 300) {
+                $providerError = 'HTTP ' . $httpCode;
+            } else {
+                $providerError = 'Malformed response from provider.';
+            }
         }
     }
 
-    $ok = $providerError === null && $httpCode >= 200 && $httpCode < 300;
+    $ok = $providerError === null && $httpCode >= 200 && $httpCode < 300 && !$blockReason;
 
     return [
         'provider' => 'gemini',
@@ -532,6 +688,13 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
         'ok' => $ok,
         'modelUsed' => $modelUsed,
         'latencyMs' => $latencyMs,
+        'finishReason' => $finishReason,
+        'blockReason' => $blockReason,
+        'safetySummary' => $safetySummary,
+        'attemptType' => $attemptType,
+        'stream' => $stream,
+        'temperatureUsed' => $temperature,
+        'maxTokensUsed' => $maxTokens,
     ];
 }
 
@@ -554,12 +717,24 @@ function ai_call(array $params): array
         'latencyMs' => null,
         'modelUsed' => null,
         'temperatureUsed' => null,
+        'finishReason' => null,
+        'promptBlockReason' => null,
+        'safetyRatingsSummary' => '',
+        'retryCount' => 0,
+        'fallbackUsed' => false,
+        'attempts' => [],
     ];
 
     $config = load_ai_config(true);
     $provider = $config['provider'] ?? '';
     $apiKey = $config['apiKey'] ?? '';
-    if (($config['provider'] ?? '') === '' || ($config['textModel'] ?? '') === '') {
+    $systemPrompt = $params['systemPrompt'] ?? '';
+    $userPrompt = $params['userPrompt'] ?? '';
+    $expectJson = (bool)($params['expectJson'] ?? false);
+    $purpose = $params['purpose'] ?? 'general';
+    $runMode = $params['runMode'] ?? 'strict';
+    $purposeModels = ai_resolve_purpose_models($config, $purpose);
+    if (($config['provider'] ?? '') === '' || (($config['textModel'] ?? '') === '' && ($purposeModels['primaryModel'] ?? '') === '')) {
         $result['errors'][] = 'AI provider configuration missing.';
     }
     if (!$apiKey) {
@@ -568,12 +743,6 @@ function ai_call(array $params): array
     if (!function_exists('curl_init')) {
         $result['errors'][] = 'cURL extension is required.';
     }
-
-    $systemPrompt = $params['systemPrompt'] ?? '';
-    $userPrompt = $params['userPrompt'] ?? '';
-    $expectJson = (bool)($params['expectJson'] ?? false);
-    $purpose = $params['purpose'] ?? 'general';
-    $runMode = $params['runMode'] ?? 'strict';
     $temperature = isset($params['temperature']) ? max(0.1, min(1.0, (float)$params['temperature'])) : 0.2;
     $maxTokens = isset($params['maxTokens']) ? max(200, (int)$params['maxTokens']) : 500;
 
@@ -583,9 +752,90 @@ function ai_call(array $params): array
     if (empty($result['errors'])) {
         try {
             if ($provider === 'openai') {
-                $providerResult = ai_provider_response_openai($config, $systemPrompt, $userPrompt, $temperature, $maxTokens);
+                $providerResult = ai_provider_response_openai($config, $systemPrompt, $userPrompt, $temperature, $maxTokens, $purposeModels['primaryModel'] ?? null);
+                $providerResult['attemptType'] = 'primary';
+                $result['attempts'][] = $providerResult;
             } elseif ($provider === 'gemini') {
-                $providerResult = ai_provider_response_gemini($config, $systemPrompt, $userPrompt, $temperature, $maxTokens);
+                $primary = ai_provider_response_gemini(
+                    $config,
+                    $systemPrompt,
+                    $userPrompt,
+                    $temperature,
+                    $maxTokens,
+                    [
+                        'modelOverride' => $purposeModels['primaryModel'] ?? null,
+                        'attemptType' => 'primary',
+                    ]
+                );
+                $result['attempts'][] = $primary;
+                $providerResult = $primary;
+                $retryCount = 0;
+                if (($primary['ok'] ?? false) && trim((string)($primary['text'] ?? '')) === '') {
+                    if (!empty($purposeModels['useStreamingFallback'])) {
+                        $streamAttempt = ai_provider_response_gemini(
+                            $config,
+                            $systemPrompt,
+                            $userPrompt,
+                            $temperature,
+                            $maxTokens,
+                            [
+                                'modelOverride' => $purposeModels['primaryModel'] ?? null,
+                                'stream' => true,
+                                'attemptType' => 'stream_fallback',
+                            ]
+                        );
+                        $result['attempts'][] = $streamAttempt;
+                        $providerResult = $streamAttempt;
+                    }
+                    if (trim((string)($providerResult['text'] ?? '')) === '' && !empty($purposeModels['retryOnceOnEmpty'])) {
+                        $retryCount++;
+                        $retryAttempt = ai_provider_response_gemini(
+                            $config,
+                            $systemPrompt,
+                            $userPrompt,
+                            0.7,
+                            max($maxTokens, 1024),
+                            [
+                                'modelOverride' => $purposeModels['primaryModel'] ?? null,
+                                'attemptType' => 'retry',
+                            ]
+                        );
+                        $result['attempts'][] = $retryAttempt;
+                        $providerResult = $retryAttempt;
+                    }
+                    if (trim((string)($providerResult['text'] ?? '')) === '' && !empty($purposeModels['fallbackModel'])) {
+                        $result['fallbackUsed'] = true;
+                        $fallbackAttempt = ai_provider_response_gemini(
+                            $config,
+                            $systemPrompt,
+                            $userPrompt,
+                            0.7,
+                            max($maxTokens, 1024),
+                            [
+                                'modelOverride' => $purposeModels['fallbackModel'],
+                                'attemptType' => 'fallback_model',
+                            ]
+                        );
+                        $result['attempts'][] = $fallbackAttempt;
+                        $providerResult = $fallbackAttempt;
+                    }
+                } elseif (!($primary['ok'] ?? false) && !empty($purposeModels['fallbackModel'])) {
+                    $result['fallbackUsed'] = true;
+                    $fallbackAttempt = ai_provider_response_gemini(
+                        $config,
+                        $systemPrompt,
+                        $userPrompt,
+                        0.6,
+                        $maxTokens,
+                        [
+                            'modelOverride' => $purposeModels['fallbackModel'],
+                            'attemptType' => 'fallback_model',
+                        ]
+                    );
+                    $result['attempts'][] = $fallbackAttempt;
+                    $providerResult = $fallbackAttempt;
+                }
+                $result['retryCount'] = $retryCount ?? 0;
             } else {
                 $result['errors'][] = 'Unsupported provider.';
             }
@@ -599,20 +849,26 @@ function ai_call(array $params): array
         $result['rawText'] = $providerResult['text'] ?? '';
         $result['text'] = $result['rawText'];
         $result['requestId'] = $providerResult['requestId'] ?? null;
+        $result['responseId'] = $providerResult['requestId'] ?? null;
+        $result['finishReason'] = $providerResult['finishReason'] ?? null;
+        $result['promptBlockReason'] = $providerResult['blockReason'] ?? null;
+        $result['safetyRatingsSummary'] = $providerResult['safetySummary'] ?? '';
         $result['providerError'] = $providerResult['providerError'] ?? null;
         $result['providerOk'] = (bool)($providerResult['ok'] ?? false);
         $result['rawBody'] = $providerResult['rawBody'] ?? '';
         $result['latencyMs'] = $providerResult['latencyMs'] ?? null;
         $result['modelUsed'] = $providerResult['modelUsed'] ?? ($config['textModel'] ?? null);
-        $result['temperatureUsed'] = $temperature;
+        $result['temperatureUsed'] = $providerResult['temperatureUsed'] ?? $temperature;
         $result['rawEnvelope'] = [
             'provider' => $provider,
             'model' => $result['modelUsed'],
             'httpStatus' => $providerResult['httpStatus'] ?? null,
             'requestId' => $providerResult['requestId'] ?? null,
             'latencyMs' => $providerResult['latencyMs'] ?? null,
-            'temperature' => $temperature,
-            'maxTokens' => $maxTokens,
+            'temperature' => $providerResult['temperatureUsed'] ?? $temperature,
+            'maxTokens' => $providerResult['maxTokensUsed'] ?? $maxTokens,
+            'attemptType' => $providerResult['attemptType'] ?? 'primary',
+            'stream' => $providerResult['stream'] ?? false,
         ];
 
         if ($result['providerError']) {
@@ -637,6 +893,8 @@ function ai_call(array $params): array
             } else {
                 $result['parsedOk'] = $result['providerOk'];
             }
+        } elseif ($providerResult['ok'] ?? false) {
+            $result['errors'][] = 'Provider succeeded but returned empty content.';
         }
     }
 
@@ -647,11 +905,46 @@ function ai_call(array $params): array
         $result['rawEnvelope']['latencyMs'] = $result['rawEnvelope']['latencyMs'] ?? $durationMs;
     }
 
+    foreach ($result['attempts'] as $attempt) {
+        ai_log([
+            'event' => 'ai_call_attempt',
+            'purpose' => $purpose,
+            'provider' => $provider,
+            'model' => $attempt['modelUsed'] ?? ($config['textModel'] ?? ''),
+            'attemptType' => $attempt['attemptType'] ?? 'primary',
+            'expectJson' => $expectJson,
+            'ok' => $attempt['ok'] ?? false,
+            'textLen' => strlen((string)($attempt['text'] ?? '')),
+            'finishReason' => $attempt['finishReason'] ?? null,
+            'blockReason' => $attempt['blockReason'] ?? null,
+            'requestId' => $attempt['requestId'] ?? null,
+            'errorCount' => !empty($attempt['providerError']) ? 1 : 0,
+            'errors' => array_filter([$attempt['providerError'] ?? null]),
+            'httpStatus' => $attempt['httpStatus'] ?? null,
+            'runMode' => $runMode,
+            'temperature' => $attempt['temperatureUsed'] ?? $temperature,
+            'latencyMs' => $attempt['latencyMs'] ?? $durationMs,
+        ]);
+
+        ai_provider_log_raw([
+            'event' => 'ai_provider_raw',
+            'provider' => $provider,
+            'model' => $attempt['modelUsed'] ?? ($config['textModel'] ?? ''),
+            'attemptType' => $attempt['attemptType'] ?? 'primary',
+            'httpStatus' => $attempt['httpStatus'] ?? null,
+            'requestId' => $attempt['requestId'] ?? null,
+            'responseSnippet' => substr($attempt['rawBody'] ?? ($attempt['text'] ?? ''), 0, 800),
+            'parsedOk' => $result['parsedOk'],
+            'errors' => array_slice($result['errors'], 0, 5),
+            'latencyMs' => $attempt['latencyMs'] ?? $durationMs,
+        ]);
+    }
+
     ai_log([
         'event' => 'ai_call',
         'purpose' => $purpose,
         'provider' => $provider,
-        'model' => $config['textModel'] ?? '',
+        'model' => $result['modelUsed'] ?? ($config['textModel'] ?? ''),
         'expectJson' => $expectJson,
         'ok' => $result['ok'],
         'parsedOk' => $result['parsedOk'],
@@ -662,21 +955,11 @@ function ai_call(array $params): array
         'httpStatus' => $result['httpStatus'],
         'runMode' => $runMode,
         'temperature' => $temperature,
+        'finishReason' => $result['finishReason'],
+        'blockReason' => $result['promptBlockReason'],
+        'retryCount' => $result['retryCount'],
+        'fallbackUsed' => $result['fallbackUsed'],
     ]);
-
-    if ($providerResult !== null) {
-        ai_provider_log_raw([
-            'event' => 'ai_provider_raw',
-            'provider' => $provider,
-            'model' => $config['textModel'] ?? '',
-            'httpStatus' => $providerResult['httpStatus'] ?? null,
-            'requestId' => $providerResult['requestId'] ?? null,
-            'responseSnippet' => substr($providerResult['rawBody'] ?? ($result['rawText'] ?? ''), 0, 500),
-            'parsedOk' => $result['parsedOk'],
-            'errors' => array_slice($result['errors'], 0, 5),
-            'latencyMs' => $durationMs,
-        ]);
-    }
 
     $result['provider'] = $provider;
 

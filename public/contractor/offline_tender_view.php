@@ -58,6 +58,12 @@ safe_page(function () {
             'parseStage' => 'fallback_manual',
             'provider' => '',
             'requestId' => null,
+            'responseId' => null,
+            'finishReason' => null,
+            'promptBlockReason' => null,
+            'safetyRatingsSummary' => '',
+            'retryCount' => 0,
+            'fallbackUsed' => false,
             'rawEnvelope' => null,
             'runMode' => 'strict',
         ];
@@ -66,6 +72,8 @@ safe_page(function () {
         $source = $tender['source'] ?? [];
         $aiHttpBadge = $ai['httpStatus'] ? 'HTTP ' . $ai['httpStatus'] : 'HTTP ?';
         $aiParseBadge = $ai['parsedOk'] ? 'Parsed' : ($ai['providerOk'] ? 'Needs Review' : 'Provider Error');
+        $aiBlocked = !empty($ai['promptBlockReason']);
+        $aiEmpty = !empty($ai['providerOk']) && trim((string)($ai['rawText'] ?? '')) === '';
         ?>
         <div class="card" style="display:grid; gap:10px;">
             <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
@@ -150,7 +158,11 @@ safe_page(function () {
             <?php if (!empty($ai['lastRunAt']) && (!empty($ai['errors']) || empty($ai['parsedOk']))): ?>
                 <div class="flashes">
                     <div class="flash error">
-                        <?php if (!empty($ai['providerOk'])): ?>
+                        <?php if ($aiBlocked): ?>
+                            <?= sanitize('AI response blocked by safety filters (' . ($ai['promptBlockReason'] ?? 'blocked') . '). Please rephrase and try again.'); ?>
+                        <?php elseif ($aiEmpty): ?>
+                            <?= sanitize('Gemini returned an empty final response. Streaming fallback, retry, and fallback model attempts were triggered automatically. Consider switching models in AI Studio if the issue persists.'); ?>
+                        <?php elseif (!empty($ai['providerOk'])): ?>
                             <?= sanitize('AI responded, but the output was not in the expected format. You can edit manually, or re-run AI. The raw AI text is shown below.'); ?>
                         <?php else: ?>
                             <?= sanitize('The AI provider reported a problem. Please review the debug info below and retry.'); ?>
@@ -232,16 +244,23 @@ safe_page(function () {
                     </ul>
                 </div>
                 <details style="border:1px solid #30363d; border-radius:10px; padding:10px; background:#0f1520;">
-                    <summary style="cursor:pointer;"><?= sanitize('Show AI Debug'); ?></summary>
+                    <summary style="cursor:pointer;"><?= sanitize('Diagnostics'); ?></summary>
                     <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start;">
-                        <div>
-                            <div class="pill" style="margin-bottom:6px;"><?= sanitize('Provider: ' . ($ai['provider'] ?: 'not run')); ?></div>
-                            <div class="pill" style="margin-bottom:6px;"><?= sanitize('Model: ' . (($ai['rawEnvelope']['model'] ?? '') ?: 'unknown')); ?></div>
-                            <div class="pill" style="margin-bottom:6px;"><?= sanitize('HTTP: ' . ($ai['httpStatus'] ?? 'n/a')); ?></div>
-                            <div class="pill" style="margin-bottom:6px;"><?= sanitize('Parsed: ' . ($ai['parsedOk'] ? 'yes' : 'no')); ?></div>
-                            <div class="pill muted" style="margin-bottom:6px;"><?= sanitize('Parse stage: ' . ($ai['parseStage'] ?? 'fallback_manual')); ?></div>
+                        <div style="display:grid;gap:6px;">
+                            <div class="pill"><?= sanitize('Provider: ' . ($ai['provider'] ?: 'not run')); ?></div>
+                            <div class="pill"><?= sanitize('Model: ' . (($ai['rawEnvelope']['model'] ?? '') ?: 'unknown')); ?></div>
+                            <div class="pill"><?= sanitize('HTTP: ' . ($ai['httpStatus'] ?? 'n/a')); ?></div>
+                            <div class="pill"><?= sanitize('Finish reason: ' . (($ai['finishReason'] ?? 'n/a'))); ?></div>
+                            <div class="pill"><?= sanitize('Block reason: ' . (($ai['promptBlockReason'] ?? 'none'))); ?></div>
+                            <div class="pill"><?= sanitize('Retry count: ' . ((int)($ai['retryCount'] ?? 0))); ?></div>
+                            <div class="pill"><?= sanitize('Fallback used: ' . (!empty($ai['fallbackUsed']) ? 'yes' : 'no')); ?></div>
+                            <div class="pill muted"><?= sanitize('Parsed: ' . ($ai['parsedOk'] ? 'yes' : 'no')); ?></div>
+                            <div class="pill muted"><?= sanitize('Parse stage: ' . ($ai['parseStage'] ?? 'fallback_manual')); ?></div>
                             <?php if (!empty($ai['requestId'])): ?>
                                 <div class="pill muted"><?= sanitize('Request ID: ' . $ai['requestId']); ?></div>
+                            <?php endif; ?>
+                            <?php if (!empty($ai['responseId'])): ?>
+                                <div class="pill muted"><?= sanitize('Response ID: ' . $ai['responseId']); ?></div>
                             <?php endif; ?>
                         </div>
                         <div>
@@ -254,6 +273,9 @@ safe_page(function () {
                                 </ul>
                             <?php else: ?>
                                 <p class="muted" style="margin:0;"><?= sanitize('No errors captured.'); ?></p>
+                            <?php endif; ?>
+                            <?php if (!empty($ai['safetyRatingsSummary'])): ?>
+                                <p class="muted" style="margin:6px 0 0 0;"><?= sanitize('Safety: ' . $ai['safetyRatingsSummary']); ?></p>
                             <?php endif; ?>
                         </div>
                     </div>

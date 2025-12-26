@@ -9,6 +9,12 @@ safe_page(function () {
     }
 
     $config = load_ai_config(true);
+    $offlineModels = $config['purposeModels']['offlineTenderExtract'] ?? [
+        'primaryModel' => '',
+        'fallbackModel' => '',
+        'useStreamingFallback' => true,
+        'retryOnceOnEmpty' => true,
+    ];
     $errors = [];
     $lastProviderCall = null;
 
@@ -29,6 +35,10 @@ safe_page(function () {
         $apiKeyInput = trim($_POST['api_key'] ?? '');
         $textModel = trim($_POST['text_model'] ?? '');
         $imageModel = trim($_POST['image_model'] ?? '');
+        $offlinePrimary = trim($_POST['offline_primary_model'] ?? ($offlineModels['primaryModel'] ?? ''));
+        $offlineFallback = trim($_POST['offline_fallback_model'] ?? ($offlineModels['fallbackModel'] ?? ''));
+        $offlineStreaming = isset($_POST['offline_use_streaming']) ? true : (bool)($offlineModels['useStreamingFallback'] ?? false);
+        $offlineRetry = isset($_POST['offline_retry_on_empty']) ? true : (bool)($offlineModels['retryOnceOnEmpty'] ?? false);
 
         if (!in_array($provider, ['openai', 'gemini'], true)) {
             $errors[] = 'Provider is required.';
@@ -46,7 +56,15 @@ safe_page(function () {
         }
 
         if (!$errors) {
-            save_ai_config($provider, $resolvedKey, $textModel, $imageModel);
+            $purposeModels = [
+                'offlineTenderExtract' => [
+                    'primaryModel' => $offlinePrimary,
+                    'fallbackModel' => $offlineFallback,
+                    'useStreamingFallback' => $offlineStreaming,
+                    'retryOnceOnEmpty' => $offlineRetry,
+                ],
+            ];
+            save_ai_config($provider, $resolvedKey, $textModel, $imageModel, $purposeModels);
             set_flash('success', 'AI settings saved successfully.');
             redirect('/superadmin/ai_studio.php');
         } else {
@@ -54,13 +72,19 @@ safe_page(function () {
             $config['provider'] = $provider;
             $config['textModel'] = $textModel;
             $config['imageModel'] = $imageModel;
+            $offlineModels = [
+                'primaryModel' => $offlinePrimary,
+                'fallbackModel' => $offlineFallback,
+                'useStreamingFallback' => $offlineStreaming,
+                'retryOnceOnEmpty' => $offlineRetry,
+            ];
         }
     }
 
     $displayKey = mask_api_key_display($config['apiKey'] ?? null);
     $title = get_app_config()['appName'] . ' | AI Studio';
 
-    render_layout($title, function () use ($config, $displayKey, $lastProviderCall) {
+    render_layout($title, function () use ($config, $displayKey, $lastProviderCall, $offlineModels) {
         ?>
         <div class="card">
             <div style="display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;justify-content:space-between;">
@@ -92,6 +116,26 @@ safe_page(function () {
                 <div class="field">
                     <label for="image_model"><?= sanitize('Image Model'); ?></label>
                     <input id="image_model" type="text" name="image_model" value="<?= sanitize($config['imageModel'] ?? ''); ?>" required placeholder="<?= sanitize('e.g. gpt-image-1'); ?>">
+                </div>
+                <div class="field">
+                    <label for="offline_primary_model"><?= sanitize('Offline Tender Primary Model'); ?></label>
+                    <input id="offline_primary_model" type="text" name="offline_primary_model" value="<?= sanitize($offlineModels['primaryModel'] ?? ''); ?>" placeholder="<?= sanitize('Defaults to Text Model when blank'); ?>">
+                    <small class="muted"><?= sanitize('Used for offline tender extraction.'); ?></small>
+                </div>
+                <div class="field">
+                    <label for="offline_fallback_model"><?= sanitize('Offline Tender Fallback Model'); ?></label>
+                    <input id="offline_fallback_model" type="text" name="offline_fallback_model" value="<?= sanitize($offlineModels['fallbackModel'] ?? ''); ?>" placeholder="<?= sanitize('e.g. gemini-3-flash-preview'); ?>">
+                    <small class="muted"><?= sanitize('Attempted after retries when Gemini returns empty content.'); ?></small>
+                </div>
+                <div class="field" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;grid-column:1/-1;">
+                    <label class="pill" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" name="offline_use_streaming" value="1" <?= !empty($offlineModels['useStreamingFallback']) ? 'checked' : ''; ?>>
+                        <?= sanitize('Use streaming fallback when empty'); ?>
+                    </label>
+                    <label class="pill" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" name="offline_retry_on_empty" value="1" <?= !empty($offlineModels['retryOnceOnEmpty']) ? 'checked' : ''; ?>>
+                        <?= sanitize('Retry once on empty content'); ?>
+                    </label>
                 </div>
                 <div class="field" style="grid-column:1/-1;">
                     <button class="btn" type="submit"><?= sanitize('Save Settings'); ?></button>

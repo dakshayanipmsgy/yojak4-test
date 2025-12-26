@@ -16,13 +16,35 @@ safe_page(function () {
     $runMode = trim($_POST['run_mode'] ?? 'strict');
     $lenient = $runMode === 'lenient';
     $tender = $offtdId !== '' ? load_offline_tender($yojId, $offtdId) : null;
+    $aiState = $tender['ai'] ?? [];
     if (!$tender || ($tender['yojId'] ?? '') !== $yojId) {
         render_error_page('Tender not found.');
         return;
     }
 
+    $now = now_kolkata();
+    $recentRuns = [];
+    foreach ((array)($aiState['runHistory'] ?? []) as $runAt) {
+        $ts = strtotime((string)$runAt);
+        if ($ts !== false && ($now->getTimestamp() - $ts) <= 3600) {
+            $recentRuns[] = $runAt;
+        }
+    }
+    if (count($recentRuns) >= 5) {
+        set_flash('error', 'AI rerun limit reached (5 per hour). Please try again later.');
+        offline_tender_log([
+            'event' => 'ai_run_rate_limited',
+            'yojId' => $yojId,
+            'offtdId' => $offtdId,
+            'recentCount' => count($recentRuns),
+        ]);
+        redirect('/contractor/offline_tender_view.php?id=' . urlencode($offtdId));
+        return;
+    }
+
     $config = load_ai_config();
-    if (($config['provider'] ?? '') === '' || ($config['textModel'] ?? '') === '' || empty($config['hasApiKey'])) {
+    $resolvedModels = ai_resolve_purpose_models($config, 'offline_tender_extract');
+    if (($config['provider'] ?? '') === '' || ((($config['textModel'] ?? '') === '') && (($resolvedModels['primaryModel'] ?? '') === '')) || empty($config['hasApiKey'])) {
         set_flash('error', 'AI is not configured. Please contact support. Superadmin can configure this in AI Studio (/superadmin/ai_studio.php).');
         ai_log([
             'event' => 'ai_missing_config',
@@ -43,12 +65,12 @@ safe_page(function () {
         'runMode' => $runMode,
     ]);
 
-    $now = now_kolkata()->format(DateTime::ATOM);
-    $aiState = $tender['ai'] ?? [];
-    $aiState['lastRunAt'] = $now;
+    $nowIso = $now->format(DateTime::ATOM);
+    $aiState['lastRunAt'] = $nowIso;
     $aiState['provider'] = $config['provider'] ?? '';
     $aiState['httpStatus'] = $aiResult['httpStatus'] ?? null;
     $aiState['requestId'] = $aiResult['requestId'] ?? null;
+    $aiState['responseId'] = $aiResult['responseId'] ?? ($aiResult['requestId'] ?? null);
     $aiState['rawText'] = $aiResult['rawText'] ?? '';
     $aiState['parsedOk'] = (bool)($aiResult['parsedOk'] ?? false);
     $aiState['parseStage'] = $aiResult['parseStage'] ?? 'fallback_manual';
@@ -56,9 +78,23 @@ safe_page(function () {
     $aiState['providerError'] = $aiResult['providerError'] ?? null;
     $aiState['providerOk'] = (bool)($aiResult['providerOk'] ?? false);
     $aiState['runMode'] = $runMode;
+    $aiState['finishReason'] = $aiResult['finishReason'] ?? null;
+    $aiState['promptBlockReason'] = $aiResult['promptBlockReason'] ?? null;
+    $aiState['safetyRatingsSummary'] = $aiResult['safetyRatingsSummary'] ?? '';
+    $aiState['retryCount'] = (int)($aiResult['retryCount'] ?? 0);
+    $aiState['fallbackUsed'] = (bool)($aiResult['fallbackUsed'] ?? false);
+    if (!empty($aiResult['attempts']) && is_array($aiResult['attempts'])) {
+        $aiState['attempts'] = $aiResult['attempts'];
+    }
     if (!empty($aiResult['rawEnvelope']) && is_array($aiResult['rawEnvelope'])) {
         $aiState['rawEnvelope'] = $aiResult['rawEnvelope'];
     }
+    $runHistory = array_values(array_filter((array)($aiState['runHistory'] ?? []), static function ($runAt) use ($now) {
+        $ts = strtotime((string)$runAt);
+        return $ts !== false && ($now->getTimestamp() - $ts) <= 86400;
+    }));
+    $runHistory[] = $nowIso;
+    $aiState['runHistory'] = array_slice($runHistory, -20);
 
     $newExtracted = offline_tender_defaults();
     $newChecklist = $tender['checklist'] ?? [];
@@ -90,12 +126,12 @@ safe_page(function () {
     if ($aiState['parsedOk']) {
         $aiState['candidateExtracted'] = $newExtracted;
         $aiState['candidateChecklist'] = $newChecklist;
-        $aiState['candidateReadyAt'] = $now;
+        $aiState['candidateReadyAt'] = $nowIso;
     }
 
     $tender['ai'] = $aiState;
     $tender['status'] = $aiState['parsedOk'] ? 'ai_ready' : 'editing';
-    $tender['updatedAt'] = $now;
+    $tender['updatedAt'] = $nowIso;
 
     save_offline_tender($tender);
 
@@ -107,12 +143,20 @@ safe_page(function () {
         'providerOk' => $aiState['providerOk'] ?? false,
         'httpStatus' => $aiState['httpStatus'] ?? null,
         'errorCount' => count($aiState['errors']),
+        'retryCount' => $aiState['retryCount'] ?? 0,
+        'fallbackUsed' => $aiState['fallbackUsed'] ?? false,
+        'finishReason' => $aiState['finishReason'] ?? null,
+        'blockReason' => $aiState['promptBlockReason'] ?? null,
     ]);
 
     if ($aiState['parsedOk']) {
         set_flash('success', 'AI responded successfully. Review the extracted values and apply them when ready.');
     } elseif (!empty($aiState['providerOk'])) {
-        set_flash('error', 'AI responded, but the output was not in JSON format. Review the debug details below and try again.');
+        if (trim((string)($aiState['rawText'] ?? '')) === '') {
+            set_flash('error', 'Gemini returned an empty final response. Streaming/retry/fallback have been attempted automatically. Consider switching to a fallback model in AI Studio.');
+        } else {
+            set_flash('error', 'AI responded, but the output was not in JSON format. Review the debug details below and try again.');
+        }
     } else {
         set_flash('error', 'The AI provider returned an error. Please review the debug details and retry.');
     }
