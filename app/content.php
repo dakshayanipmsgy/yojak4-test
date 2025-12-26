@@ -264,7 +264,7 @@ function list_content(string $type, array $allowedStatuses = ['draft', 'publishe
 function ensure_slug_unique(string $type, string $candidate, string $id): string
 {
     $slug = $candidate;
-    $counter = 1;
+    $counter = 2;
     while (content_slug_exists($type, $slug, $id)) {
         $slug = $candidate . '-' . $counter;
         $counter++;
@@ -280,17 +280,36 @@ function content_job_path(string $jobId): string
 function create_content_job(array $meta, ?string $jobId = null): string
 {
     $jobId = $jobId ?: generate_unique_job_id();
+    $path = content_job_path($jobId);
+    if (file_exists($path)) {
+        throw new RuntimeException('Job already exists for id ' . $jobId);
+    }
+
+    $typeRequested = in_array($meta['type'] ?? '', ['blog', 'news'], true) ? $meta['type'] : 'blog';
+    $lengthRequested = in_array($meta['length'] ?? '', ['short', 'standard', 'long'], true) ? ($meta['length'] ?? null) : null;
+    $nonce = $meta['nonce'] ?? strtoupper(bin2hex(random_bytes(6)));
+    $createdAt = now_kolkata()->format(DateTime::ATOM);
+
     $payload = [
         'jobId' => $jobId,
         'status' => 'running',
         'chunks' => [],
         'resultContentId' => null,
         'errorText' => null,
-        'meta' => $meta,
+        'meta' => array_merge($meta, [
+            'typeRequested' => $typeRequested,
+            'lengthRequested' => $lengthRequested,
+            'nonce' => $nonce,
+        ]),
         'processing' => false,
-        'createdAt' => now_kolkata()->format(DateTime::ATOM),
+        'createdAt' => $createdAt,
+        'startedAt' => $createdAt,
+        'finishedAt' => null,
+        'typeRequested' => $typeRequested,
+        'lengthRequested' => $lengthRequested,
+        'nonce' => $nonce,
     ];
-    writeJsonAtomic(content_job_path($jobId), $payload);
+    writeJsonAtomic($path, $payload);
     return $jobId;
 }
 
@@ -323,7 +342,7 @@ function mark_job_processing(string $jobId): bool
     return true;
 }
 
-function finalize_job(string $jobId, string $status, ?string $contentId = null, ?string $error = null): void
+function finalize_job(string $jobId, string $status, ?string $contentId = null, ?string $error = null, array $extra = []): void
 {
     $path = content_job_path($jobId);
     $job = readJson($path);
@@ -334,6 +353,10 @@ function finalize_job(string $jobId, string $status, ?string $contentId = null, 
     $job['resultContentId'] = $contentId;
     $job['errorText'] = $error;
     $job['processing'] = false;
+    $job['finishedAt'] = now_kolkata()->format(DateTime::ATOM);
+    if (!empty($extra)) {
+        $job = array_merge($job, $extra);
+    }
     writeJsonAtomic($path, $job);
 }
 
@@ -413,33 +436,99 @@ function ai_generate_image(string $prompt, string $type, string $id): ?string
 
 function ai_generate_content(array $meta): array
 {
-    $type = $meta['type'];
+    $type = in_array($meta['type'] ?? '', ['blog', 'news'], true) ? $meta['type'] : 'blog';
     $prompt = trim($meta['prompt'] ?? '');
     $length = $meta['length'] ?? 'standard';
     $randomPlatform = (bool)($meta['randomPlatform'] ?? false);
+    $nonce = $meta['nonce'] ?? strtoupper(bin2hex(random_bytes(6)));
+    $variation = in_array($meta['variation'] ?? '', ['low', 'medium', 'high'], true) ? $meta['variation'] : 'high';
 
     $lengthMap = ['short' => 120, 'standard' => 240, 'long' => 360];
     $targetWords = $lengthMap[$length] ?? 240;
 
-    $systemPrompt = "You are an assistant that generates clear HTML content with semantic paragraphs and headings. Return JSON with keys: title, excerpt (<=35 words), bodyHtml (safe HTML). Do not include scripts.";
+    $freshAngles = [
+        'compliance', 'time-saving', 'document quality', 'contractor workflow',
+        'department workflow', 'audit readiness', 'reminders', 'governance guardrails',
+        'risk mitigation', 'collaboration', 'checklist discipline',
+    ];
+    $angle = $freshAngles[array_rand($freshAngles)];
+    $variationText = [
+        'low' => 'Keep tone steady but still introduce noticeably different phrasings.',
+        'medium' => 'Rotate verbs, swap sentence patterns, and alter headings for freshness.',
+        'high' => 'Boldly vary structure, voice, and examples. Avoid any phrasing overlap.',
+    ][$variation] ?? 'Boldly vary structure, voice, and examples. Avoid any phrasing overlap.';
+
+    $now = now_kolkata()->format('Y-m-d H:i T');
+    $topicSeed = $prompt;
 
     if ($type === 'news' && $prompt === '' && $randomPlatform) {
-        $prompt = 'Share platform tips, roadmap teasers, or feature spotlights in a fictional tone. Avoid real-world claims. Keep it optimistic and helpful.';
+        $platformTopics = [
+            'smart tender reminders', 'workflow approvals', 'document clean-up helpers',
+            'policy rollouts', 'audit-ready evidence lockers', 'contractor portal refresh',
+            'schedule insights', 'compliance nudges', 'inbox declutter tips',
+        ];
+        $newsFormats = ['bulletin', 'quick hits', 'launch digest', 'field note', 'weekly recap'];
+        $titleSeeds = ['Pulse', 'Radar', 'Spotlight', 'Signals', 'Briefing', 'Fast Track'];
+        $topicSeed = $platformTopics[array_rand($platformTopics)];
+        $prompt = 'Randomized platform news. Topic: ' . $topicSeed .
+            '. Format: ' . $newsFormats[array_rand($newsFormats)] .
+            '. Title seed: ' . $titleSeeds[array_rand($titleSeeds)] .
+            '. Keep it fictional, upbeat, and focused on platform guidance only. Avoid real-world claims.';
     }
 
-    $userPrompt = 'Type: ' . $type . "\n" .
-        'Target words: ' . $targetWords . "\n" .
-        'Tone: modern, concise, trustworthy. ' .
-        'Use HTML paragraphs and h2/h3 headings. ' .
-        'Never mention confidential data.' . "\n" .
-        'Prompt: ' . $prompt;
+    $systemPrompt = "You are an assistant that generates clear HTML content with semantic paragraphs and headings. "
+        . "Return JSON with keys: title, excerpt (<=35 words), bodyHtml (safe HTML). Do not include scripts or inline events. "
+        . "Stay fictional and platform-focused.";
+
+    $baseDirectives = [
+        'Nonce: ' . $nonce,
+        'Date (Asia/Kolkata): ' . $now,
+        'Fresh angle: ' . $angle,
+        'Do not reuse phrasing from the last 10 outputs.',
+        'Use a new outline and fresh examples.',
+        'Avoid repeating the same headings used recently.',
+        'Always keep facts fictional and about internal platform guidance.',
+    ];
+
+    $typeSpecific = '';
+    if ($type === 'blog') {
+        $typeSpecific = "Blog template: opening hook, H2 for context, H2 for 3-5 practical tips with bullets, H2 for narrative example, H2 for wrap-up. "
+            . "Write in modern, structured prose with smooth transitions. Add skimmable subheadings and concise bullet lists.";
+    } else {
+        $typeSpecific = "News template: choose " . $length . " length (short=concise bulletin, standard=memo-style, long=in-depth recap). "
+            . "Use h2/h3 for sections like 'What changed', 'Why it matters', 'Fast takeaways', and a micro CTA. Prefer bullet points and short paragraphs.";
+    }
+
+    $userPrompt = implode("\n", [
+        'Type: ' . $type,
+        'Target words: ' . $targetWords,
+        'Tone: modern, concise, trustworthy.',
+        'Variation level: ' . $variation . ' — ' . $variationText,
+        $typeSpecific,
+        'Prompt/brief: ' . $prompt,
+        'Fresh angle directive: Pick one new angle from: compliance, time-saving, document quality, contractor workflow, department workflow, audit readiness, reminders.',
+        'Safety: keep everything fictional and internal-facing; do not claim real-world facts.',
+        'Non-repetition: ' . implode(' ', $baseDirectives),
+        'Include the nonce and angle in your reasoning to stay unique.',
+    ]);
+
+    $temperatureMap = ['low' => 0.3, 'medium' => 0.5, 'high' => 0.72];
+    $temperature = $temperatureMap[$variation] ?? 0.72;
 
     $call = ai_call([
         'systemPrompt' => $systemPrompt,
         'userPrompt' => $userPrompt,
         'expectJson' => true,
         'purpose' => 'content_' . $type,
+        'temperature' => $temperature,
+        'maxTokens' => 1200,
     ]);
+
+    $promptHash = hash('sha256', $systemPrompt . "\n" . $userPrompt);
+
+    $provider = $call['rawEnvelope']['provider'] ?? ($call['provider'] ?? '');
+    $model = $call['modelUsed'] ?? '';
+    $parsedOk = (bool)($call['ok'] ?? false);
 
     if ($call['ok'] && is_array($call['json'])) {
         $data = $call['json'];
@@ -456,6 +545,12 @@ function ai_generate_content(array $meta): array
             'title' => $title,
             'bodyHtml' => $body,
             'excerpt' => $excerpt,
+            'promptHash' => $promptHash,
+            'provider' => $provider,
+            'model' => $model,
+            'temperature' => $temperature,
+            'parsedOk' => $parsedOk,
+            'finalPrompt' => $systemPrompt . "\n\n" . $userPrompt,
         ];
     }
 
@@ -465,6 +560,12 @@ function ai_generate_content(array $meta): array
         'title' => 'YOJAK ' . ucfirst($type) . ' Update',
         'bodyHtml' => $fallbackBody,
         'excerpt' => content_excerpt($fallbackBody, 35),
+        'promptHash' => $promptHash,
+        'provider' => $provider,
+        'model' => $model,
+        'temperature' => $temperature,
+        'parsedOk' => $parsedOk,
+        'finalPrompt' => $systemPrompt . "\n\n" . $userPrompt,
     ];
 }
 
@@ -490,6 +591,10 @@ function process_content_job(string $jobId, ?callable $emit = null): void
     $type = in_array($meta['type'] ?? '', ['blog', 'news'], true) ? $meta['type'] : 'blog';
     $prompt = trim((string)($meta['prompt'] ?? ''));
     $contentId = is_string($meta['contentId'] ?? null) ? (string)$meta['contentId'] : generate_unique_content_id($type);
+    $length = in_array($meta['length'] ?? '', ['short', 'standard', 'long'], true) ? $meta['length'] : 'standard';
+    $randomPlatform = (bool)($meta['randomPlatform'] ?? false);
+    $nonce = $meta['nonce'] ?? strtoupper(bin2hex(random_bytes(6)));
+    $variation = in_array($meta['variation'] ?? '', ['low', 'medium', 'high'], true) ? $meta['variation'] : 'high';
 
     $send = function (string $text) use ($jobId, $emit): void {
         append_job_chunk($jobId, $text);
@@ -509,8 +614,18 @@ function process_content_job(string $jobId, ?callable $emit = null): void
 
     $send('Starting generation for ' . strtoupper($type) . '...');
 
+    $generated = [];
     try {
-        $generated = ai_generate_content($meta);
+        $generated = ai_generate_content([
+            'type' => $type,
+            'prompt' => $prompt,
+            'length' => $length,
+            'randomPlatform' => $randomPlatform,
+            'nonce' => $nonce,
+            'variation' => $variation,
+            'jobId' => $jobId,
+            'contentId' => $contentId,
+        ]);
         $title = $generated['title'];
         $body = $generated['bodyHtml'];
         $excerpt = content_excerpt($generated['excerpt']);
@@ -538,16 +653,36 @@ function process_content_job(string $jobId, ?callable $emit = null): void
             'updatedAt' => $now,
             'publishAt' => null,
             'publishedAt' => null,
+            'generation' => [
+                'jobId' => $jobId,
+                'typeRequested' => $type,
+                'lengthRequested' => $type === 'news' ? $length : null,
+                'nonce' => $nonce,
+                'promptHash' => $generated['promptHash'],
+                'outputHash' => hash('sha256', $body),
+                'provider' => $generated['provider'],
+                'model' => $generated['model'],
+                'temperature' => $generated['temperature'],
+                'createdAt' => $now,
+            ],
         ];
 
         save_content_item($item);
-        $outputHash = hash('sha256', $body);
+        $outputHash = $item['generation']['outputHash'];
         content_log([
             'event' => 'content_generated',
             'jobId' => $jobId,
             'id' => $contentId,
+            'contentId' => $contentId,
             'type' => $type,
             'outputHash' => $outputHash,
+            'length' => $type === 'news' ? $length : null,
+            'nonce' => $nonce,
+            'promptHash' => $generated['promptHash'],
+            'provider' => $generated['provider'],
+            'model' => $generated['model'],
+            'temperature' => $generated['temperature'],
+            'parsedOk' => $generated['parsedOk'],
         ]);
         content_log([
             'event' => 'GEN_DONE',
@@ -555,13 +690,46 @@ function process_content_job(string $jobId, ?callable $emit = null): void
             'contentId' => $contentId,
             'outputHash' => $outputHash,
             'type' => $type,
+            'length' => $type === 'news' ? $length : null,
+            'nonce' => $nonce,
+            'promptHash' => $generated['promptHash'],
+            'provider' => $generated['provider'],
+            'model' => $generated['model'],
+            'temperature' => $generated['temperature'],
+            'parsedOk' => $generated['parsedOk'],
         ]);
 
-        finalize_job($jobId, 'done', $contentId, null);
+        finalize_job($jobId, 'done', $contentId, null, [
+            'generation' => [
+                'contentId' => $contentId,
+                'promptHash' => $generated['promptHash'],
+                'outputHash' => $outputHash,
+                'provider' => $generated['provider'],
+                'model' => $generated['model'],
+                'temperature' => $generated['temperature'],
+                'nonce' => $nonce,
+                'typeRequested' => $type,
+                'lengthRequested' => $type === 'news' ? $length : null,
+                'parsedOk' => $generated['parsedOk'],
+                'promptText' => $generated['finalPrompt'],
+            ],
+        ]);
         $send('Draft created. Ready to edit.');
     } catch (Throwable $e) {
         $message = 'Generation failed: ' . $e->getMessage();
-        content_log(['event' => 'content_generation_error', 'jobId' => $jobId, 'error' => $message]);
+        content_log([
+            'event' => 'content_generation_error',
+            'jobId' => $jobId,
+            'type' => $type,
+            'length' => $type === 'news' ? $length : null,
+            'contentId' => $contentId,
+            'nonce' => $nonce,
+            'promptHash' => $generated['promptHash'] ?? null,
+            'provider' => $generated['provider'] ?? null,
+            'model' => $generated['model'] ?? null,
+            'parsedOk' => $generated['parsedOk'] ?? false,
+            'error' => $message,
+        ]);
         finalize_job($jobId, 'error', null, $message);
         $send($message);
     }
