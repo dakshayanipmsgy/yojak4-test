@@ -51,6 +51,11 @@ function content_item_path(string $type, string $id): string
     return CONTENT_BASE_PATH . '/' . $type . '/' . $id . '.json';
 }
 
+function content_index_lock_path(string $type): string
+{
+    return CONTENT_BASE_PATH . '/' . $type . '/index.lock';
+}
+
 function content_upload_dir(string $type, string $id): string
 {
     return PUBLIC_PATH . '/uploads/content/' . $type . '/' . $id;
@@ -70,6 +75,37 @@ function content_generate_id(string $type): string
 {
     $prefix = $type === 'news' ? 'NEWS-' : 'BLOG-';
     return $prefix . strtoupper(bin2hex(random_bytes(3)));
+}
+
+function generate_unique_job_id(): string
+{
+    do {
+        $jobId = 'JOB-' . strtoupper(bin2hex(random_bytes(4)));
+        $jobPath = content_job_path($jobId);
+    } while (file_exists($jobPath));
+
+    return $jobId;
+}
+
+function content_id_exists(string $type, string $id): bool
+{
+    $index = load_content_index($type);
+    foreach ($index as $row) {
+        if (($row['id'] ?? '') === $id) {
+            return true;
+        }
+    }
+
+    return file_exists(content_item_path($type, $id));
+}
+
+function generate_unique_content_id(string $type): string
+{
+    do {
+        $id = content_generate_id($type);
+    } while (content_id_exists($type, $id));
+
+    return $id;
 }
 
 function content_validate_slug(string $slug): bool
@@ -129,11 +165,44 @@ function content_excerpt(string $html, int $wordLimit = 60): string
 function save_content_item(array $item): void
 {
     $type = $item['type'];
-    $index = load_content_index($type);
-    $found = false;
-    foreach ($index as &$row) {
-        if ($row['id'] === $item['id']) {
-            $row = [
+    $lockHandle = fopen(content_index_lock_path($type), 'c');
+    if ($lockHandle === false) {
+        throw new RuntimeException('Unable to open content index lock.');
+    }
+    if (!flock($lockHandle, LOCK_EX)) {
+        fclose($lockHandle);
+        throw new RuntimeException('Unable to acquire content index lock.');
+    }
+
+    try {
+        $index = load_content_index($type);
+        if (!is_array($index)) {
+            $index = [];
+        }
+
+        $found = false;
+        foreach ($index as &$row) {
+            if ($row['id'] === $item['id']) {
+                $row = [
+                    'id' => $item['id'],
+                    'type' => $item['type'],
+                    'title' => $item['title'],
+                    'slug' => $item['slug'],
+                    'status' => $item['status'],
+                    'excerpt' => $item['excerpt'],
+                    'coverImagePath' => $item['coverImagePath'],
+                    'publishAt' => $item['publishAt'] ?? null,
+                    'publishedAt' => $item['publishedAt'] ?? null,
+                    'createdAt' => $item['createdAt'],
+                    'updatedAt' => $item['updatedAt'],
+                ];
+                $found = true;
+                break;
+            }
+        }
+        unset($row);
+        if (!$found) {
+            $index[] = [
                 'id' => $item['id'],
                 'type' => $item['type'],
                 'title' => $item['title'],
@@ -146,29 +215,14 @@ function save_content_item(array $item): void
                 'createdAt' => $item['createdAt'],
                 'updatedAt' => $item['updatedAt'],
             ];
-            $found = true;
-            break;
         }
-    }
-    unset($row);
-    if (!$found) {
-        $index[] = [
-            'id' => $item['id'],
-            'type' => $item['type'],
-            'title' => $item['title'],
-            'slug' => $item['slug'],
-            'status' => $item['status'],
-            'excerpt' => $item['excerpt'],
-            'coverImagePath' => $item['coverImagePath'],
-            'publishAt' => $item['publishAt'] ?? null,
-            'publishedAt' => $item['publishedAt'] ?? null,
-            'createdAt' => $item['createdAt'],
-            'updatedAt' => $item['updatedAt'],
-        ];
-    }
 
-    save_content_index($type, $index);
-    writeJsonAtomic(content_item_path($type, $item['id']), $item);
+        save_content_index($type, $index);
+        writeJsonAtomic(content_item_path($type, $item['id']), $item);
+    } finally {
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+    }
 }
 
 function load_content_item(string $type, string $id): ?array
@@ -223,9 +277,9 @@ function content_job_path(string $jobId): string
     return CONTENT_BASE_PATH . '/jobs/' . $jobId . '.json';
 }
 
-function create_content_job(array $meta): string
+function create_content_job(array $meta, ?string $jobId = null): string
 {
-    $jobId = 'JOB-' . strtoupper(bin2hex(random_bytes(4)));
+    $jobId = $jobId ?: generate_unique_job_id();
     $payload = [
         'jobId' => $jobId,
         'status' => 'running',
@@ -234,6 +288,7 @@ function create_content_job(array $meta): string
         'errorText' => null,
         'meta' => $meta,
         'processing' => false,
+        'createdAt' => now_kolkata()->format(DateTime::ATOM),
     ];
     writeJsonAtomic(content_job_path($jobId), $payload);
     return $jobId;
@@ -243,6 +298,9 @@ function append_job_chunk(string $jobId, string $text): void
 {
     $path = content_job_path($jobId);
     $job = readJson($path);
+    if (!$job || ($job['jobId'] ?? '') !== $jobId) {
+        return;
+    }
     $job['chunks'][] = [
         'at' => now_kolkata()->format(DateTime::ATOM),
         'text' => $text,
@@ -254,7 +312,10 @@ function mark_job_processing(string $jobId): bool
 {
     $path = content_job_path($jobId);
     $job = readJson($path);
-    if (($job['processing'] ?? false) === true) {
+    if (!$job || ($job['jobId'] ?? '') !== $jobId) {
+        return false;
+    }
+    if (($job['processing'] ?? false) === true || ($job['status'] ?? '') !== 'running') {
         return false;
     }
     $job['processing'] = true;
@@ -266,10 +327,24 @@ function finalize_job(string $jobId, string $status, ?string $contentId = null, 
 {
     $path = content_job_path($jobId);
     $job = readJson($path);
+    if (!$job || ($job['jobId'] ?? '') !== $jobId) {
+        return;
+    }
     $job['status'] = $status;
     $job['resultContentId'] = $contentId;
     $job['errorText'] = $error;
     $job['processing'] = false;
+    writeJsonAtomic($path, $job);
+}
+
+function update_job_meta(string $jobId, callable $updater): void
+{
+    $path = content_job_path($jobId);
+    $job = readJson($path);
+    if (!$job || ($job['jobId'] ?? '') !== $jobId) {
+        return;
+    }
+    $job = $updater($job) ?? $job;
     writeJsonAtomic($path, $job);
 }
 
@@ -412,8 +487,9 @@ function process_content_job(string $jobId, ?callable $emit = null): void
     }
 
     $meta = $job['meta'] ?? [];
-    $type = $meta['type'] ?? 'blog';
+    $type = in_array($meta['type'] ?? '', ['blog', 'news'], true) ? $meta['type'] : 'blog';
     $prompt = trim((string)($meta['prompt'] ?? ''));
+    $contentId = is_string($meta['contentId'] ?? null) ? (string)$meta['contentId'] : generate_unique_content_id($type);
 
     $send = function (string $text) use ($jobId, $emit): void {
         append_job_chunk($jobId, $text);
@@ -421,6 +497,15 @@ function process_content_job(string $jobId, ?callable $emit = null): void
             $emit($text);
         }
     };
+
+    if (content_id_exists($type, $contentId)) {
+        $contentId = generate_unique_content_id($type);
+        update_job_meta($jobId, function (array $job) use ($contentId): array {
+            $job['meta']['contentId'] = $contentId;
+            return $job;
+        });
+        $send('Content ID collision avoided. Using ' . $contentId . '.');
+    }
 
     $send('Starting generation for ' . strtoupper($type) . '...');
 
@@ -430,17 +515,16 @@ function process_content_job(string $jobId, ?callable $emit = null): void
         $body = $generated['bodyHtml'];
         $excerpt = content_excerpt($generated['excerpt']);
 
-        $id = content_generate_id($type);
-        $slugCandidate = content_slugify($title, $id);
-        $slug = ensure_slug_unique($type, $slugCandidate, $id);
+        $slugCandidate = content_slugify($title, $contentId);
+        $slug = ensure_slug_unique($type, $slugCandidate, $contentId);
         $now = now_kolkata()->format(DateTime::ATOM);
 
         $send('Creating draft item...');
 
-        $coverPath = ai_generate_image($title . ' ' . $prompt, $type, $id);
+        $coverPath = ai_generate_image($title . ' ' . $prompt, $type, $contentId);
 
         $item = [
-            'id' => $id,
+            'id' => $contentId,
             'type' => $type,
             'lang' => 'en',
             'title' => $title,
@@ -457,9 +541,23 @@ function process_content_job(string $jobId, ?callable $emit = null): void
         ];
 
         save_content_item($item);
-        content_log(['event' => 'content_generated', 'jobId' => $jobId, 'id' => $id, 'type' => $type]);
+        $outputHash = hash('sha256', $body);
+        content_log([
+            'event' => 'content_generated',
+            'jobId' => $jobId,
+            'id' => $contentId,
+            'type' => $type,
+            'outputHash' => $outputHash,
+        ]);
+        content_log([
+            'event' => 'GEN_DONE',
+            'jobId' => $jobId,
+            'contentId' => $contentId,
+            'outputHash' => $outputHash,
+            'type' => $type,
+        ]);
 
-        finalize_job($jobId, 'done', $id, null);
+        finalize_job($jobId, 'done', $contentId, null);
         $send('Draft created. Ready to edit.');
     } catch (Throwable $e) {
         $message = 'Generation failed: ' . $e->getMessage();

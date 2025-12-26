@@ -60,6 +60,10 @@ safe_page(function () {
         <div class="card" style="margin-top:16px;">
             <h3 style="margin-top:0;">Live Generation Stream</h3>
             <textarea id="stream-log" readonly rows="8" style="width:100%;resize:vertical;background:#0f1520;border:1px solid #30363d;border-radius:10px;padding:10px;color:#e6edf3;">Waiting for a job...</textarea>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
+                <span class="pill" id="job-indicator">Current jobId: none</span>
+                <span class="muted" id="draft-indicator">No draft yet.</span>
+            </div>
             <div class="buttons" style="margin-top:10px;">
                 <button class="btn secondary" type="button" id="clear-log">Clear</button>
                 <a class="btn" id="edit-link" style="display:none;" href="#">Open Draft</a>
@@ -100,9 +104,12 @@ safe_page(function () {
             const logBox = document.getElementById('stream-log');
             const clearBtn = document.getElementById('clear-log');
             const editLink = document.getElementById('edit-link');
+            const jobIndicator = document.getElementById('job-indicator');
+            const draftIndicator = document.getElementById('draft-indicator');
             let eventSource = null;
             let pollTimer = null;
             let lastCount = 0;
+            let currentJobId = '';
 
             function appendLog(text) {
                 const now = new Date().toLocaleTimeString();
@@ -113,6 +120,9 @@ safe_page(function () {
             clearBtn.addEventListener('click', () => {
                 logBox.value = 'Waiting for a job...';
                 editLink.style.display = 'none';
+                draftIndicator.textContent = 'No draft yet.';
+                jobIndicator.textContent = 'Current jobId: none';
+                currentJobId = '';
             });
 
             form.addEventListener('submit', function (e) {
@@ -130,6 +140,8 @@ safe_page(function () {
                         return;
                     }
                     appendLog('Job started: ' + data.jobId);
+                    jobIndicator.textContent = 'Current jobId: ' + data.jobId;
+                    currentJobId = data.jobId;
                     startStream(data.jobId);
                 }).catch(() => appendLog('Network error starting job.'));
             });
@@ -142,6 +154,8 @@ safe_page(function () {
                     clearInterval(pollTimer);
                 }
                 lastCount = 0;
+                currentJobId = jobId;
+                jobIndicator.textContent = 'Current jobId: ' + jobId;
                 eventSource = new EventSource('/superadmin/content_stream.php?jobId=' + encodeURIComponent(jobId));
                 eventSource.onmessage = function (ev) {
                     const payload = JSON.parse(ev.data);
@@ -151,7 +165,9 @@ safe_page(function () {
                     if (payload.status === 'done' && payload.contentId) {
                         editLink.href = '/superadmin/content_edit.php?id=' + encodeURIComponent(payload.contentId);
                         editLink.style.display = 'inline-flex';
-                        appendLog('Draft ready. Click "Open Draft".');
+                        const draftMsg = 'Created draft: ' + payload.contentId;
+                        draftIndicator.textContent = draftMsg;
+                        appendLog(draftMsg + '. Click "Open Draft".');
                     }
                     if (payload.status === 'error') {
                         appendLog(payload.error || 'Generation error.');
@@ -172,6 +188,11 @@ safe_page(function () {
                     fetch('/superadmin/content_stream.php?jobId=' + encodeURIComponent(jobId) + '&poll=1', {headers:{'Accept':'application/json'}})
                         .then(resp => resp.json())
                         .then(job => {
+                            if (job.ok === false) {
+                                appendLog(job.error || 'Job unavailable. Please regenerate.');
+                                clearInterval(pollTimer);
+                                return;
+                            }
                             const chunks = job.chunks || [];
                             if (chunks.length > lastCount) {
                                 for (let i = lastCount; i < chunks.length; i++) {
@@ -182,7 +203,9 @@ safe_page(function () {
                             if (job.status === 'done' && job.resultContentId) {
                                 editLink.href = '/superadmin/content_edit.php?id=' + encodeURIComponent(job.resultContentId);
                                 editLink.style.display = 'inline-flex';
-                                appendLog('Draft ready. Click \"Open Draft\".');
+                                const draftMsg = 'Created draft: ' + job.resultContentId;
+                                draftIndicator.textContent = draftMsg;
+                                appendLog(draftMsg + '. Click \"Open Draft\".');
                                 clearInterval(pollTimer);
                             }
                             if (job.status === 'error') {
