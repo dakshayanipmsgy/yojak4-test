@@ -138,6 +138,162 @@ function content_slugify(string $title, string $fallback): string
     return $slug;
 }
 
+function normalize_content_text(string $html): string
+{
+    $text = strip_tags($html);
+    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = strtolower($text);
+    $text = preg_replace('/\s+/', ' ', $text);
+    return trim($text);
+}
+
+function normalized_first_segment(string $normalized, int $length = 200): string
+{
+    if ($normalized === '') {
+        return '';
+    }
+    if (function_exists('mb_substr')) {
+        return mb_substr($normalized, 0, $length, 'UTF-8');
+    }
+    return substr($normalized, 0, $length);
+}
+
+function content_output_hash(string $html): string
+{
+    return hash('sha256', normalize_content_text($html));
+}
+
+function content_top_keywords(string $normalized, int $limit = 8): array
+{
+    $words = preg_split('/[^a-z0-9]+/i', $normalized) ?: [];
+    $stop = [
+        'the', 'and', 'for', 'that', 'with', 'this', 'from', 'have', 'your', 'about', 'into', 'will',
+        'what', 'when', 'where', 'which', 'while', 'their', 'they', 'them', 'you', 'our', 'ours',
+        'a', 'an', 'but', 'not', 'are', 'was', 'were', 'been', 'being', 'than', 'then', 'than', 'too',
+    ];
+    $stopLookup = array_fill_keys($stop, true);
+    $freq = [];
+    foreach ($words as $word) {
+        $word = trim($word);
+        if ($word === '' || strlen($word) < 4 || isset($stopLookup[$word])) {
+            continue;
+        }
+        $freq[$word] = ($freq[$word] ?? 0) + 1;
+    }
+    arsort($freq);
+    return array_slice(array_keys($freq), 0, $limit);
+}
+
+function build_content_signature(string $bodyHtml): array
+{
+    $normalized = normalize_content_text($bodyHtml);
+    return [
+        'normalized' => $normalized,
+        'outputHash' => hash('sha256', $normalized),
+        'firstSegment' => normalized_first_segment($normalized, 200),
+        'keywords' => content_top_keywords($normalized),
+    ];
+}
+
+function load_recent_content_pool(string $primaryType, int $primaryLimit = 20, int $crossLimit = 10, ?string $excludeId = null): array
+{
+    $pool = [];
+    $targets = [
+        $primaryType => $primaryLimit,
+        $primaryType === 'blog' ? 'news' : 'blog' => $crossLimit,
+    ];
+
+    foreach ($targets as $type => $limit) {
+        if ($limit <= 0) {
+            continue;
+        }
+        $index = load_content_index($type);
+        if (!is_array($index)) {
+            continue;
+        }
+        usort($index, function ($a, $b) {
+            return strcmp($b['createdAt'] ?? '', $a['createdAt'] ?? '');
+        });
+
+        foreach (array_slice($index, 0, $limit) as $row) {
+            $id = $row['id'] ?? null;
+            if (!$id || $id === $excludeId || (($row['status'] ?? '') === 'deleted')) {
+                continue;
+            }
+            $item = load_content_item($type, $id);
+            if (!$item) {
+                continue;
+            }
+            $signature = build_content_signature((string)($item['bodyHtml'] ?? ''));
+            if ($signature['normalized'] === '') {
+                continue;
+            }
+            $pool[] = array_merge($signature, [
+                'id' => $id,
+                'type' => $type,
+                'title' => $item['title'] ?? '',
+            ]);
+        }
+    }
+
+    return $pool;
+}
+
+function evaluate_duplicate(array $candidate, array $pool): array
+{
+    $result = [
+        'duplicate' => false,
+        'nearDuplicate' => false,
+        'matchId' => null,
+        'matchType' => null,
+        'basis' => null,
+        'score' => 0.0,
+    ];
+
+    foreach ($pool as $entry) {
+        if (($entry['outputHash'] ?? '') === ($candidate['outputHash'] ?? '')) {
+            return [
+                'duplicate' => true,
+                'nearDuplicate' => true,
+                'matchId' => $entry['id'] ?? null,
+                'matchType' => $entry['type'] ?? null,
+                'basis' => 'hash',
+                'score' => 1.0,
+            ];
+        }
+
+        $segmentPercent = 0.0;
+        if (($candidate['firstSegment'] ?? '') !== '' && ($entry['firstSegment'] ?? '') !== '') {
+            similar_text((string)$candidate['firstSegment'], (string)$entry['firstSegment'], $segmentPercent);
+        }
+
+        $overlap = array_intersect($candidate['keywords'] ?? [], $entry['keywords'] ?? []);
+        $keywordScore = 0.0;
+        if (!empty($candidate['keywords']) && !empty($entry['keywords'])) {
+            $keywordScore = count($overlap) / max(1, min(count($candidate['keywords']), count($entry['keywords'])));
+        }
+
+        $isNearBySegment = $segmentPercent >= 88.0;
+        $isNearByKeywords = $keywordScore >= 0.6 && count($overlap) >= 3;
+
+        if ($isNearBySegment || $isNearByKeywords) {
+            $score = max($segmentPercent / 100, $keywordScore);
+            if ($score > $result['score']) {
+                $result = [
+                    'duplicate' => false,
+                    'nearDuplicate' => true,
+                    'matchId' => $entry['id'] ?? null,
+                    'matchType' => $entry['type'] ?? null,
+                    'basis' => $isNearBySegment && $isNearByKeywords ? 'segment+keywords' : ($isNearBySegment ? 'segment' : 'keywords'),
+                    'score' => $score,
+                ];
+            }
+        }
+    }
+
+    return $result;
+}
+
 function sanitize_body_html(string $html): string
 {
     $html = preg_replace('#<script(.*?)>(.*?)</script>#is', '', $html);
@@ -442,6 +598,7 @@ function ai_generate_content(array $meta): array
     $randomPlatform = (bool)($meta['randomPlatform'] ?? false);
     $nonce = $meta['nonce'] ?? strtoupper(bin2hex(random_bytes(6)));
     $variation = in_array($meta['variation'] ?? '', ['low', 'medium', 'high'], true) ? $meta['variation'] : 'high';
+    $extraDirectives = array_values(array_filter($meta['extraDirectives'] ?? [], 'is_string'));
 
     $lengthMap = ['short' => 120, 'standard' => 240, 'long' => 360];
     $targetWords = $lengthMap[$length] ?? 240;
@@ -488,7 +645,11 @@ function ai_generate_content(array $meta): array
         'Use a new outline and fresh examples.',
         'Avoid repeating the same headings used recently.',
         'Always keep facts fictional and about internal platform guidance.',
+        'Rewrite completely with new outline and new title when requested.',
     ];
+    if ($extraDirectives) {
+        $baseDirectives = array_merge($baseDirectives, $extraDirectives);
+    }
 
     $typeSpecific = '';
     if ($type === 'blog') {
@@ -507,6 +668,7 @@ function ai_generate_content(array $meta): array
         $typeSpecific,
         'Prompt/brief: ' . $prompt,
         'Fresh angle directive: Pick one new angle from: compliance, time-saving, document quality, contractor workflow, department workflow, audit readiness, reminders.',
+        'Regeneration guardrails: Rewrite completely with new outline and new title. Do not reuse any headings. Use a different angle than before.',
         'Safety: keep everything fictional and internal-facing; do not claim real-world facts.',
         'Non-repetition: ' . implode(' ', $baseDirectives),
         'Include the nonce and angle in your reasoning to stay unique.',
@@ -628,7 +790,89 @@ function process_content_job(string $jobId, ?callable $emit = null): void
         ]);
         $title = $generated['title'];
         $body = $generated['bodyHtml'];
-        $excerpt = content_excerpt($generated['excerpt']);
+        $excerpt = content_excerpt($generated['excerpt'] ?? $body);
+        $signature = build_content_signature($body);
+        $pool = load_recent_content_pool($type, 20, 10, $contentId);
+        $dupCheck = evaluate_duplicate($signature, $pool);
+
+        $duplicationMeta = [
+            'dupDetected' => ($dupCheck['duplicate'] ?? false) || ($dupCheck['nearDuplicate'] ?? false),
+            'dupFlag' => false,
+            'dupOfContentId' => $dupCheck['matchId'] ?? null,
+            'dupMatchType' => $dupCheck['matchType'] ?? null,
+            'dupBasis' => $dupCheck['basis'] ?? null,
+            'similarityScore' => $dupCheck['score'] ?? 0.0,
+            'regenAttempted' => false,
+            'regenAuto' => false,
+        ];
+
+        if ($duplicationMeta['dupDetected']) {
+            $duplicationMeta['regenAttempted'] = true;
+            $duplicationMeta['regenAuto'] = true;
+            $send('Draft looks similar to recent content. Regenerating once with stronger variation...');
+            content_log([
+                'event' => 'duplication_detected',
+                'jobId' => $jobId,
+                'contentId' => $contentId,
+                'type' => $type,
+                'dupDetected' => true,
+                'dupOfContentId' => $duplicationMeta['dupOfContentId'],
+                'dupBasis' => $duplicationMeta['dupBasis'],
+                'similarityScore' => $duplicationMeta['similarityScore'],
+                'regenAttempted' => true,
+            ]);
+
+            $nonce = strtoupper(bin2hex(random_bytes(6)));
+            $regenerated = ai_generate_content([
+                'type' => $type,
+                'prompt' => $prompt,
+                'length' => $length,
+                'randomPlatform' => $randomPlatform,
+                'nonce' => $nonce,
+                'variation' => 'high',
+                'jobId' => $jobId,
+                'contentId' => $contentId,
+                'extraDirectives' => [
+                    'Rewrite completely with new outline and new title.',
+                    'Do not reuse any headings.',
+                    'Use a different angle.',
+                    'Swap to fresh examples and a new CTA to avoid repetition.',
+                ],
+            ]);
+            $generated = $regenerated;
+            $title = $generated['title'];
+            $body = $generated['bodyHtml'];
+            $excerpt = content_excerpt($generated['excerpt'] ?? $body);
+            $signature = build_content_signature($body);
+            $dupCheck = evaluate_duplicate($signature, $pool);
+            $duplicationMeta['dupFlag'] = ($dupCheck['duplicate'] ?? false) || ($dupCheck['nearDuplicate'] ?? false);
+            if ($duplicationMeta['dupFlag']) {
+                $duplicationMeta['dupOfContentId'] = $dupCheck['matchId'] ?? $duplicationMeta['dupOfContentId'];
+                $duplicationMeta['dupMatchType'] = $dupCheck['matchType'] ?? $duplicationMeta['dupMatchType'];
+                $duplicationMeta['dupBasis'] = $dupCheck['basis'] ?? $duplicationMeta['dupBasis'];
+                $duplicationMeta['similarityScore'] = $dupCheck['score'] ?? $duplicationMeta['similarityScore'];
+                $send('Output still resembles recent content. Marking draft with a warning banner.');
+            } else {
+                $duplicationMeta['dupDetected'] = true;
+                $duplicationMeta['dupOfContentId'] = null;
+                $duplicationMeta['dupBasis'] = null;
+                $duplicationMeta['similarityScore'] = 0.0;
+                $send('Fresh draft generated after regeneration.');
+            }
+        }
+
+        content_log([
+            'event' => 'duplication_result',
+            'jobId' => $jobId,
+            'contentId' => $contentId,
+            'type' => $type,
+            'dupDetected' => $duplicationMeta['dupDetected'],
+            'dupFlag' => $duplicationMeta['dupFlag'],
+            'dupOfContentId' => $duplicationMeta['dupOfContentId'],
+            'dupBasis' => $duplicationMeta['dupBasis'],
+            'similarityScore' => $duplicationMeta['similarityScore'],
+            'regenAttempted' => $duplicationMeta['regenAttempted'],
+        ]);
 
         $slugCandidate = content_slugify($title, $contentId);
         $slug = ensure_slug_unique($type, $slugCandidate, $contentId);
@@ -659,11 +903,18 @@ function process_content_job(string $jobId, ?callable $emit = null): void
                 'lengthRequested' => $type === 'news' ? $length : null,
                 'nonce' => $nonce,
                 'promptHash' => $generated['promptHash'],
-                'outputHash' => hash('sha256', $body),
+                'outputHash' => $signature['outputHash'],
                 'provider' => $generated['provider'],
                 'model' => $generated['model'],
                 'temperature' => $generated['temperature'],
                 'createdAt' => $now,
+                'dupDetected' => $duplicationMeta['dupDetected'],
+                'dupFlag' => $duplicationMeta['dupFlag'],
+                'dupOfContentId' => $duplicationMeta['dupOfContentId'],
+                'dupBasis' => $duplicationMeta['dupBasis'],
+                'similarityScore' => $duplicationMeta['similarityScore'],
+                'regenAttempted' => $duplicationMeta['regenAttempted'],
+                'regenAuto' => $duplicationMeta['regenAuto'],
             ],
         ];
 
@@ -683,6 +934,12 @@ function process_content_job(string $jobId, ?callable $emit = null): void
             'model' => $generated['model'],
             'temperature' => $generated['temperature'],
             'parsedOk' => $generated['parsedOk'],
+            'dupDetected' => $duplicationMeta['dupDetected'],
+            'dupFlag' => $duplicationMeta['dupFlag'],
+            'dupOfContentId' => $duplicationMeta['dupOfContentId'],
+            'dupBasis' => $duplicationMeta['dupBasis'],
+            'similarityScore' => $duplicationMeta['similarityScore'],
+            'regenAttempted' => $duplicationMeta['regenAttempted'],
         ]);
         content_log([
             'event' => 'GEN_DONE',
@@ -697,6 +954,12 @@ function process_content_job(string $jobId, ?callable $emit = null): void
             'model' => $generated['model'],
             'temperature' => $generated['temperature'],
             'parsedOk' => $generated['parsedOk'],
+            'dupDetected' => $duplicationMeta['dupDetected'],
+            'dupFlag' => $duplicationMeta['dupFlag'],
+            'dupOfContentId' => $duplicationMeta['dupOfContentId'],
+            'dupBasis' => $duplicationMeta['dupBasis'],
+            'similarityScore' => $duplicationMeta['similarityScore'],
+            'regenAttempted' => $duplicationMeta['regenAttempted'],
         ]);
 
         finalize_job($jobId, 'done', $contentId, null, [
@@ -712,6 +975,12 @@ function process_content_job(string $jobId, ?callable $emit = null): void
                 'lengthRequested' => $type === 'news' ? $length : null,
                 'parsedOk' => $generated['parsedOk'],
                 'promptText' => $generated['finalPrompt'],
+                'dupDetected' => $duplicationMeta['dupDetected'],
+                'dupFlag' => $duplicationMeta['dupFlag'],
+                'dupOfContentId' => $duplicationMeta['dupOfContentId'],
+                'dupBasis' => $duplicationMeta['dupBasis'],
+                'similarityScore' => $duplicationMeta['similarityScore'],
+                'regenAttempted' => $duplicationMeta['regenAttempted'],
             ],
         ]);
         $send('Draft created. Ready to edit.');
