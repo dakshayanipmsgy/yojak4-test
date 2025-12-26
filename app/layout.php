@@ -231,14 +231,16 @@ function render_layout(string $title, callable $content): void
                     <a href="/site/index.php"><?= sanitize(t('nav_home')); ?></a>
                     <?php if ($user && ($user['type'] ?? '') === 'superadmin'): ?>
                         <a href="/superadmin/dashboard.php"><?= sanitize(t('nav_dashboard')); ?></a>
-                        <a href="/superadmin/contractors.php"><?= sanitize('Contractors'); ?></a>
                         <a href="/superadmin/departments.php"><?= sanitize('Departments'); ?></a>
+                        <a href="/superadmin/contractors.php"><?= sanitize('Contractors'); ?></a>
                         <a href="/superadmin/employees.php"><?= sanitize('Employees'); ?></a>
+                        <a href="/superadmin/ai_studio.php"><?= sanitize('AI Studio'); ?></a>
+                        <a href="/superadmin/content_studio.php"><?= sanitize('Content Studio'); ?></a>
                         <a href="/superadmin/tender_discovery.php"><?= sanitize('Tender Discovery'); ?></a>
-                        <a href="/superadmin/stats.php"><?= sanitize('Stats'); ?></a>
-                        <a href="/superadmin/reset_requests.php"><?= sanitize('Reset Approvals'); ?></a>
                         <a href="/superadmin/backup.php"><?= sanitize('Backups'); ?></a>
                         <a href="/superadmin/factory_reset.php"><?= sanitize('Factory Reset'); ?></a>
+                        <a href="/superadmin/stats.php"><?= sanitize('Stats'); ?></a>
+                        <a href="/superadmin/reset_requests.php"><?= sanitize('Reset Approvals'); ?></a>
                         <a href="/superadmin/profile.php"><?= sanitize(t('profile')); ?></a>
                         <form method="post" action="/auth/logout.php" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
