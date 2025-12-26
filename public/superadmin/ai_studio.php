@@ -106,8 +106,8 @@ safe_page(function () {
                 <form id="ai-test-form" action="/superadmin/ai_test.php" method="post" style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                     <button class="btn secondary" type="submit" name="mode" value="connectivity"><?= sanitize('Test AI'); ?></button>
-                    <button class="btn" type="submit" name="mode" value="json_strict"><?= sanitize('Test JSON Mode'); ?></button>
-                    <span class="pill"><?= sanitize('Non-destructive sample prompt'); ?></span>
+                    <button class="btn" type="submit" name="mode" value="json_strict"><?= sanitize('Test JSON Mode (Preview)'); ?></button>
+                    <span class="pill"><?= sanitize('Non-destructive sample prompt & JSON preview'); ?></span>
                 </form>
             </div>
             <div>
