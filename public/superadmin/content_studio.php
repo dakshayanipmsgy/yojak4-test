@@ -45,6 +45,12 @@ safe_page(function () {
                     <small class="muted">Used for news only.</small>
                 </div>
                 <div class="field">
+                    <label for="variation-slider">Variation level</label>
+                    <input type="range" id="variation-slider" min="1" max="3" step="1" value="3" aria-label="Variation slider">
+                    <input type="hidden" id="variation-value" name="variation" value="high">
+                    <div class="muted" id="variation-label" style="margin-top:4px;">High — maximize uniqueness</div>
+                </div>
+                <div class="field">
                     <label class="muted" style="display:flex;gap:8px;align-items:center;">
                         <input type="checkbox" id="random_platform" name="random_platform" value="1">
                         Random platform news if prompt empty
@@ -63,6 +69,9 @@ safe_page(function () {
             <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
                 <span class="pill" id="job-indicator">Current jobId: none</span>
                 <span class="muted" id="draft-indicator">No draft yet.</span>
+            </div>
+            <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                <span class="pill secondary" id="meta-summary" style="display:none;">Meta: pending</span>
             </div>
             <div class="buttons" style="margin-top:10px;">
                 <button class="btn secondary" type="button" id="clear-log">Clear</button>
@@ -106,6 +115,12 @@ safe_page(function () {
             const editLink = document.getElementById('edit-link');
             const jobIndicator = document.getElementById('job-indicator');
             const draftIndicator = document.getElementById('draft-indicator');
+            const metaSummary = document.getElementById('meta-summary');
+            const typeSelect = document.getElementById('type');
+            const lengthSelect = document.getElementById('length');
+            const variationSlider = document.getElementById('variation-slider');
+            const variationLabel = document.getElementById('variation-label');
+            const variationValue = document.getElementById('variation-value');
             let eventSource = null;
             let pollTimer = null;
             let lastCount = 0;
@@ -122,13 +137,38 @@ safe_page(function () {
                 editLink.style.display = 'none';
                 draftIndicator.textContent = 'No draft yet.';
                 jobIndicator.textContent = 'Current jobId: none';
+                metaSummary.style.display = 'none';
                 currentJobId = '';
             });
+
+            function updateVariationLabel(val) {
+                if (val === '1') {
+                    variationLabel.textContent = 'Low — subtle changes, calmer tone';
+                    variationValue.value = 'low';
+                } else if (val === '2') {
+                    variationLabel.textContent = 'Medium — rotate phrasing and structure';
+                    variationValue.value = 'medium';
+                } else {
+                    variationLabel.textContent = 'High — maximize uniqueness';
+                    variationValue.value = 'high';
+                }
+            }
+
+            variationSlider.addEventListener('input', (e) => updateVariationLabel(e.target.value));
+            updateVariationLabel(variationSlider.value);
+
+            typeSelect.addEventListener('change', () => {
+                const isNews = typeSelect.value === 'news';
+                lengthSelect.disabled = !isNews;
+                lengthSelect.style.opacity = isNews ? '1' : '0.6';
+            });
+            typeSelect.dispatchEvent(new Event('change'));
 
             form.addEventListener('submit', function (e) {
                 e.preventDefault();
                 logBox.value = 'Submitting job...';
                 editLink.style.display = 'none';
+                metaSummary.style.display = 'none';
                 const formData = new FormData(form);
                 fetch(form.action, {
                     method: 'POST',
@@ -167,6 +207,10 @@ safe_page(function () {
                         editLink.style.display = 'inline-flex';
                         const draftMsg = 'Created draft: ' + payload.contentId;
                         draftIndicator.textContent = draftMsg;
+                        if (payload.meta) {
+                            metaSummary.textContent = `Meta: job ${payload.jobId} • content ${payload.contentId} • prompt ${payload.meta.promptHash || 'n/a'} • output ${payload.meta.outputHash || 'n/a'}`;
+                            metaSummary.style.display = 'inline-flex';
+                        }
                         appendLog(draftMsg + '. Click "Open Draft".');
                     }
                     if (payload.status === 'error') {
@@ -205,6 +249,12 @@ safe_page(function () {
                                 editLink.style.display = 'inline-flex';
                                 const draftMsg = 'Created draft: ' + job.resultContentId;
                                 draftIndicator.textContent = draftMsg;
+                                if (job.generation) {
+                                    const promptHash = (job.generation.promptHash || '').slice(0, 16);
+                                    const outputHash = (job.generation.outputHash || '').slice(0, 16);
+                                    metaSummary.textContent = `Meta: job ${job.jobId} • content ${job.resultContentId} • prompt ${promptHash || 'n/a'} • output ${outputHash || 'n/a'}`;
+                                    metaSummary.style.display = 'inline-flex';
+                                }
                                 appendLog(draftMsg + '. Click \"Open Draft\".');
                                 clearInterval(pollTimer);
                             }

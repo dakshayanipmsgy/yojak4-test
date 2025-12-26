@@ -27,18 +27,21 @@ try {
     };
 
     if ($jobId === '') {
+        content_log(['event' => 'content_stream_missing_job', 'jobId' => null, 'error' => 'JobId missing in request']);
         $sendError(400, 'Missing jobId. Please start a new generation.');
         exit;
     }
 
     $jobPath = content_job_path($jobId);
     if (!file_exists($jobPath)) {
+        content_log(['event' => 'content_stream_missing_job', 'jobId' => $jobId, 'error' => 'Job file not found']);
         $sendError(404, 'Job not found. Please submit generation again.');
         exit;
     }
 
     $job = readJson($jobPath);
     if (($job['jobId'] ?? '') !== $jobId) {
+        content_log(['event' => 'content_stream_job_mismatch', 'jobId' => $jobId, 'error' => 'Job id mismatch']);
         $sendError(404, 'Job mismatch. Please start a fresh generation.');
         exit;
     }
@@ -95,7 +98,25 @@ try {
         }
 
         if (($job['status'] ?? '') === 'done') {
-            $send(['status' => 'done', 'contentId' => $job['resultContentId'] ?? null, 'jobId' => $jobId]);
+            $contentId = $job['resultContentId'] ?? null;
+            if (!$contentId) {
+                content_log(['event' => 'content_stream_missing_content', 'jobId' => $jobId, 'error' => 'Content ID missing for completed job']);
+                $send(['status' => 'error', 'error' => 'Draft missing. Please generate again.', 'jobId' => $jobId]);
+                break;
+            }
+            $generationMeta = $job['generation'] ?? [];
+            $send([
+                'status' => 'done',
+                'contentId' => $contentId,
+                'jobId' => $jobId,
+                'meta' => [
+                    'promptHash' => substr((string)($generationMeta['promptHash'] ?? ''), 0, 16),
+                    'outputHash' => substr((string)($generationMeta['outputHash'] ?? ''), 0, 16),
+                    'nonce' => $generationMeta['nonce'] ?? null,
+                    'type' => $generationMeta['typeRequested'] ?? null,
+                    'length' => $generationMeta['lengthRequested'] ?? null,
+                ],
+            ]);
             break;
         }
         if (($job['status'] ?? '') === 'error') {

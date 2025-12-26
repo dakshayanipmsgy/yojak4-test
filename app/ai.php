@@ -387,7 +387,7 @@ function ai_extract_gemini_text(array $decoded): string
     return '';
 }
 
-function ai_provider_response_openai(array $config, string $systemPrompt, string $userPrompt): array
+function ai_provider_response_openai(array $config, string $systemPrompt, string $userPrompt, float $temperature = 0.2, int $maxTokens = 500): array
 {
     $startedAt = microtime(true);
     $payload = [
@@ -396,8 +396,8 @@ function ai_provider_response_openai(array $config, string $systemPrompt, string
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $userPrompt],
         ],
-        'temperature' => 0.2,
-        'max_tokens' => 500,
+        'temperature' => $temperature,
+        'max_tokens' => $maxTokens,
     ];
     $ch = curl_init('https://api.openai.com/v1/chat/completions');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -456,7 +456,7 @@ function ai_provider_response_openai(array $config, string $systemPrompt, string
     ];
 }
 
-function ai_provider_response_gemini(array $config, string $systemPrompt, string $userPrompt): array
+function ai_provider_response_gemini(array $config, string $systemPrompt, string $userPrompt, float $temperature = 0.2, int $maxTokens = 500): array
 {
     $startedAt = microtime(true);
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($config['textModel']) . ':generateContent?key=' . urlencode((string)($config['apiKey'] ?? ''));
@@ -475,8 +475,8 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
             ],
         ],
         'generation_config' => [
-            'temperature' => 0.2,
-            'max_output_tokens' => 500,
+            'temperature' => $temperature,
+            'max_output_tokens' => $maxTokens,
         ],
     ];
     $ch = curl_init($url);
@@ -553,6 +553,7 @@ function ai_call(array $params): array
         'rawBody' => '',
         'latencyMs' => null,
         'modelUsed' => null,
+        'temperatureUsed' => null,
     ];
 
     $config = load_ai_config(true);
@@ -573,6 +574,8 @@ function ai_call(array $params): array
     $expectJson = (bool)($params['expectJson'] ?? false);
     $purpose = $params['purpose'] ?? 'general';
     $runMode = $params['runMode'] ?? 'strict';
+    $temperature = isset($params['temperature']) ? max(0.1, min(1.0, (float)$params['temperature'])) : 0.2;
+    $maxTokens = isset($params['maxTokens']) ? max(200, (int)$params['maxTokens']) : 500;
 
     $startedAt = microtime(true);
     $providerResult = null;
@@ -580,9 +583,9 @@ function ai_call(array $params): array
     if (empty($result['errors'])) {
         try {
             if ($provider === 'openai') {
-                $providerResult = ai_provider_response_openai($config, $systemPrompt, $userPrompt);
+                $providerResult = ai_provider_response_openai($config, $systemPrompt, $userPrompt, $temperature, $maxTokens);
             } elseif ($provider === 'gemini') {
-                $providerResult = ai_provider_response_gemini($config, $systemPrompt, $userPrompt);
+                $providerResult = ai_provider_response_gemini($config, $systemPrompt, $userPrompt, $temperature, $maxTokens);
             } else {
                 $result['errors'][] = 'Unsupported provider.';
             }
@@ -601,12 +604,15 @@ function ai_call(array $params): array
         $result['rawBody'] = $providerResult['rawBody'] ?? '';
         $result['latencyMs'] = $providerResult['latencyMs'] ?? null;
         $result['modelUsed'] = $providerResult['modelUsed'] ?? ($config['textModel'] ?? null);
+        $result['temperatureUsed'] = $temperature;
         $result['rawEnvelope'] = [
             'provider' => $provider,
             'model' => $result['modelUsed'],
             'httpStatus' => $providerResult['httpStatus'] ?? null,
             'requestId' => $providerResult['requestId'] ?? null,
             'latencyMs' => $providerResult['latencyMs'] ?? null,
+            'temperature' => $temperature,
+            'maxTokens' => $maxTokens,
         ];
 
         if ($result['providerError']) {
@@ -655,6 +661,7 @@ function ai_call(array $params): array
         'durationMs' => $durationMs,
         'httpStatus' => $result['httpStatus'],
         'runMode' => $runMode,
+        'temperature' => $temperature,
     ]);
 
     if ($providerResult !== null) {
@@ -670,6 +677,8 @@ function ai_call(array $params): array
             'latencyMs' => $durationMs,
         ]);
     }
+
+    $result['provider'] = $provider;
 
     return $result;
 }

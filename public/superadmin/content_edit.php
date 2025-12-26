@@ -64,6 +64,15 @@ safe_page(function () {
             </form>
         </div>
 
+        <?php if (!empty($item['generation'])): ?>
+            <div class="card" style="margin-top:14px;">
+                <h3 style="margin-top:0;">Generation details</h3>
+                <p class="muted" style="margin:4px 0;">Job: <?= sanitize($item['generation']['jobId'] ?? ''); ?> • Nonce: <?= sanitize($item['generation']['nonce'] ?? ''); ?></p>
+                <p class="muted" style="margin:4px 0;">Prompt hash: <?= sanitize(substr((string)($item['generation']['promptHash'] ?? ''), 0, 16)); ?> • Output hash: <?= sanitize(substr((string)($item['generation']['outputHash'] ?? ''), 0, 16)); ?></p>
+                <p class="muted" style="margin:4px 0;">Requested: <?= sanitize($item['generation']['typeRequested'] ?? ''); ?> <?= !empty($item['generation']['lengthRequested']) ? '(' . sanitize($item['generation']['lengthRequested']) . ')' : ''; ?> • Model: <?= sanitize($item['generation']['provider'] ?? ''); ?> <?= sanitize($item['generation']['model'] ?? ''); ?> • Temp: <?= sanitize((string)($item['generation']['temperature'] ?? '')); ?></p>
+            </div>
+        <?php endif; ?>
+
         <div class="card" style="margin-top:14px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
             <div style="flex:1;min-width:220px;">
                 <h3 style="margin-top:0;">Preview</h3>
