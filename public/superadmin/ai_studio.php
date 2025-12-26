@@ -9,6 +9,14 @@ safe_page(function () {
     }
 
     $config = load_ai_config(true);
+    $defaults = ai_config_defaults();
+    $offlineDefaults = $defaults['purposeModels']['offlineTenderExtract'] ?? [
+        'primaryModel' => '',
+        'fallbackModel' => '',
+        'useStreamingFallback' => true,
+        'retryOnceOnEmpty' => true,
+        'useStructuredJson' => true,
+    ];
     $offlineModels = $config['purposeModels']['offlineTenderExtract'] ?? [
         'primaryModel' => '',
         'fallbackModel' => '',
@@ -33,15 +41,26 @@ safe_page(function () {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_csrf();
+        $action = trim($_POST['action'] ?? 'save');
         $provider = trim($_POST['provider'] ?? '');
         $apiKeyInput = trim($_POST['api_key'] ?? '');
-        $textModel = trim($_POST['text_model'] ?? '');
-        $imageModel = trim($_POST['image_model'] ?? '');
+        $textModel = trim($_POST['text_model'] ?? ($config['textModel'] ?? ''));
+        $imageModel = trim($_POST['image_model'] ?? ($config['imageModel'] ?? ''));
         $offlinePrimary = trim($_POST['offline_primary_model'] ?? ($offlineModels['primaryModel'] ?? ''));
         $offlineFallback = trim($_POST['offline_fallback_model'] ?? ($offlineModels['fallbackModel'] ?? ''));
         $offlineStreaming = isset($_POST['offline_use_streaming']) ? true : (bool)($offlineModels['useStreamingFallback'] ?? false);
         $offlineRetry = isset($_POST['offline_retry_on_empty']) ? true : (bool)($offlineModels['retryOnceOnEmpty'] ?? false);
         $offlineStructured = isset($_POST['offline_use_structured']) ? true : (bool)($offlineModels['useStructuredJson'] ?? true);
+
+        if ($action === 'switch_offline_fallback') {
+            if ($offlineFallback === '') {
+                $offlineFallback = $offlineDefaults['fallbackModel'] ?? '';
+            }
+            $offlinePrimary = $offlineFallback;
+            if ($provider === '') {
+                $provider = 'gemini';
+            }
+        }
 
         if (!in_array($provider, ['openai', 'gemini'], true)) {
             $errors[] = 'Provider is required.';
@@ -69,7 +88,22 @@ safe_page(function () {
                 ],
             ];
             save_ai_config($provider, $resolvedKey, $textModel, $imageModel, $purposeModels);
-            set_flash('success', 'AI settings saved successfully.');
+            ai_log([
+                'event' => 'ai_config_saved',
+                'actor' => $user['email'] ?? ($user['yojId'] ?? 'superadmin'),
+                'provider' => $provider,
+                'textModel' => $textModel,
+                'imageModel' => $imageModel,
+                'offlinePrimary' => $offlinePrimary,
+                'offlineFallback' => $offlineFallback,
+                'offlineStreaming' => $offlineStreaming,
+                'offlineRetryEmpty' => $offlineRetry,
+                'offlineStructured' => $offlineStructured,
+                'action' => $action,
+            ]);
+            set_flash('success', $action === 'switch_offline_fallback'
+                ? 'Offline extraction switched to the fallback model. Settings saved.'
+                : 'AI settings saved successfully.');
             redirect('/superadmin/ai_studio.php');
         } else {
             set_flash('error', implode(' ', $errors));
@@ -89,7 +123,7 @@ safe_page(function () {
     $displayKey = mask_api_key_display($config['apiKey'] ?? null);
     $title = get_app_config()['appName'] . ' | AI Studio';
 
-    render_layout($title, function () use ($config, $displayKey, $lastProviderCall, $offlineModels, $offlineStructured) {
+    render_layout($title, function () use ($config, $displayKey, $lastProviderCall, $offlineModels, $offlineStructured, $offlineDefaults) {
         ?>
         <div class="card">
             <div style="display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;justify-content:space-between;">
@@ -97,65 +131,94 @@ safe_page(function () {
                     <h2 style="margin-bottom:6px;"><?= sanitize('AI Studio'); ?></h2>
                     <p class="muted" style="margin:0;"><?= sanitize('Configure provider, models, and keep keys hidden behind server-side storage.'); ?></p>
                 </div>
-                <span class="pill"><?= sanitize('Superadmin only'); ?></span>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                    <span class="pill"><?= sanitize('Superadmin only'); ?></span>
+                    <span class="pill muted"><?= sanitize('Timezone: Asia/Kolkata'); ?></span>
+                </div>
             </div>
-            <form method="post" style="margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;">
+            <form method="post" style="margin-top:16px;display:grid;gap:16px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                <div class="field">
-                    <label for="provider"><?= sanitize('Provider'); ?></label>
-                    <select id="provider" name="provider" required>
-                        <option value=""><?= sanitize('Select provider'); ?></option>
-                        <option value="openai" <?= ($config['provider'] ?? '') === 'openai' ? 'selected' : ''; ?>><?= sanitize('OpenAI'); ?></option>
-                        <option value="gemini" <?= ($config['provider'] ?? '') === 'gemini' ? 'selected' : ''; ?>><?= sanitize('Gemini'); ?></option>
-                    </select>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;">
+                    <div class="field">
+                        <label for="provider"><?= sanitize('Provider'); ?></label>
+                        <select id="provider" name="provider" required>
+                            <option value=""><?= sanitize('Select provider'); ?></option>
+                            <option value="openai" <?= ($config['provider'] ?? '') === 'openai' ? 'selected' : ''; ?>><?= sanitize('OpenAI'); ?></option>
+                            <option value="gemini" <?= ($config['provider'] ?? '') === 'gemini' ? 'selected' : ''; ?>><?= sanitize('Gemini'); ?></option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="api_key"><?= sanitize('API Key'); ?></label>
+                        <input id="api_key" type="password" name="api_key" placeholder="<?= sanitize($config['hasApiKey'] ? 'Leave blank to keep existing key' : 'Required'); ?>">
+                        <small class="muted"><?= sanitize('Current: ' . $displayKey); ?></small>
+                    </div>
+                    <div class="field">
+                        <label for="text_model"><?= sanitize('Text Model'); ?></label>
+                        <input id="text_model" type="text" name="text_model" value="<?= sanitize($config['textModel'] ?? ''); ?>" required placeholder="<?= sanitize('e.g. gpt-4o-mini'); ?>">
+                    </div>
+                    <div class="field">
+                        <label for="image_model"><?= sanitize('Image Model'); ?></label>
+                        <input id="image_model" type="text" name="image_model" value="<?= sanitize($config['imageModel'] ?? ''); ?>" required placeholder="<?= sanitize('e.g. gpt-image-1'); ?>">
+                    </div>
                 </div>
-                <div class="field">
-                    <label for="api_key"><?= sanitize('API Key'); ?></label>
-                    <input id="api_key" type="password" name="api_key" placeholder="<?= sanitize($config['hasApiKey'] ? 'Leave blank to keep existing key' : 'Required'); ?>">
-                    <small class="muted"><?= sanitize('Current: ' . $displayKey); ?></small>
-                </div>
-                <div class="field">
-                    <label for="text_model"><?= sanitize('Text Model'); ?></label>
-                    <input id="text_model" type="text" name="text_model" value="<?= sanitize($config['textModel'] ?? ''); ?>" required placeholder="<?= sanitize('e.g. gpt-4o-mini'); ?>">
-                </div>
-                <div class="field">
-                    <label for="image_model"><?= sanitize('Image Model'); ?></label>
-                    <input id="image_model" type="text" name="image_model" value="<?= sanitize($config['imageModel'] ?? ''); ?>" required placeholder="<?= sanitize('e.g. gpt-image-1'); ?>">
-                </div>
-                <div class="field">
-                    <label for="offline_primary_model"><?= sanitize('Offline Tender Primary Model'); ?></label>
-                    <input id="offline_primary_model" type="text" name="offline_primary_model" value="<?= sanitize($offlineModels['primaryModel'] ?? ''); ?>" placeholder="<?= sanitize('Defaults to Text Model when blank'); ?>">
-                    <small class="muted"><?= sanitize('Used for offline tender extraction.'); ?></small>
-                </div>
-                <div class="field">
-                    <label for="offline_fallback_model"><?= sanitize('Offline Tender Fallback Model'); ?></label>
-                    <input id="offline_fallback_model" type="text" name="offline_fallback_model" value="<?= sanitize($offlineModels['fallbackModel'] ?? ''); ?>" placeholder="<?= sanitize('e.g. gemini-3-flash-preview'); ?>">
-                    <small class="muted"><?= sanitize('Attempted after retries when Gemini returns empty content.'); ?></small>
-                </div>
-                <div class="field" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;grid-column:1/-1;">
-                    <label class="pill" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
-                        <input type="checkbox" name="offline_use_streaming" value="1" <?= !empty($offlineModels['useStreamingFallback']) ? 'checked' : ''; ?>>
-                        <?= sanitize('Use streaming fallback when empty'); ?>
-                    </label>
-                    <label class="pill" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
-                        <input type="checkbox" name="offline_retry_on_empty" value="1" <?= !empty($offlineModels['retryOnceOnEmpty']) ? 'checked' : ''; ?>>
-                        <?= sanitize('Retry once on empty content'); ?>
-                    </label>
-                </div>
-                <div class="field" style="grid-column:1/-1;">
-                    <label class="muted" style="display:block;margin-bottom:6px;"><?= sanitize('Extraction Mode'); ?></label>
+
+                <div id="offline-extraction" class="card" style="background:#0f1520;border:1px solid #253047;border-radius:14px;padding:14px;display:grid;gap:12px;">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                        <div>
+                            <h3 style="margin:0 0 4px 0;"><?= sanitize('Offline Tender Extraction'); ?></h3>
+                            <p class="muted" style="margin:0;"><?= sanitize('Use safer defaults when Gemini 3 Pro Preview returns empty content. Flash fallback + structured outputs keep runs stable.'); ?></p>
+                        </div>
+                        <span class="pill" style="background:#1f6feb;color:#e6edf3;"><?= sanitize('Empty-response shield'); ?></span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;">
+                        <div class="field">
+                            <label for="offline_primary_model"><?= sanitize('Primary model'); ?></label>
+                            <input id="offline_primary_model" list="offline-model-options" type="text" name="offline_primary_model" value="<?= sanitize($offlineModels['primaryModel'] ?? ''); ?>" placeholder="<?= sanitize('Defaults to Text Model when blank'); ?>">
+                            <small class="muted"><?= sanitize('Current primary: ' . (($offlineModels['primaryModel'] ?? '') !== '' ? $offlineModels['primaryModel'] : 'Uses text model')); ?></small>
+                        </div>
+                        <div class="field">
+                            <label for="offline_fallback_model"><?= sanitize('Fallback model (Flash recommended)'); ?></label>
+                            <input id="offline_fallback_model" list="offline-fallback-options" type="text" name="offline_fallback_model" value="<?= sanitize($offlineModels['fallbackModel'] ?? ''); ?>" placeholder="<?= sanitize($offlineDefaults['fallbackModel'] ?? 'gemini-3-flash-preview'); ?>">
+                            <small class="muted"><?= sanitize('Used automatically after retries or when Gemini returns empty content.'); ?></small>
+                        </div>
+                    </div>
+                    <datalist id="offline-model-options">
+                        <option value="gemini-3-pro-preview">
+                        <option value="gemini-1.5-pro">
+                        <option value="gpt-4o-mini">
+                    </datalist>
+                    <datalist id="offline-fallback-options">
+                        <option value="gemini-3-flash-preview">
+                        <option value="gemini-1.5-flash">
+                        <option value="gpt-4o-mini">
+                    </datalist>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
                         <label class="pill" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
                             <input type="checkbox" name="offline_use_structured" value="1" <?= !empty($offlineStructured) ? 'checked' : ''; ?>>
-                            <?= sanitize('Use structured output for extraction'); ?>
+                            <?= sanitize('Structured outputs ON (recommended)'); ?>
                         </label>
-                        <span class="pill muted"><?= sanitize('Structured JSON (recommended)'); ?></span>
-                        <span class="muted" style="font-size:12px;"><?= sanitize('Sets response_mime_type=application/json with a JSON schema for offline tenders.'); ?></span>
+                        <label class="pill" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="checkbox" name="offline_use_streaming" value="1" <?= !empty($offlineModels['useStreamingFallback']) ? 'checked' : ''; ?>>
+                            <?= sanitize('Streaming fallback'); ?>
+                        </label>
+                        <label class="pill" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="checkbox" name="offline_retry_on_empty" value="1" <?= !empty($offlineModels['retryOnceOnEmpty']) ? 'checked' : ''; ?>>
+                            <?= sanitize('Retry once on empty content'); ?>
+                        </label>
+                        <span class="pill muted"><?= sanitize('Defaults: Flash fallback + structured'); ?></span>
                     </div>
-                </div>
-                <div class="field" style="grid-column:1/-1;">
-                    <button class="btn" type="submit"><?= sanitize('Save Settings'); ?></button>
-                    <span class="muted" style="margin-left:10px;"><?= sanitize('Keys are obfuscated with a server secret and stored outside web root.'); ?></span>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:center;">
+                        <div class="muted" style="font-size:13px;line-height:1.5;">
+                            <?= sanitize('If contractors report “AI provider returned empty final output”, switch from gemini-3-pro-preview to the Flash fallback below. This keeps extraction running without code edits.'); ?>
+                        </div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+                            <button class="btn secondary" type="submit" name="action" value="switch_offline_fallback"><?= sanitize('Switch to Flash fallback now'); ?></button>
+                            <button class="btn" type="submit" name="action" value="save"><?= sanitize('Save Settings'); ?></button>
+                        </div>
+                    </div>
+                    <div class="pill muted" style="background:#0c111b;color:#9ea7b3;">
+                        <?= sanitize('Keys are obfuscated with a server secret and stored outside web root. Logs written to /data/logs/ai.log.'); ?>
+                    </div>
                 </div>
             </form>
         </div>

@@ -91,6 +91,19 @@ safe_page(function () {
     if (!empty($aiResult['rawEnvelope']) && is_array($aiResult['rawEnvelope'])) {
         $aiState['rawEnvelope'] = $aiResult['rawEnvelope'];
     }
+    $emptyContentError = false;
+    foreach ((array)($aiState['errors'] ?? []) as $err) {
+        if (stripos((string)$err, 'empty content') !== false) {
+            $emptyContentError = true;
+            break;
+        }
+    }
+    if ($emptyContentError && ($aiState['provider'] ?? '') === 'gemini') {
+        $aiState['emptyContentEvents'] = (int)($aiState['emptyContentEvents'] ?? 0) + 1;
+        $aiState['emptyContentLastSeenAt'] = $nowIso;
+    } else {
+        $aiState['emptyContentEvents'] = (int)($aiState['emptyContentEvents'] ?? 0);
+    }
     $runHistory = array_values(array_filter((array)($aiState['runHistory'] ?? []), static function ($runAt) use ($now) {
         $ts = strtotime((string)$runAt);
         return $ts !== false && ($now->getTimestamp() - $ts) <= 86400;
