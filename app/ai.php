@@ -81,7 +81,7 @@ function ai_config_defaults(): array
         'purposeModels' => [
             'offlineTenderExtract' => [
                 'primaryModel' => '',
-                'fallbackModel' => '',
+                'fallbackModel' => 'gemini-3-flash-preview',
                 'useStreamingFallback' => true,
                 'retryOnceOnEmpty' => true,
                 'useStructuredJson' => true,
@@ -108,6 +108,9 @@ function load_ai_config(bool $includeKey = false): array
     $offlineDefault = $defaults['purposeModels']['offlineTenderExtract'] ?? [];
     $offlineConfig = is_array($config['purposeModels']['offlineTenderExtract'] ?? null) ? $config['purposeModels']['offlineTenderExtract'] : [];
     $config['purposeModels']['offlineTenderExtract'] = array_merge($offlineDefault, $offlineConfig);
+    if (($config['provider'] ?? '') === 'gemini' && ($config['purposeModels']['offlineTenderExtract']['fallbackModel'] ?? '') === '') {
+        $config['purposeModels']['offlineTenderExtract']['fallbackModel'] = $offlineDefault['fallbackModel'] ?? '';
+    }
     $config['hasApiKey'] = !empty($config['apiKey']);
     if ($includeKey) {
         $config['apiKey'] = reveal_api_key($config['apiKey']);

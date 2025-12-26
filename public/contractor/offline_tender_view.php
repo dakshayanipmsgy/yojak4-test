@@ -74,6 +74,16 @@ safe_page(function () {
         $aiParseBadge = $ai['parsedOk'] ? 'Parsed' : ($ai['providerOk'] ? 'Needs Review' : 'Provider Error');
         $aiBlocked = !empty($ai['promptBlockReason']);
         $aiEmpty = !empty($ai['providerOk']) && trim((string)($ai['rawText'] ?? '')) === '';
+        $aiEmptyContentError = false;
+        foreach ((array)($ai['errors'] ?? []) as $err) {
+            if (stripos((string)$err, 'empty content') !== false) {
+                $aiEmptyContentError = true;
+                break;
+            }
+        }
+        $aiEmptyEvents = (int)($ai['emptyContentEvents'] ?? 0);
+        $aiEmptyAnomaly = $aiEmptyContentError && ($ai['provider'] ?? '') === 'gemini';
+        $aiEmptyRepeated = $aiEmptyAnomaly && $aiEmptyEvents >= 2;
         ?>
         <div class="card" style="display:grid; gap:10px;">
             <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
@@ -178,6 +188,51 @@ safe_page(function () {
                 </div>
             <?php endif; ?>
         </div>
+
+        <?php if ($aiEmptyAnomaly): ?>
+            <div class="card" style="margin-top:12px;display:grid;gap:10px;background:#0f1826;border:1px solid #27344a;">
+                <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">
+                    <div>
+                        <h3 style="margin:0;"><?= sanitize('AI empty response detected'); ?></h3>
+                        <p class="muted" style="margin:4px 0 0;"><?= sanitize('AI provider returned empty final output. Please ask admin to switch extraction model or try again later.'); ?></p>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <?php if ($aiEmptyRepeated): ?>
+                            <span class="pill" style="background:#402222;color:#f6c7c7;"><?= sanitize('Repeated anomaly'); ?></span>
+                        <?php endif; ?>
+                        <span class="pill" style="background:#1f6feb;color:#e6edf3;"><?= sanitize('Gemini monitor'); ?></span>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                    <span class="pill muted"><?= sanitize('Empty responses logged: ' . max(1, $aiEmptyEvents)); ?></span>
+                    <?php if (!empty($ai['lastRunAt'])): ?>
+                        <span class="pill muted"><?= sanitize('Last AI run: ' . $ai['lastRunAt']); ?></span>
+                    <?php endif; ?>
+                    <?php if (!empty($ai['runMode'])): ?>
+                        <span class="pill muted"><?= sanitize('Mode: ' . ucfirst($ai['runMode'])); ?></span>
+                    <?php endif; ?>
+                </div>
+                <div class="muted" style="line-height:1.5;">
+                    <?= sanitize('Recommended fix: switch Offline Tender Extraction from gemini-3-pro-preview to a Flash fallback in AI Studio with structured outputs ON. This avoids blank final responses and keeps retries safer.'); ?>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;align-items:center;">
+                    <ul class="muted" style="margin:0;padding-left:18px;line-height:1.6;">
+                        <li><?= sanitize('Share this notice with your admin or superadmin.'); ?></li>
+                        <li><?= sanitize('Admins can open AI Studio > Offline Tender Extraction to switch to the Flash fallback model.'); ?></li>
+                        <li><?= sanitize('Re-run AI after the switch or wait a few minutes before retrying.'); ?></li>
+                    </ul>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+                        <a class="btn secondary" href="/superadmin/ai_studio.php#offline-extraction"><?= sanitize('Contact admin / open AI Studio'); ?></a>
+                        <form method="post" action="/contractor/offline_tender_run_ai.php" class="ai-rerun-form" style="margin:0;">
+                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                            <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                            <input type="hidden" name="run_mode" value="<?= sanitize($ai['runMode'] ?? 'strict'); ?>">
+                            <button class="btn" type="submit"><?= sanitize('Retry AI now'); ?></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
 
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-top:12px;">
             <div class="card" style="display:grid; gap:12px;">
