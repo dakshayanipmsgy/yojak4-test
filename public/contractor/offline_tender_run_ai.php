@@ -44,6 +44,7 @@ safe_page(function () {
 
     $config = load_ai_config();
     $resolvedModels = ai_resolve_purpose_models($config, 'offline_tender_extract');
+    $structuredEnabled = ($config['provider'] ?? '') === 'gemini' && !empty($resolvedModels['useStructuredJson']);
     if (($config['provider'] ?? '') === '' || ((($config['textModel'] ?? '') === '') && (($resolvedModels['primaryModel'] ?? '') === '')) || empty($config['hasApiKey'])) {
         set_flash('error', 'AI is not configured. Please contact support. Superadmin can configure this in AI Studio (/superadmin/ai_studio.php).');
         ai_log([
@@ -83,6 +84,7 @@ safe_page(function () {
     $aiState['safetyRatingsSummary'] = $aiResult['safetyRatingsSummary'] ?? '';
     $aiState['retryCount'] = (int)($aiResult['retryCount'] ?? 0);
     $aiState['fallbackUsed'] = (bool)($aiResult['fallbackUsed'] ?? false);
+    $aiState['schemaValidation'] = $aiResult['schemaValidation'] ?? ['enabled' => false, 'passed' => true, 'errors' => []];
     if (!empty($aiResult['attempts']) && is_array($aiResult['attempts'])) {
         $aiState['attempts'] = $aiResult['attempts'];
     }
@@ -120,6 +122,7 @@ safe_page(function () {
         if (isset($data['checklist']) && is_array($data['checklist'])) {
             $incomingChecklist = $data['checklist'];
         }
+        $newExtracted['checklist'] = $incomingChecklist;
         $newChecklist = merge_checklist($newChecklist, $incomingChecklist);
     }
 
@@ -147,12 +150,17 @@ safe_page(function () {
         'fallbackUsed' => $aiState['fallbackUsed'] ?? false,
         'finishReason' => $aiState['finishReason'] ?? null,
         'blockReason' => $aiState['promptBlockReason'] ?? null,
+        'structuredOutputs' => $structuredEnabled,
+        'schemaValidationPassed' => $aiState['schemaValidation']['passed'] ?? true,
+        'schemaErrors' => array_slice((array)($aiState['schemaValidation']['errors'] ?? []), 0, 5),
     ]);
 
     if ($aiState['parsedOk']) {
         set_flash('success', 'AI responded successfully. Review the extracted values and apply them when ready.');
     } elseif (!empty($aiState['providerOk'])) {
-        if (trim((string)($aiState['rawText'] ?? '')) === '') {
+        if (($aiState['schemaValidation']['enabled'] ?? false) && !($aiState['schemaValidation']['passed'] ?? true)) {
+            set_flash('error', 'AI responded, but the structured JSON was missing required keys. Automatic retries/fallbacks have run; please review the debug details.');
+        } elseif (trim((string)($aiState['rawText'] ?? '')) === '') {
             set_flash('error', 'Gemini returned an empty final response. Streaming/retry/fallback have been attempted automatically. Consider switching to a fallback model in AI Studio.');
         } else {
             set_flash('error', 'AI responded, but the output was not in JSON format. Review the debug details below and try again.');

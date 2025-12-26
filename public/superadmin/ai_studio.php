@@ -14,7 +14,9 @@ safe_page(function () {
         'fallbackModel' => '',
         'useStreamingFallback' => true,
         'retryOnceOnEmpty' => true,
+        'useStructuredJson' => true,
     ];
+    $offlineStructured = (bool)($offlineModels['useStructuredJson'] ?? true);
     $errors = [];
     $lastProviderCall = null;
 
@@ -39,6 +41,7 @@ safe_page(function () {
         $offlineFallback = trim($_POST['offline_fallback_model'] ?? ($offlineModels['fallbackModel'] ?? ''));
         $offlineStreaming = isset($_POST['offline_use_streaming']) ? true : (bool)($offlineModels['useStreamingFallback'] ?? false);
         $offlineRetry = isset($_POST['offline_retry_on_empty']) ? true : (bool)($offlineModels['retryOnceOnEmpty'] ?? false);
+        $offlineStructured = isset($_POST['offline_use_structured']) ? true : (bool)($offlineModels['useStructuredJson'] ?? true);
 
         if (!in_array($provider, ['openai', 'gemini'], true)) {
             $errors[] = 'Provider is required.';
@@ -62,6 +65,7 @@ safe_page(function () {
                     'fallbackModel' => $offlineFallback,
                     'useStreamingFallback' => $offlineStreaming,
                     'retryOnceOnEmpty' => $offlineRetry,
+                    'useStructuredJson' => $offlineStructured,
                 ],
             ];
             save_ai_config($provider, $resolvedKey, $textModel, $imageModel, $purposeModels);
@@ -77,6 +81,7 @@ safe_page(function () {
                 'fallbackModel' => $offlineFallback,
                 'useStreamingFallback' => $offlineStreaming,
                 'retryOnceOnEmpty' => $offlineRetry,
+                'useStructuredJson' => $offlineStructured,
             ];
         }
     }
@@ -84,7 +89,7 @@ safe_page(function () {
     $displayKey = mask_api_key_display($config['apiKey'] ?? null);
     $title = get_app_config()['appName'] . ' | AI Studio';
 
-    render_layout($title, function () use ($config, $displayKey, $lastProviderCall, $offlineModels) {
+    render_layout($title, function () use ($config, $displayKey, $lastProviderCall, $offlineModels, $offlineStructured) {
         ?>
         <div class="card">
             <div style="display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;justify-content:space-between;">
@@ -136,6 +141,17 @@ safe_page(function () {
                         <input type="checkbox" name="offline_retry_on_empty" value="1" <?= !empty($offlineModels['retryOnceOnEmpty']) ? 'checked' : ''; ?>>
                         <?= sanitize('Retry once on empty content'); ?>
                     </label>
+                </div>
+                <div class="field" style="grid-column:1/-1;">
+                    <label class="muted" style="display:block;margin-bottom:6px;"><?= sanitize('Extraction Mode'); ?></label>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                        <label class="pill" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="checkbox" name="offline_use_structured" value="1" <?= !empty($offlineStructured) ? 'checked' : ''; ?>>
+                            <?= sanitize('Use structured output for extraction'); ?>
+                        </label>
+                        <span class="pill muted"><?= sanitize('Structured JSON (recommended)'); ?></span>
+                        <span class="muted" style="font-size:12px;"><?= sanitize('Sets response_mime_type=application/json with a JSON schema for offline tenders.'); ?></span>
+                    </div>
                 </div>
                 <div class="field" style="grid-column:1/-1;">
                     <button class="btn" type="submit"><?= sanitize('Save Settings'); ?></button>

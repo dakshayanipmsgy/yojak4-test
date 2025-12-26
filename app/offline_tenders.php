@@ -208,6 +208,7 @@ function offline_tender_defaults(): array
         'eligibilityDocs' => [],
         'annexures' => [],
         'formats' => [],
+        'checklist' => [],
     ];
 }
 
@@ -244,6 +245,194 @@ function offline_tender_extract_text(array $sourceFiles): string
         $snippets[] = 'File: ' . ($file['name'] ?? basename($fullPath)) . ' | Preview: ' . substr((string)$text, 0, 4000);
     }
     return implode("\n", $snippets);
+}
+
+function offline_tender_schema_properties(): array
+{
+    return [
+        'publishDate' => [
+            'type' => 'string',
+            'description' => 'Publish date as ISO string or null',
+            'nullable' => true,
+        ],
+        'submissionDeadline' => [
+            'type' => 'string',
+            'description' => 'Submission deadline as ISO string or null',
+            'nullable' => true,
+        ],
+        'openingDate' => [
+            'type' => 'string',
+            'description' => 'Opening date as ISO string or null',
+            'nullable' => true,
+        ],
+        'fees' => [
+            'type' => 'object',
+            'properties' => [
+                'tenderFee' => ['type' => 'string', 'description' => 'Tender fee text'],
+                'emd' => ['type' => 'string', 'description' => 'EMD text'],
+                'other' => ['type' => 'string', 'description' => 'Other fee notes'],
+            ],
+            'required' => ['tenderFee', 'emd', 'other'],
+            'additionalProperties' => false,
+        ],
+        'completionMonths' => [
+            'type' => 'integer',
+            'description' => 'Completion period in months or null',
+            'nullable' => true,
+        ],
+        'bidValidityDays' => [
+            'type' => 'integer',
+            'description' => 'Bid validity in days or null',
+            'nullable' => true,
+        ],
+        'eligibilityDocs' => [
+            'type' => 'array',
+            'items' => ['type' => 'string'],
+            'description' => 'Eligibility document list',
+            'nullable' => true,
+        ],
+        'annexures' => [
+            'type' => 'array',
+            'items' => ['type' => 'string'],
+            'description' => 'Annexure list',
+            'nullable' => true,
+        ],
+        'formats' => [
+            'type' => 'array',
+            'items' => [
+                'type' => 'object',
+                'properties' => [
+                    'name' => ['type' => 'string'],
+                    'notes' => ['type' => 'string'],
+                ],
+                'required' => ['name', 'notes'],
+                'additionalProperties' => false,
+            ],
+            'description' => 'Submission format list',
+            'nullable' => true,
+        ],
+        'checklist' => [
+            'type' => 'array',
+            'items' => [
+                'type' => 'object',
+                'properties' => [
+                    'title' => ['type' => 'string'],
+                    'description' => ['type' => 'string'],
+                    'required' => ['type' => 'boolean'],
+                ],
+                'required' => ['title', 'description', 'required'],
+                'additionalProperties' => false,
+            ],
+            'description' => 'Checklist items derived from tender',
+            'nullable' => true,
+        ],
+    ];
+}
+
+function offline_tender_response_schema(): array
+{
+    $properties = offline_tender_schema_properties();
+    return [
+        'type' => 'object',
+        'properties' => $properties,
+        'required' => array_keys($properties),
+        'additionalProperties' => false,
+        'description' => 'Offline tender extraction payload (no bid values/rates).',
+    ];
+}
+
+function offline_tender_validate_extraction_schema(array $data): array
+{
+    $errors = [];
+    $properties = offline_tender_schema_properties();
+    $requiredKeys = array_keys($properties);
+
+    foreach ($requiredKeys as $key) {
+        if (!array_key_exists($key, $data)) {
+            $errors[] = "Missing key: {$key}";
+        }
+    }
+
+    if (!isset($data['fees']) || !is_array($data['fees'])) {
+        $errors[] = 'Fees must be an object with tenderFee, emd, and other fields.';
+    } else {
+        foreach (['tenderFee', 'emd', 'other'] as $feeKey) {
+            if (!array_key_exists($feeKey, $data['fees'])) {
+                $errors[] = "Missing fee field: {$feeKey}";
+            }
+        }
+    }
+
+    $numericFields = [
+        'completionMonths',
+        'bidValidityDays',
+    ];
+    foreach ($numericFields as $field) {
+        if (array_key_exists($field, $data) && $data[$field] !== null && !is_numeric($data[$field])) {
+            $errors[] = "{$field} must be numeric or null.";
+        }
+    }
+
+    $listFields = [
+        'eligibilityDocs',
+        'annexures',
+    ];
+    foreach ($listFields as $field) {
+        if (array_key_exists($field, $data) && $data[$field] !== null && !is_array($data[$field])) {
+            $errors[] = "{$field} must be an array of strings.";
+        }
+    }
+
+    if (array_key_exists('formats', $data) && $data['formats'] !== null) {
+        if (!is_array($data['formats'])) {
+            $errors[] = 'formats must be an array of objects.';
+        } else {
+            foreach ($data['formats'] as $format) {
+                if (!is_array($format)) {
+                    $errors[] = 'formats entries must be objects.';
+                    break;
+                }
+                if (!array_key_exists('name', $format) || trim((string)$format['name']) === '') {
+                    $errors[] = 'formats entries require a name.';
+                    break;
+                }
+                if (!array_key_exists('notes', $format)) {
+                    $errors[] = 'formats entries require notes (can be empty string).';
+                    break;
+                }
+            }
+        }
+    }
+
+    if (array_key_exists('checklist', $data) && $data['checklist'] !== null) {
+        if (!is_array($data['checklist'])) {
+            $errors[] = 'checklist must be an array of objects.';
+        } else {
+            foreach ($data['checklist'] as $item) {
+                if (!is_array($item)) {
+                    $errors[] = 'checklist entries must be objects.';
+                    break;
+                }
+                if (!array_key_exists('title', $item) || trim((string)$item['title']) === '') {
+                    $errors[] = 'checklist entries require a title.';
+                    break;
+                }
+                if (!array_key_exists('required', $item)) {
+                    $errors[] = 'checklist entries require the required flag.';
+                    break;
+                }
+                if (array_key_exists('required', $item) && !is_bool($item['required'])) {
+                    $errors[] = 'checklist entries must specify required as a boolean.';
+                    break;
+                }
+            }
+        }
+    }
+
+    return [
+        'ok' => empty($errors),
+        'errors' => $errors,
+    ];
 }
 
 function offline_tender_ai_prompt(array $tender, bool $lenient = false): array

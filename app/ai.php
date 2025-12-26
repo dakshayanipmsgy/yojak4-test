@@ -84,6 +84,7 @@ function ai_config_defaults(): array
                 'fallbackModel' => '',
                 'useStreamingFallback' => true,
                 'retryOnceOnEmpty' => true,
+                'useStructuredJson' => true,
             ],
         ],
         'updatedAt' => null,
@@ -104,6 +105,9 @@ function load_ai_config(bool $includeKey = false): array
         $defaults['purposeModels'],
         is_array($config['purposeModels'] ?? null) ? $config['purposeModels'] : []
     );
+    $offlineDefault = $defaults['purposeModels']['offlineTenderExtract'] ?? [];
+    $offlineConfig = is_array($config['purposeModels']['offlineTenderExtract'] ?? null) ? $config['purposeModels']['offlineTenderExtract'] : [];
+    $config['purposeModels']['offlineTenderExtract'] = array_merge($offlineDefault, $offlineConfig);
     $config['hasApiKey'] = !empty($config['apiKey']);
     if ($includeKey) {
         $config['apiKey'] = reveal_api_key($config['apiKey']);
@@ -119,7 +123,14 @@ function save_ai_config(string $provider, string $apiKey, string $textModel, str
     $defaults = ai_config_defaults();
     $existing = load_ai_config(true);
     $existingPurpose = is_array($existing['purposeModels'] ?? null) ? $existing['purposeModels'] : [];
+    $incomingOffline = is_array($purposeModels['offlineTenderExtract'] ?? null) ? $purposeModels['offlineTenderExtract'] : [];
+    $existingOffline = is_array($existingPurpose['offlineTenderExtract'] ?? null) ? $existingPurpose['offlineTenderExtract'] : [];
     $mergedPurposeModels = array_merge($defaults['purposeModels'], $existingPurpose, $purposeModels);
+    $mergedPurposeModels['offlineTenderExtract'] = array_merge(
+        $defaults['purposeModels']['offlineTenderExtract'] ?? [],
+        $existingOffline,
+        $incomingOffline
+    );
     $payload = [
         'provider' => $provider,
         'apiKey' => obfuscate_api_key($apiKey),
@@ -136,12 +147,19 @@ function ai_resolve_purpose_models(array $config, string $purpose): array
     $defaults = ai_config_defaults();
     $purposeModels = $config['purposeModels'] ?? [];
     $resolved = array_merge($defaults['purposeModels'], is_array($purposeModels) ? $purposeModels : []);
+    if (isset($resolved['offlineTenderExtract'])) {
+        $resolved['offlineTenderExtract'] = array_merge(
+            $defaults['purposeModels']['offlineTenderExtract'] ?? [],
+            is_array($resolved['offlineTenderExtract']) ? $resolved['offlineTenderExtract'] : []
+        );
+    }
     $purposeKey = $purpose === 'offline_tender_extract' ? 'offlineTenderExtract' : $purpose;
     $selected = $resolved[$purposeKey] ?? [
         'primaryModel' => $config['textModel'] ?? '',
         'fallbackModel' => '',
         'useStreamingFallback' => false,
         'retryOnceOnEmpty' => false,
+        'useStructuredJson' => false,
     ];
     $primary = ($selected['primaryModel'] ?? '') ?: ($config['textModel'] ?? '');
     $fallback = $selected['fallbackModel'] ?? '';
@@ -150,6 +168,7 @@ function ai_resolve_purpose_models(array $config, string $purpose): array
         'fallbackModel' => $fallback,
         'useStreamingFallback' => (bool)($selected['useStreamingFallback'] ?? false),
         'retryOnceOnEmpty' => (bool)($selected['retryOnceOnEmpty'] ?? false),
+        'useStructuredJson' => (bool)($selected['useStructuredJson'] ?? false),
     ];
 }
 
@@ -280,6 +299,95 @@ function parse_ai_json(string $text): array
     $result['parseStage'] = 'fallback_manual';
 
     return $result;
+}
+
+function ai_schema_validation(string $purpose, ?array $json): array
+{
+    $result = [
+        'enabled' => false,
+        'passed' => true,
+        'errors' => [],
+    ];
+
+    if ($json === null) {
+        return $result;
+    }
+
+    if ($purpose === 'offline_tender_extract') {
+        $validation = offline_tender_validate_extraction_schema($json);
+        $result['enabled'] = true;
+        $result['passed'] = (bool)($validation['ok'] ?? false);
+        $result['errors'] = $validation['errors'] ?? [];
+    }
+
+    return $result;
+}
+
+function ai_apply_provider_result(array &$result, array $providerResult, array $config, bool $expectJson, float $temperature, int $maxTokens, string $provider, string $purpose): void
+{
+    $result['httpStatus'] = $providerResult['httpStatus'] ?? $result['httpStatus'];
+    $result['rawText'] = $providerResult['text'] ?? '';
+    $result['text'] = $result['rawText'];
+    $result['requestId'] = $providerResult['requestId'] ?? $result['requestId'];
+    $result['responseId'] = $providerResult['requestId'] ?? $result['responseId'];
+    $result['finishReason'] = $providerResult['finishReason'] ?? $result['finishReason'];
+    $result['promptBlockReason'] = $providerResult['blockReason'] ?? $result['promptBlockReason'];
+    $result['safetyRatingsSummary'] = $providerResult['safetySummary'] ?? ($result['safetyRatingsSummary'] ?? '');
+    $result['providerError'] = $providerResult['providerError'] ?? null;
+    $result['providerOk'] = (bool)($providerResult['ok'] ?? false);
+    $result['rawBody'] = $providerResult['rawBody'] ?? $result['rawBody'];
+    $result['latencyMs'] = $providerResult['latencyMs'] ?? $result['latencyMs'];
+    $result['modelUsed'] = $providerResult['modelUsed'] ?? ($config['textModel'] ?? null);
+    $result['temperatureUsed'] = $providerResult['temperatureUsed'] ?? $temperature;
+    $result['rawEnvelope'] = [
+        'provider' => $provider,
+        'model' => $result['modelUsed'],
+        'httpStatus' => $providerResult['httpStatus'] ?? null,
+        'requestId' => $providerResult['requestId'] ?? null,
+        'latencyMs' => $providerResult['latencyMs'] ?? $result['latencyMs'],
+        'temperature' => $providerResult['temperatureUsed'] ?? $temperature,
+        'maxTokens' => $providerResult['maxTokensUsed'] ?? $maxTokens,
+        'attemptType' => $providerResult['attemptType'] ?? 'primary',
+        'stream' => $providerResult['stream'] ?? false,
+        'structured' => $providerResult['structured'] ?? false,
+        'responseMimeType' => $providerResult['responseMimeType'] ?? null,
+    ];
+
+    if ($result['providerError']) {
+        $result['errors'][] = $result['providerError'];
+    }
+
+    $result['parsedOk'] = false;
+    $result['json'] = null;
+    $result['parseStage'] = 'fallback_manual';
+    $result['schemaValidation'] = ['enabled' => false, 'passed' => true, 'errors' => []];
+
+    if ($result['rawText'] !== '') {
+        if ($expectJson) {
+            $parsed = parse_ai_json($result['rawText']);
+            if ($parsed['json'] !== null) {
+                $result['json'] = $parsed['json'];
+                $result['parsedOk'] = true;
+                $result['parseStage'] = $parsed['parseStage'];
+                $schemaResult = ai_schema_validation($purpose, $result['json']);
+                $result['schemaValidation'] = $schemaResult;
+                if ($schemaResult['enabled'] && !$schemaResult['passed']) {
+                    $result['parsedOk'] = false;
+                    $result['parseStage'] = 'schema_validation';
+                    $result['errors'] = array_merge($result['errors'], $schemaResult['errors']);
+                }
+            } else {
+                $result['errors'] = array_merge($result['errors'], $parsed['errors']);
+                $result['parseStage'] = $parsed['parseStage'];
+            }
+        } else {
+            $result['parsedOk'] = $result['providerOk'];
+        }
+    } elseif ($result['providerOk']) {
+        $result['errors'][] = 'Provider succeeded but returned empty content.';
+    }
+
+    $result['ok'] = $result['parsedOk'] || (!$expectJson && $result['providerOk']);
 }
 
 function ai_log(array $context): void
@@ -564,6 +672,8 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
     $model = $options['modelOverride'] ?? ($config['textModel'] ?? '');
     $stream = (bool)($options['stream'] ?? false);
     $attemptType = $options['attemptType'] ?? 'primary';
+    $structured = (bool)($options['structured'] ?? false);
+    $responseSchema = $options['responseSchema'] ?? null;
     $urlBase = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($model);
     $url = $urlBase . ($stream ? ':streamGenerateContent' : ':generateContent') . '?key=' . urlencode((string)($config['apiKey'] ?? ''));
     $payload = [
@@ -585,6 +695,11 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
             'max_output_tokens' => $maxTokens,
         ],
     ];
+    if ($structured && is_array($responseSchema)) {
+        $payload['generation_config']['response_mime_type'] = 'application/json';
+        $payload['generation_config']['response_schema'] = $responseSchema;
+        $payload['generation_config']['response_json_schema'] = $responseSchema;
+    }
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -695,6 +810,10 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
         'stream' => $stream,
         'temperatureUsed' => $temperature,
         'maxTokensUsed' => $maxTokens,
+        'structured' => $structured,
+        'responseMimeType' => $structured ? 'application/json' : null,
+        'schemaApplied' => $structured && is_array($responseSchema),
+        'responseSchema' => $structured ? $responseSchema : null,
     ];
 }
 
@@ -723,6 +842,11 @@ function ai_call(array $params): array
         'retryCount' => 0,
         'fallbackUsed' => false,
         'attempts' => [],
+        'schemaValidation' => [
+            'enabled' => false,
+            'passed' => true,
+            'errors' => [],
+        ],
     ];
 
     $config = load_ai_config(true);
@@ -734,6 +858,10 @@ function ai_call(array $params): array
     $purpose = $params['purpose'] ?? 'general';
     $runMode = $params['runMode'] ?? 'strict';
     $purposeModels = ai_resolve_purpose_models($config, $purpose);
+    $structuredOutput = ($config['provider'] ?? '') === 'gemini'
+        && $purpose === 'offline_tender_extract'
+        && !empty($purposeModels['useStructuredJson']);
+    $responseSchema = $structuredOutput && function_exists('offline_tender_response_schema') ? offline_tender_response_schema() : null;
     if (($config['provider'] ?? '') === '' || (($config['textModel'] ?? '') === '' && ($purposeModels['primaryModel'] ?? '') === '')) {
         $result['errors'][] = 'AI provider configuration missing.';
     }
@@ -756,6 +884,7 @@ function ai_call(array $params): array
                 $providerResult['attemptType'] = 'primary';
                 $result['attempts'][] = $providerResult;
             } elseif ($provider === 'gemini') {
+                $retryCount = 0;
                 $primary = ai_provider_response_gemini(
                     $config,
                     $systemPrompt,
@@ -765,11 +894,12 @@ function ai_call(array $params): array
                     [
                         'modelOverride' => $purposeModels['primaryModel'] ?? null,
                         'attemptType' => 'primary',
+                        'structured' => $structuredOutput,
+                        'responseSchema' => $responseSchema,
                     ]
                 );
                 $result['attempts'][] = $primary;
                 $providerResult = $primary;
-                $retryCount = 0;
                 if (($primary['ok'] ?? false) && trim((string)($primary['text'] ?? '')) === '') {
                     if (!empty($purposeModels['useStreamingFallback'])) {
                         $streamAttempt = ai_provider_response_gemini(
@@ -782,6 +912,8 @@ function ai_call(array $params): array
                                 'modelOverride' => $purposeModels['primaryModel'] ?? null,
                                 'stream' => true,
                                 'attemptType' => 'stream_fallback',
+                                'structured' => $structuredOutput,
+                                'responseSchema' => $responseSchema,
                             ]
                         );
                         $result['attempts'][] = $streamAttempt;
@@ -798,6 +930,8 @@ function ai_call(array $params): array
                             [
                                 'modelOverride' => $purposeModels['primaryModel'] ?? null,
                                 'attemptType' => 'retry',
+                                'structured' => $structuredOutput,
+                                'responseSchema' => $responseSchema,
                             ]
                         );
                         $result['attempts'][] = $retryAttempt;
@@ -814,6 +948,8 @@ function ai_call(array $params): array
                             [
                                 'modelOverride' => $purposeModels['fallbackModel'],
                                 'attemptType' => 'fallback_model',
+                                'structured' => $structuredOutput,
+                                'responseSchema' => $responseSchema,
                             ]
                         );
                         $result['attempts'][] = $fallbackAttempt;
@@ -830,6 +966,8 @@ function ai_call(array $params): array
                         [
                             'modelOverride' => $purposeModels['fallbackModel'],
                             'attemptType' => 'fallback_model',
+                            'structured' => $structuredOutput,
+                            'responseSchema' => $responseSchema,
                         ]
                     );
                     $result['attempts'][] = $fallbackAttempt;
@@ -845,61 +983,37 @@ function ai_call(array $params): array
     }
 
     if ($providerResult !== null) {
-        $result['httpStatus'] = $providerResult['httpStatus'];
-        $result['rawText'] = $providerResult['text'] ?? '';
-        $result['text'] = $result['rawText'];
-        $result['requestId'] = $providerResult['requestId'] ?? null;
-        $result['responseId'] = $providerResult['requestId'] ?? null;
-        $result['finishReason'] = $providerResult['finishReason'] ?? null;
-        $result['promptBlockReason'] = $providerResult['blockReason'] ?? null;
-        $result['safetyRatingsSummary'] = $providerResult['safetySummary'] ?? '';
-        $result['providerError'] = $providerResult['providerError'] ?? null;
-        $result['providerOk'] = (bool)($providerResult['ok'] ?? false);
-        $result['rawBody'] = $providerResult['rawBody'] ?? '';
-        $result['latencyMs'] = $providerResult['latencyMs'] ?? null;
-        $result['modelUsed'] = $providerResult['modelUsed'] ?? ($config['textModel'] ?? null);
-        $result['temperatureUsed'] = $providerResult['temperatureUsed'] ?? $temperature;
-        $result['rawEnvelope'] = [
-            'provider' => $provider,
-            'model' => $result['modelUsed'],
-            'httpStatus' => $providerResult['httpStatus'] ?? null,
-            'requestId' => $providerResult['requestId'] ?? null,
-            'latencyMs' => $providerResult['latencyMs'] ?? null,
-            'temperature' => $providerResult['temperatureUsed'] ?? $temperature,
-            'maxTokens' => $providerResult['maxTokensUsed'] ?? $maxTokens,
-            'attemptType' => $providerResult['attemptType'] ?? 'primary',
-            'stream' => $providerResult['stream'] ?? false,
-        ];
+        ai_apply_provider_result($result, $providerResult, $config, $expectJson, $temperature, $maxTokens, $provider, $purpose);
+    }
 
-        if ($result['providerError']) {
-            $result['errors'][] = $result['providerError'];
-        }
-
-        if ($result['rawText'] === '' && $result['providerOk']) {
-            $result['errors'][] = 'Provider succeeded but returned empty content.';
-        }
-
-        if ($result['rawText'] !== '') {
-            if ($expectJson) {
-                $parsed = parse_ai_json($result['rawText']);
-                if ($parsed['json'] !== null) {
-                    $result['json'] = $parsed['json'];
-                    $result['parsedOk'] = true;
-                    $result['parseStage'] = $parsed['parseStage'];
-                } else {
-                    $result['errors'] = array_merge($result['errors'], $parsed['errors']);
-                    $result['parseStage'] = $parsed['parseStage'];
-                }
-            } else {
-                $result['parsedOk'] = $result['providerOk'];
-            }
-        } elseif ($providerResult['ok'] ?? false) {
-            $result['errors'][] = 'Provider succeeded but returned empty content.';
-        }
+    if ($provider === 'gemini'
+        && $expectJson
+        && ($result['schemaValidation']['enabled'] ?? false)
+        && !($result['schemaValidation']['passed'] ?? true)
+        && !empty($purposeModels['fallbackModel'])
+        && !$result['fallbackUsed']
+    ) {
+        $result['errors'][] = 'Schema validation failed; attempting fallback model.';
+        $result['fallbackUsed'] = true;
+        $fallbackAttempt = ai_provider_response_gemini(
+            $config,
+            $systemPrompt,
+            $userPrompt,
+            0.6,
+            max($maxTokens, 1024),
+            [
+                'modelOverride' => $purposeModels['fallbackModel'],
+                'attemptType' => 'fallback_schema',
+                'structured' => $structuredOutput,
+                'responseSchema' => $responseSchema,
+            ]
+        );
+        $result['attempts'][] = $fallbackAttempt;
+        $providerResult = $fallbackAttempt;
+        ai_apply_provider_result($result, $providerResult, $config, $expectJson, $temperature, $maxTokens, $provider, $purpose);
     }
 
     $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
-    $result['ok'] = $result['parsedOk'] || (!$expectJson && $result['providerOk']);
 
     if (is_array($result['rawEnvelope'])) {
         $result['rawEnvelope']['latencyMs'] = $result['rawEnvelope']['latencyMs'] ?? $durationMs;
@@ -924,6 +1038,9 @@ function ai_call(array $params): array
             'runMode' => $runMode,
             'temperature' => $attempt['temperatureUsed'] ?? $temperature,
             'latencyMs' => $attempt['latencyMs'] ?? $durationMs,
+            'structured' => $attempt['structured'] ?? false,
+            'responseMimeType' => $attempt['responseMimeType'] ?? null,
+            'schemaApplied' => $attempt['schemaApplied'] ?? false,
         ]);
 
         ai_provider_log_raw([
@@ -937,6 +1054,8 @@ function ai_call(array $params): array
             'parsedOk' => $result['parsedOk'],
             'errors' => array_slice($result['errors'], 0, 5),
             'latencyMs' => $attempt['latencyMs'] ?? $durationMs,
+            'structured' => $attempt['structured'] ?? false,
+            'responseMimeType' => $attempt['responseMimeType'] ?? null,
         ]);
     }
 
@@ -959,6 +1078,9 @@ function ai_call(array $params): array
         'blockReason' => $result['promptBlockReason'],
         'retryCount' => $result['retryCount'],
         'fallbackUsed' => $result['fallbackUsed'],
+        'structured' => is_array($result['rawEnvelope']) ? ($result['rawEnvelope']['structured'] ?? false) : false,
+        'schemaValidation' => $result['schemaValidation'],
+        'responseMimeType' => is_array($result['rawEnvelope']) ? ($result['rawEnvelope']['responseMimeType'] ?? null) : null,
     ]);
 
     $result['provider'] = $provider;
