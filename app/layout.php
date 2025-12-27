@@ -235,7 +235,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/superadmin/contractors.php"><?= sanitize('Contractors'); ?></a>
                         <a href="/superadmin/employees.php"><?= sanitize('Employees'); ?></a>
                         <a href="/superadmin/ai_studio.php"><?= sanitize('AI Studio'); ?></a>
-                        <a href="/superadmin/content_studio.php"><?= sanitize('Content Studio'); ?></a>
+                        <a class="primary" href="/superadmin/content_v2.php"><?= sanitize('Content Studio v2'); ?></a>
                         <a href="/superadmin/tender_discovery.php"><?= sanitize('Tender Discovery'); ?></a>
                         <a href="/superadmin/backup.php"><?= sanitize('Backups'); ?></a>
                         <a href="/superadmin/factory_reset.php"><?= sanitize('Factory Reset'); ?></a>

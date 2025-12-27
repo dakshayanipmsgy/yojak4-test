@@ -14,6 +14,16 @@ safe_page(function () {
 
     render_layout($title, function () use ($blogs, $newsList) {
         ?>
+        <div class="card" style="border-color:#f85149;background:rgba(248,81,73,0.08);color:#f77676;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                <div>
+                    <strong><?= sanitize('Legacy Content Studio'); ?></strong>
+                    <div class="muted" style="color:#f77676;"><?= sanitize('Use Content Studio v2 for new topics and drafts to avoid confusion.'); ?></div>
+                </div>
+                <a class="btn" href="/superadmin/content_v2.php" style="background:#f85149;border-color:#c03a34;"><?= sanitize('Open Content Studio v2'); ?></a>
+            </div>
+        </div>
+
         <div class="card">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
                 <div>

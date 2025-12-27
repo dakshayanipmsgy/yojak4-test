@@ -18,12 +18,23 @@ safe_page(function () {
             </div>
             <div class="card" style="display:flex;flex-direction:column;gap:10px;justify-content:space-between;min-height:180px;">
                 <div>
-                    <div class="pill" style="display:inline-flex;align-items:center;gap:6px;"><?= sanitize('Content Studio'); ?></div>
-                    <h3 style="margin:8px 0 6px;"><?= sanitize('Create and manage publications'); ?></h3>
-                    <p class="muted" style="margin:0;"><?= sanitize('Generate blog/news drafts, preview, schedule, and publish.'); ?></p>
+                    <div class="pill" style="display:inline-flex;align-items:center;gap:6px;"><?= sanitize('Content Studio v2'); ?></div>
+                    <h3 style="margin:8px 0 6px;"><?= sanitize('Topics → Drafts flow'); ?></h3>
+                    <p class="muted" style="margin:0;"><?= sanitize('Generate topics, then draft blogs/news. Asia/Kolkata timestamps.'); ?></p>
+                </div>
+                <div class="buttons" style="margin-top:4px;">
+                    <a class="btn" href="/superadmin/content_v2.php"><?= sanitize('Open Content Studio v2'); ?></a>
+                </div>
+            </div>
+            <div class="card" style="display:flex;flex-direction:column;gap:10px;justify-content:space-between;min-height:180px;">
+                <div>
+                    <div class="pill" style="display:inline-flex;align-items:center;gap:6px;"><?= sanitize('Content Studio (Legacy)'); ?></div>
+                    <h3 style="margin:8px 0 6px;"><?= sanitize('Legacy generator'); ?></h3>
+                    <p class="muted" style="margin:0;"><?= sanitize('Legacy path kept for reference. Use v2 for new drafts.'); ?></p>
                 </div>
                 <div class="buttons">
-                    <a class="btn" href="/superadmin/content_studio.php"><?= sanitize('Open Content Studio'); ?></a>
+                    <a class="btn secondary" href="/superadmin/content_studio.php"><?= sanitize('Open Legacy Studio'); ?></a>
+                    <a class="btn" href="/superadmin/content_v2.php"><?= sanitize('Go to v2'); ?></a>
                 </div>
             </div>
         </div>
