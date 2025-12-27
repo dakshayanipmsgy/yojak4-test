@@ -12,8 +12,11 @@ safe_page(function () {
     $blogTopics = topic_v2_list('blog');
     $newsTopics = topic_v2_list('news');
     $csrf = csrf_token();
+    $aiStatus = ai_get_config();
+    $aiConfig = $aiStatus['config'] ?? ai_config_defaults();
+    $aiConfigured = $aiStatus['ok'] ?? false;
 
-    render_layout($title, function () use ($blogTopics, $newsTopics, $csrf) {
+    render_layout($title, function () use ($blogTopics, $newsTopics, $csrf, $aiConfig, $aiConfigured) {
         ?>
         <style>
             .tab-bar { display:flex; gap:10px; margin:16px 0; flex-wrap:wrap; }
@@ -36,10 +39,31 @@ safe_page(function () {
             .message.error { border-color: var(--danger); color:#f77676; }
             .message.success { border-color: var(--success); color:#8ce99a; }
             .keywords-input { width:100%; border-radius:10px; border:1px solid #30363d; background:#0d1117; color:#e6edf3; padding:10px 12px; }
+            .diag { display:none; margin-top:6px; padding:10px 12px; border-radius:10px; border:1px dashed #2b3440; background:#0b1018; color:#9fb2c8; }
+            .diag strong { color:#e6edf3; }
+            .diag .actions { display:flex; gap:8px; align-items:center; margin-top:6px; flex-wrap:wrap; }
+            .btn.compact { padding:6px 10px; font-size:12px; }
             @media (max-width: 640px) {
                 .grid-2 { grid-template-columns:1fr; }
             }
         </style>
+
+        <div class="card">
+            <div class="flex-between">
+                <div>
+                    <h2 style="margin:0;">AI Status</h2>
+                    <p class="muted" style="margin:4px 0 0;">Shared AI client (no prefetched fallbacks). </p>
+                </div>
+                <?php if ($aiConfigured): ?>
+                    <span class="pill success">AI: Configured ✅ Provider: <?= sanitize($aiConfig['provider'] ?? ''); ?> • Model: <?= sanitize($aiConfig['textModel'] ?? ''); ?></span>
+                <?php else: ?>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <span class="pill danger">AI: Config missing ❌</span>
+                        <a class="btn secondary" href="/superadmin/ai_studio.php">Go to AI Studio</a>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
 
         <div class="card">
             <div class="flex-between">
@@ -89,6 +113,7 @@ safe_page(function () {
                             <p class="muted-compact">AI config guard enforced. Results logged in /data/logs/content_v2.log</p>
                         </form>
                         <div class="message" id="<?= $type; ?>-gen-message"></div>
+                        <div class="diag" id="<?= $type; ?>-gen-diag"></div>
                     </div>
                     <div class="card" style="display:grid; gap:10px;">
                         <div class="flex-between">
@@ -117,8 +142,11 @@ safe_page(function () {
                             <input type="hidden" name="jobId" value="">
                             <input type="hidden" name="provider" value="">
                             <input type="hidden" name="model" value="">
+                            <input type="hidden" name="modelUsed" value="">
                             <input type="hidden" name="requestId" value="">
                             <input type="hidden" name="httpStatus" value="">
+                            <input type="hidden" name="aiOk" value="">
+                            <input type="hidden" name="aiError" value="">
                             <input type="hidden" name="promptHash" value="">
                             <input type="hidden" name="nonce" value="">
                             <input type="hidden" name="generatedAt" value="">
@@ -155,6 +183,7 @@ safe_page(function () {
                             </div>
                         </form>
                         <div class="message" id="<?= $type; ?>-save-message"></div>
+                        <div class="diag" id="<?= $type; ?>-save-diag"></div>
                     </div>
 
                     <div class="card">
@@ -163,6 +192,7 @@ safe_page(function () {
                             <span class="pill">Drafts</span>
                         </div>
                         <div class="message" id="<?= $type; ?>-draft-message"></div>
+                        <div class="diag" id="<?= $type; ?>-draft-diag"></div>
                         <div class="table-responsive" style="margin-top:10px; overflow-x:auto;">
                             <table>
                                 <thead>
@@ -231,6 +261,49 @@ safe_page(function () {
                 }[m] || m));
             }
 
+            function renderDiagnostics(targetId, meta, errorText = '') {
+                const el = document.getElementById(targetId);
+                if (!el) return;
+                el.innerHTML = '';
+                if (!meta) {
+                    el.style.display = 'none';
+                    return;
+                }
+                const model = meta.modelUsed || meta.model || 'unknown';
+                const httpStatus = meta.httpStatus ?? 'n/a';
+                const requestId = meta.requestId || 'n/a';
+                const line = document.createElement('div');
+                line.className = 'muted-compact';
+                line.innerHTML = `<strong>Model:</strong> ${escapeHtml(model)} • <strong>HTTP:</strong> ${escapeHtml(String(httpStatus))} • <strong>Request:</strong> ${escapeHtml(requestId)}`;
+                const actions = document.createElement('div');
+                actions.className = 'actions';
+                const copyBtn = document.createElement('button');
+                copyBtn.type = 'button';
+                copyBtn.className = 'btn secondary compact';
+                copyBtn.textContent = 'Copy debug';
+                const debugText = `requestId=${requestId}\nhttpStatus=${httpStatus}\nmodelUsed=${model}`;
+                copyBtn.addEventListener('click', () => {
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(debugText).then(() => {
+                            copyBtn.textContent = 'Copied';
+                            setTimeout(() => { copyBtn.textContent = 'Copy debug'; }, 1200);
+                        }).catch(() => alert('Unable to copy debug payload.'));
+                    } else {
+                        alert('Clipboard unavailable.');
+                    }
+                });
+                actions.appendChild(copyBtn);
+                if (errorText || meta.error) {
+                    const err = document.createElement('div');
+                    err.className = 'muted-compact';
+                    err.textContent = errorText || meta.error || '';
+                    actions.appendChild(err);
+                }
+                el.appendChild(line);
+                el.appendChild(actions);
+                el.style.display = 'block';
+            }
+
             function renderResults(type) {
                 const container = document.getElementById(`${type}-results`);
                 const jobPill = document.getElementById(`${type}-job-pill`);
@@ -241,6 +314,8 @@ safe_page(function () {
                     container.innerHTML = '<p class="muted" style="margin:0;">No topics yet.</p>';
                     jobPill.textContent = 'No job yet';
                     sourcePill.textContent = 'Awaiting selection';
+                    renderDiagnostics(`${type}-gen-diag`, null);
+                    renderDiagnostics(`${type}-save-diag`, null);
                     return;
                 }
                 jobPill.textContent = `Job ${state[type].jobId || 'pending'}`;
@@ -266,6 +341,7 @@ safe_page(function () {
                     });
                     container.appendChild(card);
                 });
+                renderDiagnostics(`${type}-gen-diag`, state[type].aiMeta || null, (state[type].aiMeta && state[type].aiMeta.ok === false) ? (state[type].aiMeta.error || '') : '');
             }
 
             function fillEditor(type, item) {
@@ -279,9 +355,19 @@ safe_page(function () {
                 sourcePill.textContent = 'AI topic selected';
                 const meta = state[type].aiMeta || {};
                 form.provider.value = meta.provider || '';
-                form.model.value = meta.model || '';
+                const resolvedModel = meta.modelUsed || meta.model || '';
+                form.model.value = resolvedModel;
+                if (form.modelUsed) {
+                    form.modelUsed.value = resolvedModel;
+                }
                 form.requestId.value = meta.requestId || '';
                 form.httpStatus.value = meta.httpStatus || '';
+                if (form.aiOk) {
+                    form.aiOk.value = meta.ok === false ? '0' : '1';
+                }
+                if (form.aiError) {
+                    form.aiError.value = meta.error || '';
+                }
                 form.promptHash.value = meta.promptHash || '';
                 form.nonce.value = meta.nonce || '';
                 form.generatedAt.value = meta.generatedAt || '';
@@ -290,6 +376,7 @@ safe_page(function () {
                 if (form.newsLength) {
                     form.newsLength.value = state[type].newsLength || 'standard';
                 }
+                renderDiagnostics(`${type}-save-diag`, meta, meta.ok === false ? (meta.error || '') : '');
             }
 
             function renderSaved(type) {
@@ -378,6 +465,8 @@ safe_page(function () {
                             if (!data.ok) {
                                 setMessage(`${type}-gen-message`, data.error || 'Generation failed.', true);
                                 state[type].results = [];
+                                state[type].aiMeta = data.aiMeta || null;
+                                renderDiagnostics(`${type}-gen-diag`, data.aiMeta || null, data.error || '');
                                 renderResults(type);
                                 return;
                             }
@@ -389,6 +478,7 @@ safe_page(function () {
                             setMessage(`${type}-gen-message`, 'Topics generated and logged.', false);
                         }).catch(() => {
                             setMessage(`${type}-gen-message`, 'Network error while generating.', true);
+                            renderDiagnostics(`${type}-gen-diag`, null);
                         });
                     });
                 });
@@ -418,6 +508,16 @@ safe_page(function () {
                         form.nonce.value = '';
                         form.generatedAt.value = '';
                         form.rawTextSnippet.value = '';
+                        if (form.modelUsed) {
+                            form.modelUsed.value = '';
+                        }
+                        if (form.aiOk) {
+                            form.aiOk.value = '';
+                        }
+                        if (form.aiError) {
+                            form.aiError.value = '';
+                        }
+                        renderDiagnostics(`${type}-save-diag`, null);
                         submitSave(form, type, true);
                     });
                 });
@@ -490,6 +590,7 @@ safe_page(function () {
                 if (!topicId || !targetType) return;
                 const messageId = `${sourceType}-draft-message`;
                 setMessage(messageId, `Generating ${targetType} draft...`, false);
+                renderDiagnostics(`${sourceType}-draft-diag`, null);
                 const fd = new FormData();
                 fd.append('csrf_token', csrfToken);
                 fd.append('type', targetType);
@@ -505,14 +606,17 @@ safe_page(function () {
                 }).then(resp => resp.json()).then(data => {
                     if (!data.ok) {
                         setMessage(messageId, data.error || 'Draft generation failed.', true);
+                        renderDiagnostics(`${sourceType}-draft-diag`, data.aiMeta || null, data.error || '');
                         return;
                     }
+                    renderDiagnostics(`${sourceType}-draft-diag`, data.aiMeta || null, '');
                     setMessage(messageId, 'Draft created. Redirecting...', false);
                     if (data.viewUrl) {
                         window.location.href = data.viewUrl;
                     }
                 }).catch(() => {
                     setMessage(messageId, 'Network error while creating draft.', true);
+                    renderDiagnostics(`${sourceType}-draft-diag`, null);
                 });
             }
         </script>
