@@ -76,7 +76,7 @@ safe_page(function () {
                 </div>
                 <ul style="list-style:none; padding:0; margin:0; display:grid; gap:6px;">
                     <li><strong>Provider:</strong> <?= sanitize($gen['provider'] ?? ''); ?></li>
-                    <li><strong>Model:</strong> <?= sanitize($gen['model'] ?? ''); ?></li>
+                    <li><strong>Model:</strong> <?= sanitize($gen['modelUsed'] ?? ($gen['model'] ?? '')); ?></li>
                     <li><strong>HTTP:</strong> <?= sanitize((string)($gen['httpStatus'] ?? '')); ?></li>
                     <li><strong>Request ID:</strong> <?= sanitize($gen['requestId'] ?? ''); ?></li>
                     <li><strong>Prompt hash:</strong> <?= sanitize($gen['promptHash'] ?? ''); ?></li>

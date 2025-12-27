@@ -58,15 +58,22 @@ try {
     $aiMeta = null;
     if ($source === 'ai') {
         $rawSnippet = (string)($_POST['rawTextSnippet'] ?? '');
+        $modelUsed = trim((string)($_POST['modelUsed'] ?? ($_POST['model'] ?? '')));
+        $httpStatus = isset($_POST['httpStatus']) && $_POST['httpStatus'] !== '' ? (int)$_POST['httpStatus'] : null;
+        $aiOk = ($_POST['aiOk'] ?? '') !== '' ? (bool)(int)$_POST['aiOk'] : null;
+        $aiError = trim((string)($_POST['aiError'] ?? ''));
         $aiMeta = [
             'provider' => trim((string)($_POST['provider'] ?? '')),
-            'model' => trim((string)($_POST['model'] ?? '')),
+            'modelUsed' => $modelUsed,
+            'model' => $modelUsed,
             'requestId' => trim((string)($_POST['requestId'] ?? '')),
-            'httpStatus' => isset($_POST['httpStatus']) && $_POST['httpStatus'] !== '' ? (int)$_POST['httpStatus'] : null,
+            'httpStatus' => $httpStatus,
             'promptHash' => trim((string)($_POST['promptHash'] ?? '')),
             'nonce' => trim((string)($_POST['nonce'] ?? '')),
             'generatedAt' => trim((string)($_POST['generatedAt'] ?? $now)),
             'rawTextSnippet' => function_exists('mb_substr') ? mb_substr($rawSnippet, 0, 500, 'UTF-8') : substr($rawSnippet, 0, 500),
+            'ok' => $aiOk,
+            'error' => $aiError !== '' ? $aiError : null,
         ];
     }
 

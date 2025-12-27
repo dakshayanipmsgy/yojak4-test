@@ -58,7 +58,7 @@ try {
     $prompts = topic_v2_build_prompts($type, $prompt, $newsLength, $count, $nonce);
 
     $aiResult = ai_call_text(
-        'content_topic_v2',
+        'contentTopics',
         $prompts['systemPrompt'],
         $prompts['userPrompt'],
         [
@@ -68,32 +68,39 @@ try {
         ]
     );
 
-    $results = topic_v2_parse_results($aiResult['json'] ?? null, $count);
+    $results = ($aiResult['ok'] ?? false) ? topic_v2_parse_results($aiResult['json'] ?? null, $count) : [];
     $requiredMin = max(4, min($count, 7));
-    $ok = ($aiResult['ok'] ?? false) && count($results) >= 4;
-
     $errors = $aiResult['errors'] ?? [];
-    if (count($results) < $requiredMin) {
-        $errors[] = 'AI returned fewer topics than requested (' . $requiredMin . ').';
-        $ok = false;
-    }
-    if (count($results) === 0) {
-        $errors[] = 'No topics were generated.';
+    $ok = ($aiResult['ok'] ?? false) && count($results) >= $requiredMin;
+
+    if (!$ok) {
+        if (count($results) < $requiredMin) {
+            $errors[] = 'AI returned fewer topics than requested (' . $requiredMin . ').';
+        }
+        if (count($results) === 0) {
+            $errors[] = 'No topics were generated.';
+        }
     }
 
     $rawText = (string)($aiResult['rawText'] ?? '');
     $rawSnippet = function_exists('mb_substr') ? mb_substr($rawText, 0, 500, 'UTF-8') : substr($rawText, 0, 500);
     $finishedAt = now_kolkata()->format(DateTime::ATOM);
 
+    $errorText = implode(' | ', array_slice($errors, 0, 3));
+    if (!$ok && $errorText === '') {
+        $errorText = 'AI call failed.';
+    }
     $aiMeta = [
         'provider' => $aiResult['provider'] ?? ($aiResult['rawEnvelope']['provider'] ?? ''),
-        'model' => $aiResult['modelUsed'] ?? ($aiResult['rawEnvelope']['model'] ?? ''),
+        'modelUsed' => $aiResult['modelUsed'] ?? ($aiResult['rawEnvelope']['model'] ?? ''),
         'httpStatus' => $aiResult['httpStatus'] ?? ($aiResult['rawEnvelope']['httpStatus'] ?? null),
         'requestId' => $aiResult['requestId'] ?? ($aiResult['rawEnvelope']['requestId'] ?? null),
         'promptHash' => $prompts['promptHash'],
         'nonce' => $nonce,
         'generatedAt' => $startedAt,
         'rawTextSnippet' => $rawSnippet,
+        'ok' => $ok,
+        'error' => $errorText !== '' ? $errorText : null,
     ];
 
     $jobPayload = [
@@ -108,11 +115,16 @@ try {
         ]),
         'results' => $results,
         'ok' => $ok,
+        'error' => $aiMeta['error'],
         'errors' => $errors,
         'rawText' => $rawText,
         'promptHash' => $prompts['promptHash'],
         'createdAt' => $startedAt,
         'newsLength' => $type === 'news' ? $newsLength : null,
+        'provider' => $aiMeta['provider'],
+        'modelUsed' => $aiMeta['modelUsed'],
+        'httpStatus' => $aiMeta['httpStatus'],
+        'requestId' => $aiMeta['requestId'],
     ];
 
     writeJsonAtomic(topic_v2_job_path($jobId), $jobPayload);
@@ -123,13 +135,14 @@ try {
         'type' => $type,
         'ok' => $ok,
         'provider' => $aiMeta['provider'],
-        'model' => $aiMeta['model'],
+        'modelUsed' => $aiMeta['modelUsed'],
         'httpStatus' => $aiMeta['httpStatus'],
         'requestId' => $aiMeta['requestId'],
         'promptHash' => $prompts['promptHash'],
         'resultsCount' => count($results),
         'rawSnippet' => $rawSnippet,
         'errors' => $errors,
+        'error' => $aiMeta['error'],
     ]);
 
     $response = [
