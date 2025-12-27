@@ -13,7 +13,9 @@ safe_page(function () {
 
     require_csrf();
 
-    $config = load_ai_config(true);
+    $configResult = ai_get_config(true);
+    $config = $configResult['config'] ?? [];
+    $configErrors = $configResult['errors'] ?? [];
     $mode = trim($_POST['mode'] ?? 'connectivity');
     $progress = [
         'Preparing secure request...',
@@ -38,22 +40,27 @@ safe_page(function () {
         'modelUsed' => null,
     ];
 
-    if (($config['provider'] ?? '') && ($config['textModel'] ?? '') && ($config['apiKey'] ?? '')) {
+    if (empty($configErrors) && ($config['apiKey'] ?? '')) {
         $systemPrompt = 'You are an API connectivity checker. Respond ONLY with compact JSON keys: status, summary, echo.';
         $userPrompt = 'Return JSON with status:"ok", summary:"AI Studio reachable", echo:"sample". Keep it one sentence.';
         if ($mode === 'json_strict') {
             $systemPrompt = 'You verify JSON cleanliness. Respond with a JSON object that includes status, summary, echo, and a nested meta object with ok:boolean.';
             $userPrompt = 'Return a JSON object without markdown fences. Keep status:"ok", summary:"Strict JSON path", echo:"sample", meta:{ok:true}.';
         }
-        $callResult = ai_call([
-            'purpose' => 'ai_studio_test',
-            'systemPrompt' => $systemPrompt,
-            'userPrompt' => $userPrompt,
-            'expectJson' => true,
-            'runMode' => $mode,
-        ]);
+        $callResult = ai_call_text(
+            'ai_studio_test',
+            $systemPrompt,
+            $userPrompt,
+            [
+                'expectJson' => true,
+                'runMode' => $mode,
+            ]
+        );
     } else {
-        $callResult['errors'] = ['Please save provider, key, and model names before testing.'];
+        $callResult['errors'] = array_merge(
+            $configErrors,
+            ['AI is not configured. Superadmin: set provider, API key, and model in AI Studio.']
+        );
     }
 
     $progress[] = $callResult['ok'] ? 'Result: success' : 'Result: errors present - review details.';

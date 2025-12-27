@@ -529,7 +529,8 @@ function update_job_meta(string $jobId, callable $updater): void
 
 function ai_generate_image(string $prompt, string $type, string $id): ?string
 {
-    $config = load_ai_config(true);
+    $configResult = ai_get_config(true);
+    $config = $configResult['config'] ?? [];
     $uploadDir = content_upload_dir($type, $id);
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0775, true);
@@ -677,14 +678,16 @@ function ai_generate_content(array $meta): array
     $temperatureMap = ['low' => 0.3, 'medium' => 0.5, 'high' => 0.72];
     $temperature = $temperatureMap[$variation] ?? 0.72;
 
-    $call = ai_call([
-        'systemPrompt' => $systemPrompt,
-        'userPrompt' => $userPrompt,
-        'expectJson' => true,
-        'purpose' => 'content_' . $type,
-        'temperature' => $temperature,
-        'maxTokens' => 1200,
-    ]);
+    $call = ai_call_text(
+        'content_' . $type,
+        $systemPrompt,
+        $userPrompt,
+        [
+            'expectJson' => true,
+            'temperature' => $temperature,
+            'maxTokens' => 1200,
+        ]
+    );
 
     $promptHash = hash('sha256', $systemPrompt . "\n" . $userPrompt);
 

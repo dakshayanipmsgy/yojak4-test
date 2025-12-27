@@ -75,12 +75,21 @@ function ai_config_defaults(): array
 {
     return [
         'provider' => '',
-        'apiKey' => null,
+        'apiKeyEnc' => '',
+        'apiKeyStored' => false,
         'textModel' => '',
         'imageModel' => '',
         'purposeModels' => [
+            'contentTopics' => [
+                'primaryModel' => null,
+                'fallbackModel' => null,
+            ],
+            'contentDrafts' => [
+                'primaryModel' => null,
+                'fallbackModel' => null,
+            ],
             'offlineTenderExtract' => [
-                'primaryModel' => '',
+                'primaryModel' => null,
                 'fallbackModel' => 'gemini-3-flash-preview',
                 'useStreamingFallback' => true,
                 'retryOnceOnEmpty' => true,
@@ -91,84 +100,191 @@ function ai_config_defaults(): array
     ];
 }
 
-function load_ai_config(bool $includeKey = false): array
+function ai_normalize_purpose_models(array $raw): array
+{
+    $defaults = ai_config_defaults()['purposeModels'];
+    $normalized = [];
+    foreach ($defaults as $key => $default) {
+        $incoming = is_array($raw[$key] ?? null) ? $raw[$key] : [];
+        $normalized[$key] = array_merge($default, $incoming);
+        $normalized[$key]['primaryModel'] = trim((string)($normalized[$key]['primaryModel'] ?? '')) ?: null;
+        $normalized[$key]['fallbackModel'] = trim((string)($normalized[$key]['fallbackModel'] ?? '')) ?: null;
+        if (array_key_exists('useStreamingFallback', $default)) {
+            $normalized[$key]['useStreamingFallback'] = (bool)($normalized[$key]['useStreamingFallback'] ?? false);
+        }
+        if (array_key_exists('retryOnceOnEmpty', $default)) {
+            $normalized[$key]['retryOnceOnEmpty'] = (bool)($normalized[$key]['retryOnceOnEmpty'] ?? false);
+        }
+        if (array_key_exists('useStructuredJson', $default)) {
+            $normalized[$key]['useStructuredJson'] = (bool)($normalized[$key]['useStructuredJson'] ?? false);
+        }
+    }
+
+    foreach ($raw as $key => $value) {
+        if (isset($normalized[$key])) {
+            continue;
+        }
+        if (is_array($value)) {
+            $normalized[$key] = [
+                'primaryModel' => trim((string)($value['primaryModel'] ?? '')) ?: null,
+                'fallbackModel' => trim((string)($value['fallbackModel'] ?? '')) ?: null,
+            ];
+        }
+    }
+
+    return $normalized;
+}
+
+function ai_get_config(bool $includeKey = false): array
 {
     ensure_ai_storage();
-    $config = readJson(AI_CONFIG_PATH);
-    if (!$config) {
-        $config = ai_config_defaults();
-    } else {
-        $config = array_merge(ai_config_defaults(), $config);
+
+    $config = ai_config_defaults();
+    $raw = readJson(AI_CONFIG_PATH);
+    if ($raw) {
+        $config = array_merge($config, $raw);
     }
-    $defaults = ai_config_defaults();
-    $config['purposeModels'] = array_merge(
-        $defaults['purposeModels'],
-        is_array($config['purposeModels'] ?? null) ? $config['purposeModels'] : []
-    );
-    $offlineDefault = $defaults['purposeModels']['offlineTenderExtract'] ?? [];
-    $offlineConfig = is_array($config['purposeModels']['offlineTenderExtract'] ?? null) ? $config['purposeModels']['offlineTenderExtract'] : [];
-    $config['purposeModels']['offlineTenderExtract'] = array_merge($offlineDefault, $offlineConfig);
-    if (($config['provider'] ?? '') === 'gemini' && ($config['purposeModels']['offlineTenderExtract']['fallbackModel'] ?? '') === '') {
-        $config['purposeModels']['offlineTenderExtract']['fallbackModel'] = $offlineDefault['fallbackModel'] ?? '';
+
+    if (!isset($config['apiKeyEnc']) && isset($raw['apiKey'])) {
+        $config['apiKeyEnc'] = $raw['apiKey'];
     }
-    $config['hasApiKey'] = !empty($config['apiKey']);
-    if ($includeKey) {
-        $config['apiKey'] = reveal_api_key($config['apiKey']);
-    } else {
-        unset($config['apiKey']);
+
+    $config['apiKeyStored'] = !empty($config['apiKeyEnc']);
+    $config['purposeModels'] = ai_normalize_purpose_models(is_array($config['purposeModels'] ?? null) ? $config['purposeModels'] : []);
+    $config['updatedAt'] = $config['updatedAt'] ?? now_kolkata()->format(DateTime::ATOM);
+
+    $apiKey = null;
+    if ($includeKey && $config['apiKeyStored']) {
+        $apiKey = reveal_api_key($config['apiKeyEnc']);
+        if ($apiKey === null || $apiKey === '') {
+            $config['apiKeyStored'] = false;
+        }
     }
-    return $config;
+
+    $config['apiKey'] = $includeKey ? $apiKey : null;
+    $config['hasApiKey'] = $config['apiKeyStored'];
+
+    $errors = [];
+    if (($config['provider'] ?? '') === '') {
+        $errors[] = 'Provider is required.';
+    }
+    if (($config['textModel'] ?? '') === '') {
+        $errors[] = 'Text model is required.';
+    }
+    if (!$config['apiKeyStored']) {
+        $errors[] = 'API key is required.';
+    }
+
+    return [
+        'ok' => empty($errors),
+        'config' => $config,
+        'errors' => $errors,
+    ];
+}
+
+function load_ai_config(bool $includeKey = false): array
+{
+    $result = ai_get_config($includeKey);
+    return $result['config'] ?? ai_config_defaults();
+}
+
+function ai_save_config(array $input): array
+{
+    ensure_ai_storage();
+
+    $provider = trim((string)($input['provider'] ?? ''));
+    $textModel = trim((string)($input['textModel'] ?? ''));
+    $imageModel = trim((string)($input['imageModel'] ?? ''));
+    $apiKeyInput = trim((string)($input['apiKey'] ?? ''));
+    $purposeModels = is_array($input['purposeModels'] ?? null) ? $input['purposeModels'] : [];
+
+    $existing = ai_get_config(true);
+    $existingConfig = $existing['config'] ?? ai_config_defaults();
+    $existingKey = $existingConfig['apiKey'] ?? '';
+
+    $finalKey = $apiKeyInput !== '' ? $apiKeyInput : $existingKey;
+
+    $errors = [];
+    if ($provider === '' || !in_array($provider, ['openai', 'gemini'], true)) {
+        $errors[] = 'Provider is required.';
+    }
+    if ($textModel === '') {
+        $errors[] = 'Text model is required.';
+    }
+    if ($finalKey === '') {
+        $errors[] = 'API key is required.';
+    }
+
+    $payload = ai_config_defaults();
+    $payload['provider'] = $provider;
+    $payload['apiKeyEnc'] = $finalKey !== '' ? obfuscate_api_key($finalKey) : '';
+    $payload['apiKeyStored'] = $finalKey !== '';
+    $payload['textModel'] = $textModel;
+    $payload['imageModel'] = $imageModel;
+    $payload['purposeModels'] = ai_normalize_purpose_models($purposeModels + ($existingConfig['purposeModels'] ?? []));
+    $payload['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
+
+    if (empty($errors)) {
+        writeJsonAtomic(AI_CONFIG_PATH, $payload);
+    }
+
+    return [
+        'ok' => empty($errors),
+        'errors' => $errors,
+        'config' => $payload,
+    ];
 }
 
 function save_ai_config(string $provider, string $apiKey, string $textModel, string $imageModel, array $purposeModels = []): void
 {
-    ensure_ai_storage();
-    $defaults = ai_config_defaults();
-    $existing = load_ai_config(true);
-    $existingPurpose = is_array($existing['purposeModels'] ?? null) ? $existing['purposeModels'] : [];
-    $incomingOffline = is_array($purposeModels['offlineTenderExtract'] ?? null) ? $purposeModels['offlineTenderExtract'] : [];
-    $existingOffline = is_array($existingPurpose['offlineTenderExtract'] ?? null) ? $existingPurpose['offlineTenderExtract'] : [];
-    $mergedPurposeModels = array_merge($defaults['purposeModels'], $existingPurpose, $purposeModels);
-    $mergedPurposeModels['offlineTenderExtract'] = array_merge(
-        $defaults['purposeModels']['offlineTenderExtract'] ?? [],
-        $existingOffline,
-        $incomingOffline
-    );
-    $payload = [
+    ai_save_config([
         'provider' => $provider,
-        'apiKey' => obfuscate_api_key($apiKey),
+        'apiKey' => $apiKey,
         'textModel' => $textModel,
         'imageModel' => $imageModel,
-        'purposeModels' => $mergedPurposeModels,
-        'updatedAt' => now_kolkata()->format(DateTime::ATOM),
-    ];
-    writeJsonAtomic(AI_CONFIG_PATH, $payload);
+        'purposeModels' => $purposeModels,
+    ]);
+}
+
+function ai_purpose_key(string $purpose): string
+{
+    switch ($purpose) {
+        case 'content_topic_v2':
+        case 'content_topics':
+            return 'contentTopics';
+        case 'content_v2_blog':
+        case 'content_v2_news':
+        case 'content_blog':
+        case 'content_news':
+        case 'contentDraft':
+        case 'contentDrafts':
+            return 'contentDrafts';
+        case 'offline_tender_extract':
+        case 'offlineTenderExtract':
+            return 'offlineTenderExtract';
+        default:
+            return $purpose;
+    }
 }
 
 function ai_resolve_purpose_models(array $config, string $purpose): array
 {
     $defaults = ai_config_defaults();
-    $purposeModels = $config['purposeModels'] ?? [];
-    $resolved = array_merge($defaults['purposeModels'], is_array($purposeModels) ? $purposeModels : []);
-    if (isset($resolved['offlineTenderExtract'])) {
-        $resolved['offlineTenderExtract'] = array_merge(
-            $defaults['purposeModels']['offlineTenderExtract'] ?? [],
-            is_array($resolved['offlineTenderExtract']) ? $resolved['offlineTenderExtract'] : []
-        );
-    }
-    $purposeKey = $purpose === 'offline_tender_extract' ? 'offlineTenderExtract' : $purpose;
+    $purposeModels = ai_normalize_purpose_models(is_array($config['purposeModels'] ?? null) ? $config['purposeModels'] : []);
+    $resolved = array_merge($defaults['purposeModels'], $purposeModels);
+    $purposeKey = ai_purpose_key($purpose);
     $selected = $resolved[$purposeKey] ?? [
-        'primaryModel' => $config['textModel'] ?? '',
-        'fallbackModel' => '',
+        'primaryModel' => null,
+        'fallbackModel' => null,
         'useStreamingFallback' => false,
         'retryOnceOnEmpty' => false,
         'useStructuredJson' => false,
     ];
-    $primary = ($selected['primaryModel'] ?? '') ?: ($config['textModel'] ?? '');
-    $fallback = $selected['fallbackModel'] ?? '';
+    $primary = ($selected['primaryModel'] ?? null) ?: ($config['textModel'] ?? '');
+    $fallback = $selected['fallbackModel'] ?? null;
     return [
         'primaryModel' => $primary,
-        'fallbackModel' => $fallback,
+        'fallbackModel' => $fallback ?: null,
         'useStreamingFallback' => (bool)($selected['useStreamingFallback'] ?? false),
         'retryOnceOnEmpty' => (bool)($selected['retryOnceOnEmpty'] ?? false),
         'useStructuredJson' => (bool)($selected['useStructuredJson'] ?? false),
@@ -836,6 +952,7 @@ function ai_call(array $params): array
         'providerError' => null,
         'rawEnvelope' => null,
         'rawBody' => '',
+        'rawBodySnippet' => '',
         'latencyMs' => null,
         'modelUsed' => null,
         'temperatureUsed' => null,
@@ -852,7 +969,8 @@ function ai_call(array $params): array
         ],
     ];
 
-    $config = load_ai_config(true);
+    $configResult = ai_get_config(true);
+    $config = $configResult['config'] ?? ai_config_defaults();
     $provider = $config['provider'] ?? '';
     $apiKey = $config['apiKey'] ?? '';
     $systemPrompt = $params['systemPrompt'] ?? '';
@@ -862,23 +980,28 @@ function ai_call(array $params): array
     $runMode = $params['runMode'] ?? 'strict';
     $purposeModels = ai_resolve_purpose_models($config, $purpose);
     $structuredOutput = ($config['provider'] ?? '') === 'gemini'
-        && $purpose === 'offline_tender_extract'
+        && ai_purpose_key($purpose) === 'offlineTenderExtract'
         && !empty($purposeModels['useStructuredJson']);
     $responseSchema = $structuredOutput && function_exists('offline_tender_response_schema') ? offline_tender_response_schema() : null;
-    if (($config['provider'] ?? '') === '' || (($config['textModel'] ?? '') === '' && ($purposeModels['primaryModel'] ?? '') === '')) {
-        $result['errors'][] = 'AI provider configuration missing.';
-    }
-    if (!$apiKey) {
-        $result['errors'][] = 'AI API key not configured.';
-    }
-    if (!function_exists('curl_init')) {
-        $result['errors'][] = 'cURL extension is required.';
-    }
     $temperature = isset($params['temperature']) ? max(0.1, min(1.0, (float)$params['temperature'])) : 0.2;
     $maxTokens = isset($params['maxTokens']) ? max(200, (int)$params['maxTokens']) : 500;
 
     $startedAt = microtime(true);
     $providerResult = null;
+
+    if (!function_exists('curl_init')) {
+        $result['errors'][] = 'cURL extension is required.';
+    }
+
+    $configErrors = $configResult['errors'] ?? [];
+    if (!empty($configErrors)) {
+        $result['errors'] = array_merge($result['errors'], $configErrors);
+        $result['errors'][] = 'AI is not configured. Superadmin: set provider, API key, and model in AI Studio.';
+    }
+
+    if (($config['textModel'] ?? '') === '' && ($purposeModels['primaryModel'] ?? '') === '') {
+        $result['errors'][] = 'Text model is required for AI calls.';
+    }
 
     if (empty($result['errors'])) {
         try {
@@ -1022,6 +1145,25 @@ function ai_call(array $params): array
         $result['rawEnvelope']['latencyMs'] = $result['rawEnvelope']['latencyMs'] ?? $durationMs;
     }
 
+    if ($result['httpStatus'] !== null) {
+        if (in_array($result['httpStatus'], [401, 403], true)) {
+            $result['errors'][] = 'Invalid API key or not authorized for model.';
+        } elseif ($result['httpStatus'] === 404) {
+            $result['errors'][] = 'Model name incorrect or not available.';
+        } elseif ($result['httpStatus'] === 429) {
+            $result['errors'][] = 'Rate limit hit. Please slow down and retry.';
+        } elseif ($result['httpStatus'] >= 500) {
+            $result['errors'][] = 'Upstream provider returned a server error.';
+        }
+    }
+
+    if ($result['providerOk'] && trim((string)$result['text']) === '') {
+        $result['errors'][] = 'Empty response anomaly.';
+    }
+
+    $result['rawBodySnippet'] = substr($result['rawBody'] ?: $result['rawText'], 0, 800);
+    $result['provider'] = $provider;
+
     foreach ($result['attempts'] as $attempt) {
         ai_log([
             'event' => 'ai_call_attempt',
@@ -1086,7 +1228,25 @@ function ai_call(array $params): array
         'responseMimeType' => is_array($result['rawEnvelope']) ? ($result['rawEnvelope']['responseMimeType'] ?? null) : null,
     ]);
 
-    $result['provider'] = $provider;
-
     return $result;
+}
+
+function ai_call_text(string $purpose, string $systemPrompt, string $userPrompt, array $options = []): array
+{
+    $params = [
+        'purpose' => $purpose,
+        'systemPrompt' => $systemPrompt,
+        'userPrompt' => $userPrompt,
+        'expectJson' => (bool)($options['expectJson'] ?? false),
+        'runMode' => $options['runMode'] ?? 'strict',
+    ];
+
+    if (isset($options['temperature'])) {
+        $params['temperature'] = $options['temperature'];
+    }
+    if (isset($options['maxTokens'])) {
+        $params['maxTokens'] = $options['maxTokens'];
+    }
+
+    return ai_call($params);
 }

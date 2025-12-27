@@ -42,10 +42,11 @@ safe_page(function () {
         return;
     }
 
-    $config = load_ai_config();
+    $configResult = ai_get_config();
+    $config = $configResult['config'] ?? [];
     $resolvedModels = ai_resolve_purpose_models($config, 'offline_tender_extract');
     $structuredEnabled = ($config['provider'] ?? '') === 'gemini' && !empty($resolvedModels['useStructuredJson']);
-    if (($config['provider'] ?? '') === '' || ((($config['textModel'] ?? '') === '') && (($resolvedModels['primaryModel'] ?? '') === '')) || empty($config['hasApiKey'])) {
+    if (!$configResult['ok'] || (($config['textModel'] ?? '') === '' && (($resolvedModels['primaryModel'] ?? '') === '')) || empty($config['hasApiKey'])) {
         set_flash('error', 'AI is not configured. Please contact support. Superadmin can configure this in AI Studio (/superadmin/ai_studio.php).');
         ai_log([
             'event' => 'ai_missing_config',
@@ -58,13 +59,15 @@ safe_page(function () {
     }
 
     [$systemPrompt, $userPrompt] = offline_tender_ai_prompt($tender, $lenient);
-    $aiResult = ai_call([
-        'systemPrompt' => $systemPrompt,
-        'userPrompt' => $userPrompt,
-        'expectJson' => true,
-        'purpose' => 'offline_tender_extract',
-        'runMode' => $runMode,
-    ]);
+    $aiResult = ai_call_text(
+        'offline_tender_extract',
+        $systemPrompt,
+        $userPrompt,
+        [
+            'expectJson' => true,
+            'runMode' => $runMode,
+        ]
+    );
 
     $nowIso = $now->format(DateTime::ATOM);
     $aiState['lastRunAt'] = $nowIso;

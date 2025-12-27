@@ -19,20 +19,23 @@ safe_page(function () {
         return;
     }
 
-    $config = load_ai_config();
-    if (($config['provider'] ?? '') === '' || ($config['textModel'] ?? '') === '' || empty($config['hasApiKey'])) {
+    $configResult = ai_get_config();
+    $config = $configResult['config'] ?? [];
+    if (!$configResult['ok'] || ($config['textModel'] ?? '') === '' || empty($config['hasApiKey'])) {
         set_flash('error', 'AI is not configured. Please contact support. Superadmin can configure this in AI Studio (/superadmin/ai_studio.php).');
         redirect('/contractor/workorder_view.php?id=' . urlencode($woId));
         return;
     }
 
     [$systemPrompt, $userPrompt] = workorder_ai_prompt($workorder);
-    $aiResult = ai_call([
-        'systemPrompt' => $systemPrompt,
-        'userPrompt' => $userPrompt,
-        'expectJson' => true,
-        'purpose' => 'workorder_extract',
-    ]);
+    $aiResult = ai_call_text(
+        'workorder_extract',
+        $systemPrompt,
+        $userPrompt,
+        [
+            'expectJson' => true,
+        ]
+    );
 
     $now = now_kolkata()->format(DateTime::ATOM);
     $ai = [

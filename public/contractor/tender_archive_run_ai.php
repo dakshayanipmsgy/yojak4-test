@@ -19,20 +19,23 @@ safe_page(function () {
         return;
     }
 
-    $config = load_ai_config();
-    if (($config['provider'] ?? '') === '' || ($config['textModel'] ?? '') === '' || empty($config['hasApiKey'])) {
+    $configResult = ai_get_config();
+    $config = $configResult['config'] ?? [];
+    if (!$configResult['ok'] || ($config['textModel'] ?? '') === '' || empty($config['hasApiKey'])) {
         set_flash('error', 'AI is not configured. Please contact support.');
         redirect('/contractor/tender_archive_view.php?id=' . urlencode($archId));
         return;
     }
 
     [$systemPrompt, $userPrompt] = tender_archive_ai_prompt($archive);
-    $aiResult = ai_call([
-        'systemPrompt' => $systemPrompt,
-        'userPrompt' => $userPrompt,
-        'expectJson' => true,
-        'purpose' => 'tender_archive_summary',
-    ]);
+    $aiResult = ai_call_text(
+        'tender_archive_summary',
+        $systemPrompt,
+        $userPrompt,
+        [
+            'expectJson' => true,
+        ]
+    );
 
     $now = now_kolkata()->format(DateTime::ATOM);
     $aiSummary = array_merge(tender_archive_ai_defaults(), $archive['aiSummary'] ?? []);
