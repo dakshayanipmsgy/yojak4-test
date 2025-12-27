@@ -8,7 +8,8 @@ safe_page(function () {
         redirect('/auth/force_reset.php');
     }
 
-    $config = load_ai_config(true);
+    $configResult = ai_get_config(true);
+    $config = $configResult['config'] ?? ai_config_defaults();
     $defaults = ai_config_defaults();
     $offlineDefaults = $defaults['purposeModels']['offlineTenderExtract'] ?? [
         'primaryModel' => '',
@@ -25,8 +26,12 @@ safe_page(function () {
         'useStructuredJson' => true,
     ];
     $offlineStructured = (bool)($offlineModels['useStructuredJson'] ?? true);
-    $errors = [];
+    $errors = $configResult['errors'] ?? [];
     $lastProviderCall = null;
+    $lastTest = [
+        'at' => null,
+        'ok' => null,
+    ];
 
     if (file_exists(AI_PROVIDER_RAW_LOG)) {
         $lines = file(AI_PROVIDER_RAW_LOG, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
@@ -35,6 +40,18 @@ safe_page(function () {
             $decoded = json_decode($lastLine, true);
             if (is_array($decoded)) {
                 $lastProviderCall = $decoded;
+            }
+        }
+    }
+
+    if (file_exists(AI_LOG_FILE)) {
+        $logLines = file(AI_LOG_FILE, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+        for ($i = count($logLines) - 1; $i >= 0; $i--) {
+            $row = json_decode((string)$logLines[$i], true);
+            if (is_array($row) && ($row['event'] ?? '') === 'ai_test') {
+                $lastTest['at'] = $row['timestamp'] ?? null;
+                $lastTest['ok'] = (bool)($row['ok'] ?? false);
+                break;
             }
         }
     }
@@ -62,23 +79,12 @@ safe_page(function () {
             }
         }
 
-        if (!in_array($provider, ['openai', 'gemini'], true)) {
-            $errors[] = 'Provider is required.';
-        }
-        if ($textModel === '') {
-            $errors[] = 'Text model is required.';
-        }
-        if ($imageModel === '') {
-            $errors[] = 'Image model is required.';
-        }
-
-        $resolvedKey = $apiKeyInput !== '' ? $apiKeyInput : ($config['apiKey'] ?? '');
-        if ($resolvedKey === '') {
-            $errors[] = 'API key is required.';
-        }
-
-        if (!$errors) {
-            $purposeModels = [
+        $saveResult = ai_save_config([
+            'provider' => $provider,
+            'apiKey' => $apiKeyInput,
+            'textModel' => $textModel,
+            'imageModel' => $imageModel,
+            'purposeModels' => [
                 'offlineTenderExtract' => [
                     'primaryModel' => $offlinePrimary,
                     'fallbackModel' => $offlineFallback,
@@ -86,8 +92,10 @@ safe_page(function () {
                     'retryOnceOnEmpty' => $offlineRetry,
                     'useStructuredJson' => $offlineStructured,
                 ],
-            ];
-            save_ai_config($provider, $resolvedKey, $textModel, $imageModel, $purposeModels);
+            ],
+        ]);
+
+        if (!empty($saveResult['ok'])) {
             ai_log([
                 'event' => 'ai_config_saved',
                 'actor' => $user['email'] ?? ($user['yojId'] ?? 'superadmin'),
@@ -106,6 +114,7 @@ safe_page(function () {
                 : 'AI settings saved successfully.');
             redirect('/superadmin/ai_studio.php');
         } else {
+            $errors = $saveResult['errors'] ?? ['Unable to save configuration.'];
             set_flash('error', implode(' ', $errors));
             $config['provider'] = $provider;
             $config['textModel'] = $textModel;
@@ -120,10 +129,10 @@ safe_page(function () {
         }
     }
 
-    $displayKey = mask_api_key_display($config['apiKey'] ?? null);
+    $displayKey = $config['apiKeyStored'] ? mask_api_key_display($config['apiKey'] ?? 'stored') : 'Not set';
     $title = get_app_config()['appName'] . ' | AI Studio';
 
-    render_layout($title, function () use ($config, $displayKey, $lastProviderCall, $offlineModels, $offlineStructured, $offlineDefaults) {
+    render_layout($title, function () use ($config, $displayKey, $lastProviderCall, $offlineModels, $offlineStructured, $offlineDefaults, $lastTest) {
         ?>
         <div class="card">
             <div style="display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;justify-content:space-between;">
@@ -138,6 +147,27 @@ safe_page(function () {
             </div>
             <form method="post" style="margin-top:16px;display:grid;gap:16px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                <div class="card" style="background:#0f1520;border:1px solid #253047;border-radius:14px;padding:14px;display:grid;gap:10px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                        <div>
+                            <h3 style="margin:0 0 4px 0;"><?= sanitize('Connection status'); ?></h3>
+                            <p class="muted" style="margin:0;"><?= sanitize('Uses /data/ai/ai_config.json as the single source of truth.'); ?></p>
+                        </div>
+                        <span class="pill" style="background:<?= !empty($config['apiKeyStored']) ? '#22863a' : '#8a3d3d'; ?>;color:#e6edf3;"><?= sanitize(!empty($config['apiKeyStored']) ? 'Key saved' : 'Key missing'); ?></span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+                        <div class="pill"><?= sanitize('Provider: ' . (($config['provider'] ?? '') !== '' ? $config['provider'] : 'not set')); ?></div>
+                        <div class="pill"><?= sanitize('Text model: ' . (($config['textModel'] ?? '') !== '' ? $config['textModel'] : 'not set')); ?></div>
+                        <div class="pill"><?= sanitize('Updated: ' . ($config['updatedAt'] ?? 'n/a')); ?></div>
+                        <div class="pill"><?= sanitize('Last test: ' . ($lastTest['at'] ?? 'never')); ?></div>
+                        <div class="pill" style="background:#0c111b;color:<?= $lastTest['ok'] === false ? '#f77676' : '#9ea7b3'; ?>;">
+                            <?= sanitize('Last result: ' . ($lastTest['ok'] === null ? 'not run' : ($lastTest['ok'] ? 'ok' : 'error'))); ?>
+                        </div>
+                    </div>
+                    <div class="pill muted" style="background:#0c111b;color:#9ea7b3;">
+                        <?= sanitize('If configuration is missing, AI callers will show: “AI is not configured. Superadmin: set provider, API key, and model in AI Studio.”'); ?>
+                    </div>
+                </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;">
                     <div class="field">
                         <label for="provider"><?= sanitize('Provider'); ?></label>

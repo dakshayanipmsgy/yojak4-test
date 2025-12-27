@@ -37,9 +37,9 @@ try {
         return;
     }
 
-    $config = load_ai_config(true);
-    if (($config['provider'] ?? '') === '' || empty($config['apiKey']) || (($config['textModel'] ?? '') === '')) {
-        $respond(['ok' => false, 'error' => 'AI configuration missing. Add provider, API key, and text model.']);
+    $configResult = ai_get_config();
+    if (!$configResult['ok']) {
+        $respond(['ok' => false, 'error' => 'AI is not configured. Superadmin: set provider, API key, and model in AI Studio.', 'details' => $configResult['errors']]);
         return;
     }
 
@@ -58,14 +58,16 @@ try {
         'newsLength' => $newsLength,
     ], $nonce);
 
-    $aiResult = ai_call([
-        'systemPrompt' => $promptBundle['systemPrompt'],
-        'userPrompt' => $promptBundle['userPrompt'],
-        'expectJson' => true,
-        'purpose' => 'content_v2_' . $type,
-        'temperature' => $type === 'news' ? 0.5 : 0.68,
-        'maxTokens' => $type === 'news' ? 900 : 1400,
-    ]);
+    $aiResult = ai_call_text(
+        'content_v2_' . $type,
+        $promptBundle['systemPrompt'],
+        $promptBundle['userPrompt'],
+        [
+            'expectJson' => true,
+            'temperature' => $type === 'news' ? 0.5 : 0.68,
+            'maxTokens' => $type === 'news' ? 900 : 1400,
+        ]
+    );
 
     $rawText = (string)($aiResult['rawText'] ?? '');
     $rawTextSnippet = function_exists('mb_substr') ? mb_substr($rawText, 0, 800, 'UTF-8') : substr($rawText, 0, 800);

@@ -45,9 +45,9 @@ try {
         }
     }
 
-    $config = load_ai_config(true);
-    if (($config['provider'] ?? '') === '' || empty($config['apiKey']) || (($config['textModel'] ?? '') === '')) {
-        $send(['ok' => false, 'error' => 'AI Studio configuration missing. Add provider, API key, and text model.']);
+    $configResult = ai_get_config();
+    if (!$configResult['ok']) {
+        $send(['ok' => false, 'error' => 'AI is not configured. Superadmin: set provider, API key, and model in AI Studio.', 'details' => $configResult['errors']]);
         return;
     }
 
@@ -57,14 +57,16 @@ try {
 
     $prompts = topic_v2_build_prompts($type, $prompt, $newsLength, $count, $nonce);
 
-    $aiResult = ai_call([
-        'systemPrompt' => $prompts['systemPrompt'],
-        'userPrompt' => $prompts['userPrompt'],
-        'expectJson' => true,
-        'purpose' => 'content_topic_v2',
-        'temperature' => $type === 'news' ? 0.55 : 0.7,
-        'maxTokens' => 600,
-    ]);
+    $aiResult = ai_call_text(
+        'content_topic_v2',
+        $prompts['systemPrompt'],
+        $prompts['userPrompt'],
+        [
+            'expectJson' => true,
+            'temperature' => $type === 'news' ? 0.55 : 0.7,
+            'maxTokens' => 600,
+        ]
+    );
 
     $results = topic_v2_parse_results($aiResult['json'] ?? null, $count);
     $requiredMin = max(4, min($count, 7));
