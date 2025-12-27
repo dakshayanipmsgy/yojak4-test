@@ -13,6 +13,10 @@ function ensure_content_v2_structure(): void
         CONTENT_V2_BASE . '/topics/news',
         CONTENT_V2_BASE . '/jobs',
         CONTENT_V2_BASE . '/jobs/topic',
+        CONTENT_V2_BASE . '/jobs/content',
+        CONTENT_V2_BASE . '/drafts',
+        CONTENT_V2_BASE . '/drafts/blog',
+        CONTENT_V2_BASE . '/drafts/news',
     ];
 
     foreach ($directories as $dir) {
@@ -24,6 +28,8 @@ function ensure_content_v2_structure(): void
     $indexFiles = [
         CONTENT_V2_BASE . '/topics/blog/index.json',
         CONTENT_V2_BASE . '/topics/news/index.json',
+        CONTENT_V2_BASE . '/drafts/blog/index.json',
+        CONTENT_V2_BASE . '/drafts/news/index.json',
     ];
     foreach ($indexFiles as $file) {
         if (!file_exists($file)) {
@@ -149,6 +155,7 @@ function topic_v2_save_record(array $record): void
             'status' => $record['status'],
             'createdAt' => $record['createdAt'],
             'deletedAt' => $record['deletedAt'],
+            'newsLength' => $record['newsLength'] ?? null,
         ];
 
         $updated = false;
@@ -284,4 +291,253 @@ function topic_v2_soft_delete(string $type, string $topicId): bool
     $record['updatedAt'] = $now;
     topic_v2_save_record($record);
     return true;
+}
+
+function content_v2_draft_index_path(string $type): string
+{
+    return CONTENT_V2_BASE . '/drafts/' . $type . '/index.json';
+}
+
+function content_v2_draft_item_path(string $type, string $contentId): string
+{
+    return CONTENT_V2_BASE . '/drafts/' . $type . '/' . $contentId . '.json';
+}
+
+function content_v2_draft_lock_path(string $type): string
+{
+    return CONTENT_V2_BASE . '/drafts/' . $type . '/index.lock';
+}
+
+function content_v2_job_path(string $jobId): string
+{
+    return CONTENT_V2_BASE . '/jobs/content/' . $jobId . '.json';
+}
+
+function content_v2_load_draft_index(string $type): array
+{
+    return readJson(content_v2_draft_index_path($type));
+}
+
+function content_v2_save_draft_index(string $type, array $index): void
+{
+    writeJsonAtomic(content_v2_draft_index_path($type), $index);
+}
+
+function content_v2_generate_content_id(string $type): string
+{
+    $prefix = $type === 'news' ? 'NEWS-' : 'BLOG-';
+    do {
+        $contentId = $prefix . strtoupper(bin2hex(random_bytes(3)));
+    } while (file_exists(content_v2_draft_item_path('blog', $contentId)) || file_exists(content_v2_draft_item_path('news', $contentId)));
+
+    return $contentId;
+}
+
+function content_v2_generate_job_id(): string
+{
+    do {
+        $jobId = 'JOB-' . strtoupper(bin2hex(random_bytes(4)));
+    } while (file_exists(content_v2_job_path($jobId)));
+
+    return $jobId;
+}
+
+function content_v2_slugify(string $title): string
+{
+    $slug = strtolower(trim(preg_replace('/[^a-zA-Z0-9]+/', '-', $title), '-'));
+    $slug = preg_replace('/-+/', '-', $slug);
+    $slug = substr((string)$slug, 0, 80);
+    $slug = trim((string)$slug, '-');
+    if ($slug === '' || strlen($slug) < 3) {
+        $slug = strtolower(substr(bin2hex(random_bytes(3)), 0, 6));
+    }
+    return $slug;
+}
+
+function content_v2_slug_exists(string $type, string $slug, ?string $excludeId = null): bool
+{
+    $index = content_v2_load_draft_index($type);
+    foreach ($index as $row) {
+        if (($row['slug'] ?? '') === $slug && ($row['contentId'] ?? '') !== $excludeId && ($row['deletedAt'] ?? null) === null) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function content_v2_unique_slug(string $type, string $title, ?string $preferred, ?string $excludeId = null): string
+{
+    $base = $preferred !== '' ? $preferred : $title;
+    $slug = content_v2_slugify($base);
+    if (!content_v2_slug_exists($type, $slug, $excludeId)) {
+        return $slug;
+    }
+    $suffix = 2;
+    while (true) {
+        $candidate = substr($slug, 0, max(0, 80 - strlen((string)$suffix) - 1)) . '-' . $suffix;
+        if (!content_v2_slug_exists($type, $candidate, $excludeId)) {
+            return $candidate;
+        }
+        $suffix++;
+    }
+}
+
+function content_v2_save_draft(array $record, bool $allowUpdate = false): void
+{
+    $type = $record['type'] ?? '';
+    if (!in_array($type, ['blog', 'news'], true)) {
+        throw new InvalidArgumentException('Invalid draft type.');
+    }
+    $contentId = $record['contentId'] ?? '';
+    if ($contentId === '') {
+        throw new InvalidArgumentException('Missing contentId.');
+    }
+
+    $lockHandle = fopen(content_v2_draft_lock_path($type), 'c');
+    if ($lockHandle === false) {
+        throw new RuntimeException('Unable to open draft index lock.');
+    }
+    if (!flock($lockHandle, LOCK_EX)) {
+        fclose($lockHandle);
+        throw new RuntimeException('Unable to acquire draft index lock.');
+    }
+
+    try {
+        $index = content_v2_load_draft_index($type);
+        if (!is_array($index)) {
+            $index = [];
+        }
+
+        $existingIndexKey = null;
+        foreach ($index as $idx => $row) {
+            if (($row['contentId'] ?? '') === $contentId) {
+                $existingIndexKey = $idx;
+                break;
+            }
+        }
+
+        if ($existingIndexKey !== null && !$allowUpdate) {
+            throw new RuntimeException('Draft already exists.');
+        }
+        if ($existingIndexKey === null && file_exists(content_v2_draft_item_path($type, $contentId))) {
+            throw new RuntimeException('Draft file already exists.');
+        }
+
+        $summary = [
+            'contentId' => $contentId,
+            'type' => $type,
+            'title' => $record['title'] ?? '',
+            'slug' => $record['slug'] ?? '',
+            'status' => $record['status'] ?? 'draft',
+            'createdAt' => $record['createdAt'] ?? now_kolkata()->format(DateTime::ATOM),
+            'updatedAt' => $record['updatedAt'] ?? $record['createdAt'] ?? now_kolkata()->format(DateTime::ATOM),
+            'deletedAt' => $record['deletedAt'] ?? null,
+        ];
+
+        if ($existingIndexKey !== null) {
+            $index[$existingIndexKey] = $summary;
+        } else {
+            $index[] = $summary;
+        }
+
+        content_v2_save_draft_index($type, $index);
+        writeJsonAtomic(content_v2_draft_item_path($type, $contentId), $record);
+    } finally {
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+    }
+}
+
+function content_v2_load_draft(string $type, string $contentId): ?array
+{
+    if (!in_array($type, ['blog', 'news'], true)) {
+        return null;
+    }
+    $data = readJson(content_v2_draft_item_path($type, $contentId));
+    return $data ?: null;
+}
+
+function content_v2_list_drafts(string $type): array
+{
+    $index = content_v2_load_draft_index($type);
+    $filtered = array_values(array_filter($index, function ($row) {
+        return ($row['deletedAt'] ?? null) === null;
+    }));
+    usort($filtered, function ($a, $b) {
+        return strcmp($b['createdAt'] ?? '', $a['createdAt'] ?? '');
+    });
+    return $filtered;
+}
+
+function content_v2_mark_topic_used(string $type, string $topicId): void
+{
+    $topic = topic_v2_load_record($type, $topicId);
+    if (!$topic) {
+        return;
+    }
+    $now = now_kolkata()->format(DateTime::ATOM);
+    $topic['status'] = 'used';
+    $topic['updatedAt'] = $now;
+    topic_v2_save_record($topic);
+}
+
+function content_v2_build_generation_prompt(string $type, array $topic, array $overrides, string $nonce): array
+{
+    $now = now_kolkata()->format('Y-m-d H:i T');
+    $baseTitle = trim((string)($overrides['customTitle'] ?? ''));
+    $topicTitle = $baseTitle !== '' ? $baseTitle : ($topic['topicTitle'] ?? '');
+    if ($topicTitle === '') {
+        $topicTitle = 'Untitled ' . ucfirst($type) . ' Topic';
+    }
+    $tone = trim((string)($overrides['tone'] ?? 'modern, confident, concise'));
+    $newsLength = $type === 'news' ? ($overrides['newsLength'] ?? ($topic['newsLength'] ?? 'standard')) : null;
+    $newsLength = in_array($newsLength, ['short', 'standard', 'long'], true) ? $newsLength : 'standard';
+
+    $systemPrompt = 'You are an assistant that returns STRICT JSON only: {"title":"string","excerpt":"<=40 words","bodyHtml":"HTML"} with no code fences. '
+        . 'Sanitize output: no scripts, inline events, or unsafe URLs. Always use fresh wording and a new outline.';
+
+    $directives = [
+        'Nonce: ' . $nonce,
+        'Current date (Asia/Kolkata): ' . $now,
+        'Do not reuse wording or headings from previous outputs.',
+        'Use a new outline and different phrasing.',
+        'Keep everything fictional, internal-facing, and platform-safe.',
+    ];
+
+    if ($type === 'blog') {
+        $template = 'Blog structure: intro hook, H2 sections for context, H2 with 3-5 practical tips (bulleted), H2 narrative example, H2 wrap-up. '
+            . 'End with an ordered checklist titled "Checklist" containing 4-6 items.';
+    } else {
+        $template = 'News structure: start with a clear headline, then 4-7 bullet points covering what changed, why it matters, and fast takeaways. '
+            . 'Close with a short 2-3 sentence conclusion. Adjust density for length = ' . $newsLength . '.';
+    }
+
+    $topicInfo = implode("\n", array_filter([
+        'Topic title: ' . $topicTitle,
+        !empty($topic['topicAngle']) ? 'Angle: ' . $topic['topicAngle'] : '',
+        !empty($topic['audience']) ? 'Audience: ' . $topic['audience'] : 'Audience: Jharkhand government contractors',
+        !empty($topic['keywords']) ? 'Keywords: ' . implode(', ', $topic['keywords']) : '',
+    ]));
+
+    $userPrompt = implode("\n", [
+        'Type: ' . $type,
+        'Tone: ' . $tone,
+        $type === 'news' ? 'News length: ' . $newsLength : 'Blog length: standard',
+        'Topic seed: ' . $topicInfo,
+        $template,
+        'Body requirements: semantic HTML with <p>, <h2>, <h3>, <ul>/<ol>. No scripts or inline events.',
+        'Checklist: ' . ($type === 'blog' ? 'Include a final Checklist section with actionable items.' : 'Not required for news unless it helps clarity.'),
+        implode(' ', $directives),
+        'Do not include notes outside JSON.',
+    ]);
+
+    $promptHash = hash('sha256', $systemPrompt . "\n" . $userPrompt);
+
+    return [
+        'systemPrompt' => $systemPrompt,
+        'userPrompt' => $userPrompt,
+        'promptHash' => $promptHash,
+        'newsLength' => $newsLength,
+        'topicTitle' => $topicTitle,
+    ];
 }

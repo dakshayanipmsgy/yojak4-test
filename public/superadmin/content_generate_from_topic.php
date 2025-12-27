@@ -1,0 +1,199 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/../../app/bootstrap.php';
+
+header('Content-Type: application/json');
+
+$respond = function (array $payload, int $status = 200): void {
+    http_response_code($status);
+    echo json_encode($payload);
+};
+
+try {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        $respond(['ok' => false, 'error' => 'Method not allowed.'], 405);
+        return;
+    }
+
+    $user = require_role('superadmin');
+    if (!empty($user['mustResetPassword'])) {
+        $respond(['ok' => false, 'error' => 'Password reset required.'], 403);
+        return;
+    }
+
+    require_csrf();
+
+    $type = $_POST['type'] ?? '';
+    $sourceType = $_POST['sourceType'] ?? $type;
+    $topicId = trim((string)($_POST['topicId'] ?? ''));
+    if (!in_array($type, ['blog', 'news'], true) || !in_array($sourceType, ['blog', 'news'], true) || $topicId === '') {
+        $respond(['ok' => false, 'error' => 'Invalid type or topic.']);
+        return;
+    }
+
+    $topic = topic_v2_load_record($sourceType, $topicId);
+    if (!$topic || ($topic['deletedAt'] ?? null) !== null) {
+        $respond(['ok' => false, 'error' => 'Topic not found or deleted.']);
+        return;
+    }
+
+    $config = load_ai_config(true);
+    if (($config['provider'] ?? '') === '' || empty($config['apiKey']) || (($config['textModel'] ?? '') === '')) {
+        $respond(['ok' => false, 'error' => 'AI configuration missing. Add provider, API key, and text model.']);
+        return;
+    }
+
+    $customTitle = trim((string)($_POST['customTitle'] ?? ''));
+    $tone = trim((string)($_POST['tone'] ?? 'modern, confident, concise'));
+    $newsLength = $type === 'news' ? ($_POST['newsLength'] ?? '') : null;
+
+    $jobId = content_v2_generate_job_id();
+    $contentId = content_v2_generate_content_id($type);
+    $nonce = strtoupper(bin2hex(random_bytes(6)));
+    $startedAt = now_kolkata()->format(DateTime::ATOM);
+
+    $promptBundle = content_v2_build_generation_prompt($type, $topic, [
+        'customTitle' => $customTitle,
+        'tone' => $tone,
+        'newsLength' => $newsLength,
+    ], $nonce);
+
+    $aiResult = ai_call([
+        'systemPrompt' => $promptBundle['systemPrompt'],
+        'userPrompt' => $promptBundle['userPrompt'],
+        'expectJson' => true,
+        'purpose' => 'content_v2_' . $type,
+        'temperature' => $type === 'news' ? 0.5 : 0.68,
+        'maxTokens' => $type === 'news' ? 900 : 1400,
+    ]);
+
+    $rawText = (string)($aiResult['rawText'] ?? '');
+    $rawTextSnippet = function_exists('mb_substr') ? mb_substr($rawText, 0, 800, 'UTF-8') : substr($rawText, 0, 800);
+
+    $json = is_array($aiResult['json'] ?? null) ? $aiResult['json'] : null;
+    $title = trim((string)($json['title'] ?? ''));
+    $bodyHtml = sanitize_body_html((string)($json['bodyHtml'] ?? ''));
+    $excerpt = trim((string)($json['excerpt'] ?? ''));
+
+    if (!$aiResult['ok'] || $title === '' || $bodyHtml === '') {
+        $errors = $aiResult['errors'] ?? [];
+        if ($title === '' || $bodyHtml === '') {
+            $errors[] = 'AI response missing required title or bodyHtml.';
+        }
+        content_v2_log([
+            'event' => 'CONTENT_GEN',
+            'jobId' => $jobId,
+            'contentId' => $contentId,
+            'type' => $type,
+            'topicId' => $topicId,
+            'ok' => false,
+            'provider' => $aiResult['provider'] ?? ($aiResult['rawEnvelope']['provider'] ?? ''),
+            'model' => $aiResult['modelUsed'] ?? ($aiResult['rawEnvelope']['model'] ?? ''),
+            'httpStatus' => $aiResult['httpStatus'] ?? ($aiResult['rawEnvelope']['httpStatus'] ?? null),
+            'requestId' => $aiResult['requestId'] ?? ($aiResult['rawEnvelope']['requestId'] ?? null),
+            'promptHash' => $promptBundle['promptHash'],
+            'outputHash' => null,
+            'errors' => $errors,
+        ]);
+        $respond(['ok' => false, 'error' => 'AI returned empty content. Please retry with a new nonce.']);
+        return;
+    }
+
+    if ($excerpt === '') {
+        $excerpt = content_excerpt($bodyHtml, 40);
+    }
+
+    $slug = content_v2_unique_slug($type, $title, null, null);
+    $outputHash = content_output_hash($bodyHtml);
+    $finishedAt = now_kolkata()->format(DateTime::ATOM);
+
+    $generationMeta = [
+        'jobId' => $jobId,
+        'provider' => $aiResult['provider'] ?? ($aiResult['rawEnvelope']['provider'] ?? ''),
+        'model' => $aiResult['modelUsed'] ?? ($aiResult['rawEnvelope']['model'] ?? ''),
+        'httpStatus' => $aiResult['httpStatus'] ?? ($aiResult['rawEnvelope']['httpStatus'] ?? null),
+        'requestId' => $aiResult['requestId'] ?? ($aiResult['rawEnvelope']['requestId'] ?? null),
+        'nonce' => $nonce,
+        'promptHash' => $promptBundle['promptHash'],
+        'outputHash' => $outputHash,
+        'rawTextSnippet' => $rawTextSnippet,
+        'createdAt' => $startedAt,
+    ];
+
+    $draft = [
+        'contentId' => $contentId,
+        'type' => $type,
+        'topicId' => $topicId,
+        'topicType' => $sourceType,
+        'title' => $title,
+        'slug' => $slug,
+        'status' => 'draft',
+        'bodyHtml' => $bodyHtml,
+        'excerpt' => $excerpt,
+        'tags' => $topic['keywords'] ?? [],
+        'newsLength' => $type === 'news' ? ($promptBundle['newsLength'] ?? null) : null,
+        'generation' => $generationMeta,
+        'createdAt' => $startedAt,
+        'updatedAt' => $finishedAt,
+        'deletedAt' => null,
+    ];
+
+    $jobPayload = [
+        'jobId' => $jobId,
+        'type' => $type,
+        'topicId' => $topicId,
+        'sourceType' => $sourceType,
+        'promptUsed' => $promptBundle['userPrompt'],
+        'nonce' => $nonce,
+        'aiMeta' => [
+            'provider' => $generationMeta['provider'],
+            'model' => $generationMeta['model'],
+            'httpStatus' => $generationMeta['httpStatus'],
+            'requestId' => $generationMeta['requestId'],
+            'startedAt' => $startedAt,
+            'finishedAt' => $finishedAt,
+        ],
+        'ok' => true,
+        'rawText' => $rawText,
+        'parsedHtml' => $bodyHtml,
+        'errors' => [],
+        'promptHash' => $promptBundle['promptHash'],
+        'outputHash' => $outputHash,
+        'createdAt' => $startedAt,
+    ];
+
+    writeJsonAtomic(content_v2_job_path($jobId), $jobPayload);
+    content_v2_save_draft($draft, false);
+    content_v2_mark_topic_used($sourceType, $topicId);
+
+    content_v2_log([
+        'event' => 'CONTENT_GEN',
+        'jobId' => $jobId,
+        'contentId' => $contentId,
+        'type' => $type,
+        'topicId' => $topicId,
+        'sourceType' => $sourceType,
+        'ok' => true,
+        'provider' => $generationMeta['provider'],
+        'model' => $generationMeta['model'],
+        'httpStatus' => $generationMeta['httpStatus'],
+        'requestId' => $generationMeta['requestId'],
+        'promptHash' => $promptBundle['promptHash'],
+        'outputHash' => $outputHash,
+    ]);
+
+    $respond([
+        'ok' => true,
+        'jobId' => $jobId,
+        'contentId' => $contentId,
+        'viewUrl' => '/superadmin/content_draft_view.php?type=' . urlencode($type) . '&contentId=' . urlencode($contentId),
+    ]);
+} catch (Throwable $e) {
+    content_v2_log([
+        'event' => 'CONTENT_GEN_ERROR',
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+    ]);
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'error' => 'Server error. Please check logs.']);
+}

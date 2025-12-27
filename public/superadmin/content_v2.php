@@ -162,6 +162,7 @@ safe_page(function () {
                             <h3 style="margin:0;">Saved Topics</h3>
                             <span class="pill">Drafts</span>
                         </div>
+                        <div class="message" id="<?= $type; ?>-draft-message"></div>
                         <div class="table-responsive" style="margin-top:10px; overflow-x:auto;">
                             <table>
                                 <thead>
@@ -177,12 +178,14 @@ safe_page(function () {
                                         <tr><td colspan="4" class="muted">No topics yet.</td></tr>
                                     <?php else: ?>
                                         <?php foreach ($savedList as $row): ?>
-                                            <tr data-topic-id="<?= sanitize($row['topicId']); ?>">
+                                            <tr data-topic-id="<?= sanitize($row['topicId']); ?>" data-news-length="<?= sanitize($row['newsLength'] ?? ''); ?>">
                                                 <td><?= sanitize($row['topicTitle'] ?? ''); ?></td>
                                                 <td><?= sanitize($row['status'] ?? 'draft'); ?></td>
                                                 <td><?= sanitize($row['createdAt'] ?? ''); ?></td>
                                                 <td class="table-actions">
                                                     <a class="btn secondary" style="padding:6px 10px;" href="/superadmin/topic_view.php?type=<?= $type; ?>&topicId=<?= urlencode($row['topicId']); ?>">View</a>
+                                                    <button class="btn" data-generate="blog" data-source-type="<?= $type; ?>" data-topic-id="<?= sanitize($row['topicId']); ?>" type="button" style="padding:6px 10px;">Generate Blog Draft</button>
+                                                    <button class="btn secondary" data-generate="news" data-source-type="<?= $type; ?>" data-topic-id="<?= sanitize($row['topicId']); ?>" type="button" style="padding:6px 10px;">Generate News Draft</button>
                                                     <button class="btn danger delete-btn" data-type="<?= $type; ?>" data-topic-id="<?= sanitize($row['topicId']); ?>" type="button" style="padding:6px 10px;">Delete</button>
                                                 </td>
                                             </tr>
@@ -206,6 +209,7 @@ safe_page(function () {
                 blog: <?= json_encode($blogTopics); ?>,
                 news: <?= json_encode($newsTopics); ?>
             };
+            const csrfToken = '<?= sanitize($csrf); ?>';
 
             function setMessage(id, text, isError = false) {
                 const el = document.getElementById(id);
@@ -300,6 +304,7 @@ safe_page(function () {
                 rows.forEach(row => {
                     const tr = document.createElement('tr');
                     tr.dataset.topicId = row.topicId;
+                    tr.dataset.newsLength = row.newsLength || '';
                     const titleTd = document.createElement('td');
                     titleTd.textContent = row.topicTitle || '';
                     const statusTd = document.createElement('td');
@@ -313,6 +318,22 @@ safe_page(function () {
                     viewLink.style.padding = '6px 10px';
                     viewLink.href = `/superadmin/topic_view.php?type=${type}&topicId=${encodeURIComponent(row.topicId)}`;
                     viewLink.textContent = 'View';
+                    const genBlogBtn = document.createElement('button');
+                    genBlogBtn.className = 'btn';
+                    genBlogBtn.dataset.generate = 'blog';
+                    genBlogBtn.dataset.sourceType = type;
+                    genBlogBtn.dataset.topicId = row.topicId;
+                    genBlogBtn.style.padding = '6px 10px';
+                    genBlogBtn.type = 'button';
+                    genBlogBtn.textContent = 'Generate Blog Draft';
+                    const genNewsBtn = document.createElement('button');
+                    genNewsBtn.className = 'btn secondary';
+                    genNewsBtn.dataset.generate = 'news';
+                    genNewsBtn.dataset.sourceType = type;
+                    genNewsBtn.dataset.topicId = row.topicId;
+                    genNewsBtn.style.padding = '6px 10px';
+                    genNewsBtn.type = 'button';
+                    genNewsBtn.textContent = 'Generate News Draft';
                     const delBtn = document.createElement('button');
                     delBtn.className = 'btn danger delete-btn';
                     delBtn.dataset.type = type;
@@ -321,6 +342,8 @@ safe_page(function () {
                     delBtn.style.padding = '6px 10px';
                     delBtn.textContent = 'Delete';
                     actionsTd.appendChild(viewLink);
+                    actionsTd.appendChild(genBlogBtn);
+                    actionsTd.appendChild(genNewsBtn);
                     actionsTd.appendChild(delBtn);
                     tr.appendChild(titleTd);
                     tr.appendChild(statusTd);
@@ -426,15 +449,24 @@ safe_page(function () {
             function bindDeleteActions() {
                 document.querySelectorAll('table').forEach(table => {
                     table.addEventListener('click', (e) => {
+                        const genBtn = e.target.closest('[data-generate]');
+                        if (genBtn) {
+                            const topicId = genBtn.dataset.topicId;
+                            const targetType = genBtn.dataset.generate;
+                            const sourceType = genBtn.dataset.sourceType || 'blog';
+                            const row = genBtn.closest('tr');
+                            const newsLength = row ? (row.dataset.newsLength || '') : '';
+                            triggerDraftGeneration(sourceType, targetType, topicId, newsLength);
+                            return;
+                        }
                         const btn = e.target.closest('.delete-btn');
                         if (!btn) return;
                         const type = btn.dataset.type;
                         const topicId = btn.dataset.topicId;
-                        const csrf = '<?= sanitize($csrf); ?>';
                         fetch('/superadmin/topic_delete.php', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                            body: new URLSearchParams({type, topicId, csrf_token: csrf})
+                            body: new URLSearchParams({type, topicId, csrf_token: csrfToken})
                         }).then(resp => resp.json()).then(data => {
                             if (!data.ok) {
                                 alert(data.error || 'Delete failed');
@@ -453,6 +485,36 @@ safe_page(function () {
             bindDeleteActions();
             renderSaved('blog');
             renderSaved('news');
+
+            function triggerDraftGeneration(sourceType, targetType, topicId, newsLength) {
+                if (!topicId || !targetType) return;
+                const messageId = `${sourceType}-draft-message`;
+                setMessage(messageId, `Generating ${targetType} draft...`, false);
+                const fd = new FormData();
+                fd.append('csrf_token', csrfToken);
+                fd.append('type', targetType);
+                fd.append('sourceType', sourceType);
+                fd.append('topicId', topicId);
+                if (targetType === 'news') {
+                    fd.append('newsLength', newsLength || 'standard');
+                }
+                fetch('/superadmin/content_generate_from_topic.php', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'Accept': 'application/json'}
+                }).then(resp => resp.json()).then(data => {
+                    if (!data.ok) {
+                        setMessage(messageId, data.error || 'Draft generation failed.', true);
+                        return;
+                    }
+                    setMessage(messageId, 'Draft created. Redirecting...', false);
+                    if (data.viewUrl) {
+                        window.location.href = data.viewUrl;
+                    }
+                }).catch(() => {
+                    setMessage(messageId, 'Network error while creating draft.', true);
+                });
+            }
         </script>
         <?php
     });
