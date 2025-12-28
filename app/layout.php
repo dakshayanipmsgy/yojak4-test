@@ -237,6 +237,8 @@ function render_layout(string $title, callable $content): void
                         <a href="/superadmin/ai_studio.php"><?= sanitize('AI Studio'); ?></a>
                         <a href="/superadmin/tender_discovery.php"><?= sanitize('Tender Discovery'); ?></a>
                         <a href="/superadmin/backup.php"><?= sanitize('Backups'); ?></a>
+                        <a href="/superadmin/support_dashboard.php"><?= sanitize('Support Inbox'); ?></a>
+                        <a href="/superadmin/error_log.php"><?= sanitize('Error Log'); ?></a>
                         <a href="/superadmin/factory_reset.php"><?= sanitize('Factory Reset'); ?></a>
                         <a href="/superadmin/stats.php"><?= sanitize('Stats'); ?></a>
                         <a href="/superadmin/reset_requests.php"><?= sanitize('Reset Approvals'); ?></a>
@@ -257,6 +259,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/department/requirements.php"><?= sanitize('Requirements'); ?></a>
                         <a href="/department/dak.php"><?= sanitize('DAK'); ?></a>
                         <a href="/department/health.php"><?= sanitize('Health'); ?></a>
+                        <a href="/department/support.php"><?= sanitize('Support'); ?></a>
                         <form method="post" action="/department/logout.php" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
@@ -270,6 +273,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/contractor/discovered_tenders.php"><?= sanitize('Discovered'); ?></a>
                         <a href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
                         <a href="/contractor/tender_archive.php"><?= sanitize('Tender Archive'); ?></a>
+                        <a href="/contractor/support.php"><?= sanitize('Support'); ?></a>
                         <form method="post" action="/contractor/logout.php" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
@@ -320,18 +324,4 @@ function render_layout(string $title, callable $content): void
     </body>
     </html>
     <?php
-}
-
-function safe_page(callable $callback): void
-{
-    try {
-        $callback();
-    } catch (Throwable $e) {
-        logEvent(DATA_PATH . '/logs/php_errors.log', [
-            'event' => 'page_exception',
-            'message' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-        render_error_page();
-    }
 }

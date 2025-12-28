@@ -22,6 +22,7 @@ safe_page(function () {
                 <a class="btn" href="/contractor/vault_upload.php"><?= sanitize('Upload Document'); ?></a>
                 <a class="btn secondary" href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
                 <span class="btn secondary"><?= sanitize('Reminders'); ?></span>
+                <a class="btn secondary" href="/contractor/support.php"><?= sanitize('Report Issue'); ?></a>
             </div>
         </div>
         <?php

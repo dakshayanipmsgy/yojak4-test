@@ -36,6 +36,9 @@ safe_page(function () {
                 </div>
             </div>
             <p class="muted" style="margin-top:14px;"><?= sanitize('Use the navigation to manage roles, users, tenders, and documents based on your permissions.'); ?></p>
+            <div class="buttons" style="margin-top:12px;">
+                <a class="btn secondary" href="/department/support.php"><?= sanitize('Report Issue'); ?></a>
+            </div>
         </div>
         <?php
     });
