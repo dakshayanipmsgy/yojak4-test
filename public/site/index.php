@@ -6,9 +6,7 @@ safe_page(function () {
     $user = current_user();
     $title = get_app_config()['appName'] . ' | ' . t('welcome_title');
     $lang = get_language();
-    $blogs = list_content('blog', ['published']);
-    $news = list_content('news', ['published']);
-    render_layout($title, function () use ($user, $blogs, $news, $lang) {
+    render_layout($title, function () use ($user, $lang) {
         ?>
         <section class="hero">
             <div class="card">
@@ -48,37 +46,12 @@ safe_page(function () {
             <?php endif; ?>
         </section>
         <section class="card" style="margin-top:16px;">
-            <h3 style="margin-top:0;">Latest Blog</h3>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
-                <?php foreach (array_slice($blogs, 0, 3) as $item): ?>
-                    <a href="/site/blog_view.php?slug=<?= urlencode($item['slug']); ?>" class="card" style="text-decoration:none;background:#0f1520;border:1px solid #30363d;">
-                        <?php if (!empty($item['coverImagePath'])): ?>
-                            <img src="<?= sanitize($item['coverImagePath']); ?>" alt="Cover" style="width:100%;border-radius:10px;">
-                        <?php endif; ?>
-                        <h4 style="margin-bottom:4px;"><?= sanitize($item['title'] ?? ''); ?></h4>
-                        <p class="muted" style="margin:0;"><?= sanitize($item['excerpt'] ?? ''); ?></p>
-                    </a>
-                <?php endforeach; ?>
-                <?php if (!$blogs): ?>
-                    <p class="muted" style="margin:0;">No blog posts yet.</p>
-                <?php endif; ?>
-            </div>
-        </section>
-        <section class="card" style="margin-top:16px;">
-            <h3 style="margin-top:0;">Latest News</h3>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
-                <?php foreach (array_slice($news, 0, 3) as $item): ?>
-                    <a href="/site/news_view.php?slug=<?= urlencode($item['slug']); ?>" class="card" style="text-decoration:none;background:#0f1520;border:1px solid #30363d;">
-                        <?php if (!empty($item['coverImagePath'])): ?>
-                            <img src="<?= sanitize($item['coverImagePath']); ?>" alt="Cover" style="width:100%;border-radius:10px;">
-                        <?php endif; ?>
-                        <h4 style="margin-bottom:4px;"><?= sanitize($item['title'] ?? ''); ?></h4>
-                        <p class="muted" style="margin:0;"><?= sanitize($item['excerpt'] ?? ''); ?></p>
-                    </a>
-                <?php endforeach; ?>
-                <?php if (!$news): ?>
-                    <p class="muted" style="margin:0;">No news yet.</p>
-                <?php endif; ?>
+            <h3 style="margin-top:0;">Blog &amp; News</h3>
+            <p class="muted" style="margin:0 0 8px 0;">Content Studio and Content Studio v2 have been removed. Blog and news posts are no longer published from this app.</p>
+            <div class="pill" style="display:inline-block;background:#0c111b;color:#9ea7b3;">Content unavailable</div>
+            <div class="buttons" style="margin-top:12px;">
+                <a class="btn" href="/site/blog.php"><?= sanitize('Blog'); ?></a>
+                <a class="btn secondary" href="/site/news.php"><?= sanitize('News'); ?></a>
             </div>
         </section>
         <script>

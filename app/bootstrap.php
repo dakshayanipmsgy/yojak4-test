@@ -18,16 +18,12 @@ require_once __DIR__ . '/workorders.php';
 require_once __DIR__ . '/tender_archive.php';
 require_once __DIR__ . '/packs.php';
 require_once __DIR__ . '/ai.php';
-require_once __DIR__ . '/content.php';
-require_once __DIR__ . '/content_v2.php';
 require_once __DIR__ . '/bills.php';
 require_once __DIR__ . '/tender_discovery.php';
 
 set_default_timezone();
 start_app_session();
 ensure_data_structure();
-ensure_content_structure();
-ensure_content_v2_structure();
 ensure_departments_root();
 ensure_contractors_root();
 ensure_staff_environment();
