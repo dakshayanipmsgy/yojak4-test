@@ -33,6 +33,10 @@ function ensure_data_structure(): void
         DATA_PATH . '/ai',
         DATA_PATH . '/discovery',
         DATA_PATH . '/discovery/discovered',
+        DATA_PATH . '/support',
+        DATA_PATH . '/support/tickets',
+        DATA_PATH . '/support/uploads',
+        DATA_PATH . '/logs/runtime_errors',
     ];
 
     foreach ($directories as $dir) {
@@ -98,12 +102,18 @@ function ensure_data_structure(): void
         writeJsonAtomic($passwordResetIndex, []);
     }
 
+    $supportIndex = DATA_PATH . '/support/tickets/index.json';
+    if (!file_exists($supportIndex)) {
+        writeJsonAtomic($supportIndex, []);
+    }
+
     $logFiles = [
         DATA_PATH . '/logs/superadmin.log',
         DATA_PATH . '/logs/auth.log',
         DATA_PATH . '/logs/backup.log',
         DATA_PATH . '/logs/reset.log',
         DATA_PATH . '/logs/tender_discovery.log',
+        DATA_PATH . '/logs/support.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {

@@ -20,6 +20,7 @@ require_once __DIR__ . '/packs.php';
 require_once __DIR__ . '/ai.php';
 require_once __DIR__ . '/bills.php';
 require_once __DIR__ . '/tender_discovery.php';
+require_once __DIR__ . '/support.php';
 
 set_default_timezone();
 start_app_session();
@@ -29,3 +30,4 @@ ensure_contractors_root();
 ensure_staff_environment();
 rotate_language_from_request();
 initialize_php_error_logging();
+install_runtime_error_handlers();
