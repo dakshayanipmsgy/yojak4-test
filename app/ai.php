@@ -1056,6 +1056,7 @@ function ai_call(array $params): array
         'safetyRatingsSummary' => '',
         'retryCount' => 0,
         'fallbackUsed' => false,
+        'fallbackModelUsed' => null,
         'attempts' => [],
         'schemaValidation' => [
             'enabled' => false,
@@ -1075,7 +1076,16 @@ function ai_call(array $params): array
     $expectJson = (bool)($params['expectJson'] ?? false);
     $purpose = $params['purpose'] ?? 'general';
     $runMode = $params['runMode'] ?? 'strict';
+    $modelOverride = isset($params['modelOverride']) ? trim((string)$params['modelOverride']) : null;
+    $fallbackModelOverride = isset($params['fallbackModelOverride']) ? trim((string)$params['fallbackModelOverride']) : null;
+    $allowFallback = !isset($params['allowFallback']) ? true : (bool)$params['allowFallback'];
     $purposeModels = ai_resolve_purpose_models($config, $purpose);
+    if ($modelOverride !== null && $modelOverride !== '') {
+        $purposeModels['primaryModel'] = $modelOverride;
+    }
+    if ($fallbackModelOverride !== null) {
+        $purposeModels['fallbackModel'] = $fallbackModelOverride !== '' ? $fallbackModelOverride : null;
+    }
     $structuredOutput = ($config['provider'] ?? '') === 'gemini'
         && ai_purpose_key($purpose) === 'offlineTenderExtract'
         && !empty($purposeModels['useStructuredJson']);
@@ -1106,6 +1116,21 @@ function ai_call(array $params): array
                 $providerResult = ai_provider_response_openai($config, $systemPrompt, $userPrompt, $temperature, $maxTokens, $purposeModels['primaryModel'] ?? null);
                 $providerResult['attemptType'] = 'primary';
                 $result['attempts'][] = $providerResult;
+                if (!$providerResult['ok'] && !empty($purposeModels['fallbackModel']) && $allowFallback) {
+                    $result['fallbackUsed'] = true;
+                    $result['fallbackModelUsed'] = $purposeModels['fallbackModel'];
+                    $fallbackAttempt = ai_provider_response_openai(
+                        $config,
+                        $systemPrompt,
+                        $userPrompt,
+                        max($temperature, 0.5),
+                        max($maxTokens, 800),
+                        $purposeModels['fallbackModel']
+                    );
+                    $fallbackAttempt['attemptType'] = 'fallback_model';
+                    $result['attempts'][] = $fallbackAttempt;
+                    $providerResult = $fallbackAttempt;
+                }
             } elseif ($provider === 'gemini') {
                 $retryCount = 0;
                 $primary = ai_provider_response_gemini(
@@ -1123,7 +1148,7 @@ function ai_call(array $params): array
                 );
                 $result['attempts'][] = $primary;
                 $providerResult = $primary;
-                if (($primary['ok'] ?? false) && trim((string)($primary['text'] ?? '')) === '') {
+                if (($primary['ok'] ?? false) && trim((string)($primary['text'] ?? '')) === '' && $allowFallback) {
                     if (!empty($purposeModels['useStreamingFallback'])) {
                         $streamAttempt = ai_provider_response_gemini(
                             $config,
@@ -1142,7 +1167,7 @@ function ai_call(array $params): array
                         $result['attempts'][] = $streamAttempt;
                         $providerResult = $streamAttempt;
                     }
-                    if (trim((string)($providerResult['text'] ?? '')) === '' && !empty($purposeModels['retryOnceOnEmpty'])) {
+                    if (trim((string)($providerResult['text'] ?? '')) === '' && !empty($purposeModels['retryOnceOnEmpty']) && $allowFallback) {
                         $retryCount++;
                         $retryAttempt = ai_provider_response_gemini(
                             $config,
@@ -1160,8 +1185,9 @@ function ai_call(array $params): array
                         $result['attempts'][] = $retryAttempt;
                         $providerResult = $retryAttempt;
                     }
-                    if (trim((string)($providerResult['text'] ?? '')) === '' && !empty($purposeModels['fallbackModel'])) {
+                    if (trim((string)($providerResult['text'] ?? '')) === '' && !empty($purposeModels['fallbackModel']) && $allowFallback) {
                         $result['fallbackUsed'] = true;
+                        $result['fallbackModelUsed'] = $purposeModels['fallbackModel'];
                         $fallbackAttempt = ai_provider_response_gemini(
                             $config,
                             $systemPrompt,
@@ -1178,8 +1204,9 @@ function ai_call(array $params): array
                         $result['attempts'][] = $fallbackAttempt;
                         $providerResult = $fallbackAttempt;
                     }
-                } elseif (!($primary['ok'] ?? false) && !empty($purposeModels['fallbackModel'])) {
+                } elseif (!($primary['ok'] ?? false) && !empty($purposeModels['fallbackModel']) && $allowFallback) {
                     $result['fallbackUsed'] = true;
+                    $result['fallbackModelUsed'] = $purposeModels['fallbackModel'];
                     $fallbackAttempt = ai_provider_response_gemini(
                         $config,
                         $systemPrompt,
@@ -1215,9 +1242,11 @@ function ai_call(array $params): array
         && !($result['schemaValidation']['passed'] ?? true)
         && !empty($purposeModels['fallbackModel'])
         && !$result['fallbackUsed']
+        && $allowFallback
     ) {
         $result['errors'][] = 'Schema validation failed; attempting fallback model.';
         $result['fallbackUsed'] = true;
+        $result['fallbackModelUsed'] = $purposeModels['fallbackModel'];
         $fallbackAttempt = ai_provider_response_gemini(
             $config,
             $systemPrompt,
@@ -1358,6 +1387,15 @@ function ai_call_text(string $purpose, string $systemPrompt, string $userPrompt,
     }
     if (isset($options['maxTokens'])) {
         $params['maxTokens'] = $options['maxTokens'];
+    }
+    if (isset($options['modelOverride'])) {
+        $params['modelOverride'] = $options['modelOverride'];
+    }
+    if (isset($options['fallbackModelOverride'])) {
+        $params['fallbackModelOverride'] = $options['fallbackModelOverride'];
+    }
+    if (isset($options['allowFallback'])) {
+        $params['allowFallback'] = $options['allowFallback'];
     }
 
     return ai_call($params);
