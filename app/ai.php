@@ -80,14 +80,6 @@ function ai_config_defaults(): array
         'textModel' => '',
         'imageModel' => '',
         'purposeModels' => [
-            'contentTopics' => [
-                'primaryModel' => null,
-                'fallbackModel' => null,
-            ],
-            'contentDrafts' => [
-                'primaryModel' => null,
-                'fallbackModel' => null,
-            ],
             'offlineTenderExtract' => [
                 'primaryModel' => null,
                 'fallbackModel' => 'gemini-3-flash-preview',
@@ -251,6 +243,8 @@ function ai_save_config(array $input): array
     $existing = ai_get_config(true);
     $existingConfig = $existing['config'] ?? ai_config_defaults();
     $existingKey = $existingConfig['apiKey'] ?? '';
+    unset($purposeModels['contentTopics'], $purposeModels['contentDrafts']);
+    unset($existingConfig['purposeModels']['contentTopics'], $existingConfig['purposeModels']['contentDrafts']);
 
     $finalKey = $apiKeyInput !== '' ? $apiKeyInput : $existingKey;
 
@@ -300,16 +294,6 @@ function save_ai_config(string $provider, string $apiKey, string $textModel, str
 function ai_purpose_key(string $purpose): string
 {
     switch ($purpose) {
-        case 'content_topic_v2':
-        case 'content_topics':
-            return 'contentTopics';
-        case 'content_v2_blog':
-        case 'content_v2_news':
-        case 'content_blog':
-        case 'content_news':
-        case 'contentDraft':
-        case 'contentDrafts':
-            return 'contentDrafts';
         case 'offline_tender_extract':
         case 'offlineTenderExtract':
             return 'offlineTenderExtract';

@@ -11,10 +11,6 @@ safe_page(function () {
     $configResult = ai_get_config(true);
     $config = $configResult['config'] ?? ai_config_defaults();
     $defaults = ai_config_defaults();
-    $contentTopicsDefaults = $defaults['purposeModels']['contentTopics'] ?? ['primaryModel' => '', 'fallbackModel' => ''];
-    $contentDraftsDefaults = $defaults['purposeModels']['contentDrafts'] ?? ['primaryModel' => '', 'fallbackModel' => ''];
-    $topicsModels = $config['purposeModels']['contentTopics'] ?? $contentTopicsDefaults;
-    $draftModels = $config['purposeModels']['contentDrafts'] ?? $contentDraftsDefaults;
     $offlineDefaults = $defaults['purposeModels']['offlineTenderExtract'] ?? [
         'primaryModel' => '',
         'fallbackModel' => '',
@@ -67,10 +63,6 @@ safe_page(function () {
         $apiKeyInput = trim($_POST['api_key'] ?? '');
         $textModel = trim($_POST['text_model'] ?? ($config['textModel'] ?? ''));
         $imageModel = trim($_POST['image_model'] ?? ($config['imageModel'] ?? ''));
-        $topicsPrimary = trim($_POST['topics_primary_model'] ?? ($topicsModels['primaryModel'] ?? ''));
-        $topicsFallback = trim($_POST['topics_fallback_model'] ?? ($topicsModels['fallbackModel'] ?? ''));
-        $draftsPrimary = trim($_POST['drafts_primary_model'] ?? ($draftModels['primaryModel'] ?? ''));
-        $draftsFallback = trim($_POST['drafts_fallback_model'] ?? ($draftModels['fallbackModel'] ?? ''));
         $offlinePrimary = trim($_POST['offline_primary_model'] ?? ($offlineModels['primaryModel'] ?? ''));
         $offlineFallback = trim($_POST['offline_fallback_model'] ?? ($offlineModels['fallbackModel'] ?? ''));
         $offlineStreaming = isset($_POST['offline_use_streaming']) ? true : (bool)($offlineModels['useStreamingFallback'] ?? false);
@@ -100,14 +92,6 @@ safe_page(function () {
                         'retryOnceOnEmpty' => $offlineRetry,
                         'useStructuredJson' => $offlineStructured,
                     ],
-                    'contentTopics' => [
-                        'primaryModel' => $topicsPrimary,
-                        'fallbackModel' => $topicsFallback,
-                    ],
-                    'contentDrafts' => [
-                        'primaryModel' => $draftsPrimary,
-                        'fallbackModel' => $draftsFallback,
-                    ],
                 ],
             ]);
 
@@ -118,10 +102,6 @@ safe_page(function () {
                 'provider' => $provider,
                 'textModel' => $textModel,
                 'imageModel' => $imageModel,
-                'topicsPrimary' => $topicsPrimary,
-                'topicsFallback' => $topicsFallback,
-                'draftsPrimary' => $draftsPrimary,
-                'draftsFallback' => $draftsFallback,
                 'offlinePrimary' => $offlinePrimary,
                 'offlineFallback' => $offlineFallback,
                 'offlineStreaming' => $offlineStreaming,
@@ -139,14 +119,6 @@ safe_page(function () {
             $config['provider'] = $provider;
             $config['textModel'] = $textModel;
             $config['imageModel'] = $imageModel;
-            $topicsModels = [
-                'primaryModel' => $topicsPrimary,
-                'fallbackModel' => $topicsFallback,
-            ];
-            $draftModels = [
-                'primaryModel' => $draftsPrimary,
-                'fallbackModel' => $draftsFallback,
-            ];
             $offlineModels = [
                 'primaryModel' => $offlinePrimary,
                 'fallbackModel' => $offlineFallback,
@@ -160,7 +132,7 @@ safe_page(function () {
     $displayKey = $config['apiKeyStored'] ? mask_api_key_display($config['apiKey'] ?? 'stored') : 'Not set';
     $title = get_app_config()['appName'] . ' | AI Studio';
 
-    render_layout($title, function () use ($config, $displayKey, $lastProviderCall, $offlineModels, $offlineStructured, $offlineDefaults, $lastTest, $topicsModels, $draftModels, $contentTopicsDefaults, $contentDraftsDefaults) {
+    render_layout($title, function () use ($config, $displayKey, $lastProviderCall, $offlineModels, $offlineStructured, $offlineDefaults, $lastTest) {
         ?>
         <div class="card">
             <div style="display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;justify-content:space-between;">
@@ -217,41 +189,6 @@ safe_page(function () {
                     <div class="field">
                         <label for="image_model"><?= sanitize('Image Model'); ?></label>
                         <input id="image_model" type="text" name="image_model" value="<?= sanitize($config['imageModel'] ?? ''); ?>" required placeholder="<?= sanitize('e.g. gpt-image-1'); ?>">
-                    </div>
-                </div>
-
-                <div class="card" style="background:#0f1520;border:1px solid #253047;border-radius:14px;padding:14px;display:grid;gap:12px;">
-                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-                        <div>
-                            <h3 style="margin:0 0 4px 0;"><?= sanitize('Content Studio models'); ?></h3>
-                            <p class="muted" style="margin:0;"><?= sanitize('Set per-purpose primary and fallback models for Topic and Draft generation.'); ?></p>
-                        </div>
-                        <span class="pill muted"><?= sanitize('JSON-only outputs enforced'); ?></span>
-                    </div>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;align-items:end;">
-                        <div class="field">
-                            <label for="topics_primary_model"><?= sanitize('Topics: primary model'); ?></label>
-                            <input id="topics_primary_model" type="text" name="topics_primary_model" value="<?= sanitize($topicsModels['primaryModel'] ?? ''); ?>" placeholder="<?= sanitize(($contentTopicsDefaults['primaryModel'] ?? '') !== '' ? $contentTopicsDefaults['primaryModel'] : 'Defaults to text model'); ?>">
-                            <small class="muted"><?= sanitize('Used for /superadmin/topic_generate.php'); ?></small>
-                        </div>
-                        <div class="field">
-                            <label for="topics_fallback_model"><?= sanitize('Topics: fallback model'); ?></label>
-                            <input id="topics_fallback_model" type="text" name="topics_fallback_model" value="<?= sanitize($topicsModels['fallbackModel'] ?? ''); ?>" placeholder="<?= sanitize($contentTopicsDefaults['fallbackModel'] ?? 'Optional'); ?>">
-                            <small class="muted"><?= sanitize('Auto-used after one retry or empty JSON.'); ?></small>
-                        </div>
-                        <div class="field">
-                            <label for="drafts_primary_model"><?= sanitize('Drafts: primary model'); ?></label>
-                            <input id="drafts_primary_model" type="text" name="drafts_primary_model" value="<?= sanitize($draftModels['primaryModel'] ?? ''); ?>" placeholder="<?= sanitize(($contentDraftsDefaults['primaryModel'] ?? '') !== '' ? $contentDraftsDefaults['primaryModel'] : 'Defaults to text model'); ?>">
-                            <small class="muted"><?= sanitize('Used for /superadmin/content_generate_from_topic.php'); ?></small>
-                        </div>
-                        <div class="field">
-                            <label for="drafts_fallback_model"><?= sanitize('Drafts: fallback model'); ?></label>
-                            <input id="drafts_fallback_model" type="text" name="drafts_fallback_model" value="<?= sanitize($draftModels['fallbackModel'] ?? ''); ?>" placeholder="<?= sanitize($contentDraftsDefaults['fallbackModel'] ?? 'Optional'); ?>">
-                            <small class="muted"><?= sanitize('Used if primary returns empty or invalid JSON.'); ?></small>
-                        </div>
-                    </div>
-                    <div class="pill muted" style="background:#0c111b;color:#9ea7b3;">
-                        <?= sanitize('All POST calls enforce CSRF, sessions, and JSON file locking. Timezone: Asia/Kolkata.'); ?>
                     </div>
                 </div>
 

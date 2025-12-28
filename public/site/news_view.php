@@ -3,30 +3,20 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../app/bootstrap.php';
 
 safe_page(function () {
-    $slug = $_GET['slug'] ?? '';
-    if ($slug === '') {
-        render_error_page('Missing slug.');
-        return;
-    }
-    $item = load_content_by_slug('news', $slug);
-    if (!$item) {
-        render_error_page('News not found.');
-        return;
-    }
+    $title = get_app_config()['appName'] . ' | News';
+    http_response_code(404);
 
-    $title = get_app_config()['appName'] . ' | ' . ($item['title'] ?? 'News');
-
-    render_layout($title, function () use ($item) {
+    render_layout($title, function () {
         ?>
-        <article class="card">
+        <div class="card error-card">
             <p class="pill" style="display:inline-block;margin:0 0 8px 0;">News</p>
-            <h1 style="margin-top:0;"><?= sanitize($item['title'] ?? ''); ?></h1>
-            <?php if (!empty($item['coverImagePath'])): ?>
-                <img src="<?= sanitize($item['coverImagePath']); ?>" alt="Cover" style="max-width:100%;border-radius:12px;border:1px solid #30363d;margin:10px 0;">
-            <?php endif; ?>
-            <div class="muted" style="margin-bottom:10px;">Published: <?= sanitize($item['publishedAt'] ?? $item['createdAt'] ?? ''); ?></div>
-            <div style="line-height:1.6;"><?= $item['bodyHtml'] ?? ''; ?></div>
-        </article>
+            <h1 style="margin-top:0;"><?= sanitize('Not Found'); ?></h1>
+            <p class="muted">News posts are no longer available because Content Studio has been removed.</p>
+            <div class="buttons" style="margin-top:10px;">
+                <a class="btn" href="/site/news.php"><?= sanitize('Back to News'); ?></a>
+                <a class="btn secondary" href="/site/index.php"><?= sanitize('Home'); ?></a>
+            </div>
+        </div>
         <?php
     });
 });
