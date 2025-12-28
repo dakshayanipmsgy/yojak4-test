@@ -186,6 +186,61 @@ function pack_items_from_requirement_set(array $set): array
     return $items;
 }
 
+function pack_apply_default_templates(array $pack, array $tender, array $contractor, string $context = 'tender'): array
+{
+    $templates = load_contractor_templates_full($pack['yojId']);
+    $defaults = array_filter($templates, fn($tpl) => ($tpl['category'] ?? 'tender') === 'tender');
+    if (!$defaults) {
+        return $pack;
+    }
+
+    $existingTemplateDocs = [];
+    foreach ($pack['generatedDocs'] ?? [] as $doc) {
+        if (!empty($doc['templateId'])) {
+            $existingTemplateDocs[$doc['templateId']] = true;
+        }
+    }
+
+    $generatedDir = pack_generated_dir($pack['yojId'], $pack['packId'], $context);
+    $defaultsDir = $generatedDir . '/default_letters';
+    if (!is_dir($defaultsDir)) {
+        mkdir($defaultsDir, 0775, true);
+    }
+
+    $contextMap = contractor_template_context($contractor, $tender);
+    $now = now_kolkata()->format(DateTime::ATOM);
+    $docs = $pack['generatedDocs'] ?? [];
+
+    foreach ($defaults as $tpl) {
+        $tplId = $tpl['tplId'] ?? '';
+        if ($tplId !== '' && isset($existingTemplateDocs[$tplId])) {
+            continue;
+        }
+        $docId = 'DOC-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10));
+        $filename = $docId . '.html';
+        $path = $defaultsDir . '/' . $filename;
+        $filled = contractor_fill_template_body($tpl['body'] ?? '', $contextMap);
+        $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'
+            . htmlspecialchars($tpl['name'] ?? 'Template')
+            . '</title><style>body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:24px;}h1{margin-top:0;color:#fff;}p,pre{line-height:1.6;white-space:pre-wrap;}</style></head><body>'
+            . '<h1>' . htmlspecialchars($tpl['name'] ?? 'Template') . '</h1>'
+            . '<pre>' . htmlspecialchars($filled) . '</pre>'
+            . '</body></html>';
+        file_put_contents($path, $html);
+        $docs[] = [
+            'docId' => $docId,
+            'title' => $tpl['name'] ?? 'Tender letter',
+            'path' => str_replace(PUBLIC_PATH, '', $path),
+            'generatedAt' => $now,
+            'templateId' => $tplId,
+        ];
+    }
+
+    $pack['generatedDocs'] = $docs;
+    $pack['defaultTemplatesApplied'] = true;
+    return $pack;
+}
+
 function pack_stats(array $pack): array
 {
     $items = $pack['items'] ?? [];

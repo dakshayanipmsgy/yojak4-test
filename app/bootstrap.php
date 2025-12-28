@@ -21,6 +21,8 @@ require_once __DIR__ . '/ai.php';
 require_once __DIR__ . '/bills.php';
 require_once __DIR__ . '/tender_discovery.php';
 require_once __DIR__ . '/support.php';
+require_once __DIR__ . '/assisted_extraction.php';
+require_once __DIR__ . '/contractor_templates.php';
 
 set_default_timezone();
 start_app_session();

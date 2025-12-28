@@ -32,6 +32,11 @@ safe_page(function () {
                             • <?= sanitize(($pack['sourceTender']['type'] ?? '') . ' ' . ($pack['sourceTender']['id'] ?? '')); ?>
                         <?php endif; ?>
                     </p>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                        <?php if (!empty($pack['defaultTemplatesApplied'])): ?>
+                            <span class="pill success"><?= sanitize('Default tender letters added'); ?></span>
+                        <?php endif; ?>
+                    </div>
                     <?php if (($pack['source'] ?? '') === 'dept'): ?>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
                             <span class="pill"><?= sanitize('Department Published'); ?></span>

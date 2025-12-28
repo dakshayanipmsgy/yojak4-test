@@ -14,6 +14,7 @@ safe_page(function () {
     ensure_packs_env($yojId);
 
     $offtdId = trim($_POST['offtdId'] ?? '');
+    $includeDefaults = ($_POST['include_defaults'] ?? '1') === '1';
     if ($offtdId === '') {
         render_error_page('Missing tender id.');
         return;
@@ -52,7 +53,13 @@ safe_page(function () {
         'status' => 'Pending',
         'items' => pack_items_from_checklist($tender['checklist'] ?? []),
         'generatedDocs' => [],
+        'defaultTemplatesApplied' => false,
     ];
+
+    if ($includeDefaults) {
+        $contractor = load_contractor($yojId) ?? [];
+        $pack = pack_apply_default_templates($pack, $tender, $contractor);
+    }
 
     save_pack($pack);
     pack_log([
