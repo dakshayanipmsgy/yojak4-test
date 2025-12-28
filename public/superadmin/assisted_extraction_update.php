@@ -19,23 +19,65 @@ safe_page(function () {
         return;
     }
 
-    $decoded = json_decode($input, true);
+    $sanitizedInput = assisted_sanitize_json_input($input);
+    $decoded = json_decode($sanitizedInput, true);
     if (!is_array($decoded)) {
-        $_SESSION['assisted_draft_input'][$reqId] = $input;
-        set_flash('error', 'Please provide valid JSON for the draft.');
+        $_SESSION['assisted_draft_input'][$reqId] = $sanitizedInput;
+        $_SESSION['assisted_validation'][$reqId] = [
+            'errors' => ['Invalid JSON. Please paste valid JSON only.'],
+            'missingKeys' => [],
+            'forbiddenFindings' => [],
+            'jsonError' => json_last_error_msg(),
+        ];
+        logEvent(ASSISTED_EXTRACTION_LOG, [
+            'at' => now_kolkata()->format(DateTime::ATOM),
+            'event' => 'ASSISTED_PASTE_VALIDATE',
+            'ok' => false,
+            'reqId' => $reqId,
+            'actor' => assisted_actor_label($actor),
+            'jsonError' => json_last_error_msg(),
+            'rawSnippet' => mb_substr($sanitizedInput, 0, 500),
+        ]);
+        set_flash('error', 'Invalid JSON. Please paste valid JSON only.');
         redirect('/superadmin/assisted_extraction_view.php?reqId=' . urlencode($reqId));
         return;
     }
 
-    $errors = assisted_validate_payload($decoded);
+    $validation = assisted_validate_payload($decoded);
+    $errors = $validation['errors'] ?? [];
     if ($errors) {
-        $_SESSION['assisted_draft_input'][$reqId] = $input;
+        $_SESSION['assisted_draft_input'][$reqId] = $sanitizedInput;
+        $_SESSION['assisted_validation'][$reqId] = $validation;
+        logEvent(ASSISTED_EXTRACTION_LOG, [
+            'at' => now_kolkata()->format(DateTime::ATOM),
+            'event' => 'ASSISTED_PASTE_VALIDATE',
+            'ok' => false,
+            'reqId' => $reqId,
+            'actor' => assisted_actor_label($actor),
+            'missingKeys' => $validation['missingKeys'] ?? [],
+            'forbiddenFindings' => $validation['forbiddenFindings'] ?? [],
+        ]);
         set_flash('error', implode(' ', $errors));
         redirect('/superadmin/assisted_extraction_view.php?reqId=' . urlencode($reqId));
         return;
     }
 
-    $normalized = assisted_normalize_payload($decoded);
+    $_SESSION['assisted_validation'][$reqId] = [
+        'errors' => [],
+        'missingKeys' => [],
+        'forbiddenFindings' => [],
+    ];
+    logEvent(ASSISTED_EXTRACTION_LOG, [
+        'at' => now_kolkata()->format(DateTime::ATOM),
+        'event' => 'ASSISTED_PASTE_VALIDATE',
+        'ok' => true,
+        'reqId' => $reqId,
+        'actor' => assisted_actor_label($actor),
+        'missingKeys' => [],
+        'forbiddenFindings' => [],
+    ]);
+
+    $normalized = $validation['normalized'] ?? assisted_normalize_payload($decoded);
     $request['assistantDraft'] = $normalized;
     assisted_assign_request($request, $actor);
     $request['assignedTo'] = $actor['id'] ?? ($request['assignedTo'] ?? null);
@@ -46,7 +88,9 @@ safe_page(function () {
         assisted_append_audit($request, assisted_actor_label($actor), 'delivered', null);
         assisted_deliver_notification($request);
         logEvent(ASSISTED_EXTRACTION_LOG, [
-            'event' => 'delivered',
+            'at' => now_kolkata()->format(DateTime::ATOM),
+            'event' => 'ASSISTED_DELIVER',
+            'ok' => true,
             'reqId' => $reqId,
             'yojId' => $request['yojId'] ?? '',
             'offtdId' => $request['offtdId'] ?? '',
@@ -57,7 +101,9 @@ safe_page(function () {
         $request['status'] = 'in_progress';
         assisted_append_audit($request, assisted_actor_label($actor), 'draft_saved', null);
         logEvent(ASSISTED_EXTRACTION_LOG, [
+            'at' => now_kolkata()->format(DateTime::ATOM),
             'event' => 'draft_saved',
+            'ok' => true,
             'reqId' => $reqId,
             'yojId' => $request['yojId'] ?? '',
             'offtdId' => $request['offtdId'] ?? '',

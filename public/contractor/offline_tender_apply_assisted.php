@@ -40,14 +40,15 @@ safe_page(function () {
         return;
     }
 
-    $errors = assisted_validate_payload($draft);
+    $validation = assisted_validate_payload($draft);
+    $errors = $validation['errors'] ?? [];
     if ($errors) {
         set_flash('error', implode(' ', $errors));
         redirect('/contractor/offline_tender_view.php?id=' . urlencode($offtdId));
         return;
     }
 
-    $normalized = assisted_normalize_payload($draft);
+    $normalized = $validation['normalized'] ?? assisted_normalize_payload($draft);
     $previous = $tender['checklist'] ?? [];
     if (!isset($tender['previousChecklists']) || !is_array($tender['previousChecklists'])) {
         $tender['previousChecklists'] = [];
@@ -80,6 +81,17 @@ safe_page(function () {
     }
 
     $tender['status'] = 'assisted_applied';
+    if (!isset($tender['assistedExtractHistory']) || !is_array($tender['assistedExtractHistory'])) {
+        $tender['assistedExtractHistory'] = [];
+    }
+    if (!empty($tender['assistedExtract'])) {
+        $tender['assistedExtractHistory'][] = [
+            'savedAt' => now_kolkata()->format(DateTime::ATOM),
+            'payload' => $tender['assistedExtract'],
+        ];
+    }
+    $tender['assistedExtract'] = $normalized;
+    $tender['assistedExtractDeliveredAt'] = $request['deliveredAt'] ?? null;
     $tender['assistedExtraction'] = [
         'reqId' => $reqId,
         'status' => 'applied',
@@ -95,7 +107,9 @@ safe_page(function () {
     assisted_save_request($request);
 
     logEvent(ASSISTED_EXTRACTION_LOG, [
-        'event' => 'applied_to_tender',
+        'at' => now_kolkata()->format(DateTime::ATOM),
+        'event' => 'ASSISTED_APPLY',
+        'ok' => true,
         'reqId' => $reqId,
         'yojId' => $yojId,
         'offtdId' => $offtdId,
