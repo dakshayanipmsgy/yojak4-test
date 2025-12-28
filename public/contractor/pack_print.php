@@ -6,6 +6,7 @@ safe_page(function () {
     $user = require_role('contractor');
     $yojId = $user['yojId'];
     $packId = trim($_GET['packId'] ?? '');
+    $doc = trim($_GET['doc'] ?? 'index');
     $context = detect_pack_context($packId);
     ensure_packs_env($yojId, $context);
 
@@ -15,7 +16,20 @@ safe_page(function () {
         return;
     }
 
-    $html = pack_index_html($pack);
+    $contractor = load_contractor($yojId) ?? [];
+    $vaultFiles = contractor_vault_index($yojId);
+    $options = [
+        'includeSnippets' => ($_GET['snippets'] ?? '1') !== '0',
+        'includeRestricted' => ($_GET['restricted'] ?? '1') !== '0',
+        'pendingOnly' => ($_GET['pendingOnly'] ?? '') === '1',
+    ];
+    $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles);
+    logEvent(PACK_PRINT_LOG, [
+        'event' => 'PACK_PRINT',
+        'yojId' => $yojId,
+        'packId' => $packId,
+        'doc' => $doc,
+    ]);
     header('Content-Type: text/html; charset=UTF-8');
     echo $html;
 });

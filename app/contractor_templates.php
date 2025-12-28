@@ -275,16 +275,28 @@ function seed_default_contractor_templates(string $yojId): array
 function contractor_template_context(array $contractor, array $tender): array
 {
     $extracted = $tender['extracted'] ?? offline_tender_defaults();
+    $address = contractor_profile_address($contractor);
+    $contractorName = $contractor['firmName'] ?: ($contractor['name'] ?? 'Contractor');
     return [
-        '{{contractorName}}' => $contractor['name'] ?? 'Contractor',
+        '{{contractorName}}' => $contractorName,
+        '{{firmName}}' => $contractor['firmName'] ?? ($contractor['name'] ?? ''),
+        '{{firmType}}' => $contractor['firmType'] ?? '',
         '{{contactPerson}}' => $contractor['contactPerson'] ?? ($contractor['name'] ?? 'Authorized Signatory'),
         '{{contactMobile}}' => $contractor['mobile'] ?? '',
         '{{email}}' => $contractor['email'] ?? '',
-        '{{address}}' => $contractor['address'] ?? '',
+        '{{address}}' => $address,
+        '{{placeDefault}}' => $contractor['placeDefault'] ?? '',
+        '{{authorizedSignatory}}' => $contractor['authorizedSignatoryName'] ?? ($contractor['name'] ?? 'Authorized Signatory'),
+        '{{signatoryDesignation}}' => $contractor['authorizedSignatoryDesignation'] ?? '',
+        '{{gstNumber}}' => $contractor['gstNumber'] ?? '',
+        '{{panNumber}}' => $contractor['panNumber'] ?? '',
+        '{{bankName}}' => $contractor['bankName'] ?? '',
+        '{{bankAccount}}' => $contractor['bankAccount'] ?? '',
+        '{{ifsc}}' => $contractor['ifsc'] ?? '',
         '{{deptName}}' => $tender['departmentName'] ?? ($tender['location'] ?? 'Department'),
-        '{{tenderTitle}}' => $tender['title'] ?? 'Tender',
-        '{{tenderId}}' => $tender['id'] ?? '',
-        '{{tenderNumber}}' => $tender['id'] ?? '',
+        '{{tenderTitle}}' => $tender['title'] ?? ($tender['tenderTitle'] ?? 'Tender'),
+        '{{tenderId}}' => $tender['id'] ?? ($tender['tenderNumber'] ?? ''),
+        '{{tenderNumber}}' => $tender['id'] ?? ($tender['tenderNumber'] ?? ''),
         '{{submissionDeadline}}' => $extracted['submissionDeadline'] ?? '',
         '{{openingDate}}' => $extracted['openingDate'] ?? '',
         '{{todayDate}}' => now_kolkata()->format('Y-m-d'),
@@ -295,4 +307,3 @@ function contractor_fill_template_body(string $body, array $context): string
 {
     return str_replace(array_keys($context), array_values($context), $body);
 }
-
