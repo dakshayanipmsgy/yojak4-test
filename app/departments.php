@@ -241,6 +241,56 @@ function load_active_department_user(string $fullUserId): ?array
     return $data ?: null;
 }
 
+function resolve_department_admin_account(string $deptId): array
+{
+    $deptId = normalize_dept_id($deptId);
+    $department = load_department($deptId);
+    if (!$department) {
+        return ['ok' => false, 'reason' => 'department_missing'];
+    }
+
+    $activeAdminUserId = strtolower((string)($department['activeAdminUserId'] ?? ''));
+    if ($activeAdminUserId === '') {
+        return ['ok' => false, 'reason' => 'active_admin_missing', 'department' => $department];
+    }
+
+    $parsed = parse_department_login_identifier($activeAdminUserId);
+    if (!$parsed || ($parsed['roleId'] ?? '') !== 'admin' || ($parsed['deptId'] ?? '') !== $deptId) {
+        return [
+            'ok' => false,
+            'reason' => 'active_admin_invalid',
+            'department' => $department,
+            'activeAdminUserId' => $activeAdminUserId,
+        ];
+    }
+
+    $record = load_active_department_user($activeAdminUserId);
+    if (!$record) {
+        return [
+            'ok' => false,
+            'reason' => 'admin_record_missing',
+            'department' => $department,
+            'activeAdminUserId' => $activeAdminUserId,
+        ];
+    }
+    if (($record['type'] ?? '') !== 'department' || ($record['roleId'] ?? '') !== 'admin') {
+        return [
+            'ok' => false,
+            'reason' => 'admin_record_mismatch',
+            'department' => $department,
+            'activeAdminUserId' => $activeAdminUserId,
+            'record' => $record,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'department' => $department,
+        'activeAdminUserId' => $activeAdminUserId,
+        'record' => $record,
+    ];
+}
+
 function parse_department_login_identifier(string $identifier): ?array
 {
     $normalized = strtolower(trim($identifier));
@@ -1056,6 +1106,9 @@ function load_all_password_reset_requests(): array
         if (!isset($req['userType'])) {
             $req['userType'] = 'dept_admin';
         }
+        if (!isset($req['adminUserId']) && isset($req['fullUserId'])) {
+            $req['adminUserId'] = $req['fullUserId'];
+        }
         if (!array_key_exists('updatedAt', $req)) {
             $req['updatedAt'] = $req['requestedAt'] ?? now_kolkata()->format(DateTime::ATOM);
         }
@@ -1092,17 +1145,31 @@ function add_password_reset_request(
     ?string $contact = null,
     ?string $message = null,
     ?string $requesterIp = null,
-    ?string $userAgent = null
+    ?string $userAgent = null,
+    ?string $adminUserIdOverride = null
 ): array
 {
+    $deptId = normalize_dept_id($deptId);
+    if (!is_valid_dept_id($deptId)) {
+        throw new InvalidArgumentException('Invalid department id.');
+    }
+    $department = load_department($deptId);
+    if (!$department) {
+        throw new RuntimeException('Department not found.');
+    }
+
     ensure_department_env($deptId);
     $requests = load_all_password_reset_requests();
     $normalizedUserId = strtolower($fullUserId);
+    $adminUserId = strtolower($adminUserIdOverride ?? $normalizedUserId);
     $existing = array_values(array_filter(
         $requests,
-        fn($req) => ($req['fullUserId'] ?? '') === $normalizedUserId
-            && ($req['deptId'] ?? '') === $deptId
+        fn($req) => ($req['deptId'] ?? '') === $deptId
             && ($req['status'] ?? '') === 'pending'
+            && (
+                ($req['adminUserId'] ?? $req['fullUserId'] ?? '') === $adminUserId
+                || ($req['fullUserId'] ?? '') === $normalizedUserId
+            )
     ));
     if ($existing) {
         $existing[0]['contact'] = $existing[0]['contact'] ?? $contact;
@@ -1116,7 +1183,7 @@ function add_password_reset_request(
         'requestId' => 'RESET-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
         'deptId' => $deptId,
         'fullUserId' => $normalizedUserId,
-        'adminUserId' => $normalizedUserId,
+        'adminUserId' => $adminUserId,
         'status' => 'pending',
         'requestedBy' => $requestedBy,
         'requestedAt' => now_kolkata()->format(DateTime::ATOM),
