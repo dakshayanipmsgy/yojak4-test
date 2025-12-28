@@ -72,6 +72,12 @@ try {
     $requiredMin = max(4, min($count, 7));
     $errors = $aiResult['errors'] ?? [];
     $ok = ($aiResult['ok'] ?? false) && count($results) >= $requiredMin;
+    $rawText = (string)($aiResult['rawText'] ?? '');
+    $rawSnippet = function_exists('mb_substr') ? mb_substr($rawText, 0, 500, 'UTF-8') : substr($rawText, 0, 500);
+    $responseId = $aiResult['responseId'] ?? ($aiResult['rawEnvelope']['responseId'] ?? null);
+    $finishReasons = $aiResult['finishReasons'] ?? ($aiResult['rawEnvelope']['finishReasons'] ?? []);
+    $blockReason = $aiResult['promptBlockReason'] ?? ($aiResult['rawEnvelope']['blockReason'] ?? null);
+    $textLength = strlen($rawText);
 
     if (!$ok) {
         if (count($results) < $requiredMin) {
@@ -80,10 +86,17 @@ try {
         if (count($results) === 0) {
             $errors[] = 'No topics were generated.';
         }
+        if ($blockReason) {
+            $errors[] = 'Block reason: ' . $blockReason;
+        }
+        if (!empty($finishReasons)) {
+            $errors[] = 'Finish reasons: ' . implode(', ', $finishReasons);
+        }
+        if (($aiResult['diagnosticError'] ?? null) === 'empty_content') {
+            $errors[] = 'empty_content';
+        }
     }
 
-    $rawText = (string)($aiResult['rawText'] ?? '');
-    $rawSnippet = function_exists('mb_substr') ? mb_substr($rawText, 0, 500, 'UTF-8') : substr($rawText, 0, 500);
     $finishedAt = now_kolkata()->format(DateTime::ATOM);
 
     $errorText = implode(' | ', array_slice($errors, 0, 3));
@@ -95,6 +108,10 @@ try {
         'modelUsed' => $aiResult['modelUsed'] ?? ($aiResult['rawEnvelope']['model'] ?? ''),
         'httpStatus' => $aiResult['httpStatus'] ?? ($aiResult['rawEnvelope']['httpStatus'] ?? null),
         'requestId' => $aiResult['requestId'] ?? ($aiResult['rawEnvelope']['requestId'] ?? null),
+        'responseId' => $responseId,
+        'finishReasons' => $finishReasons,
+        'blockReason' => $blockReason,
+        'textLength' => $textLength,
         'promptHash' => $prompts['promptHash'],
         'nonce' => $nonce,
         'generatedAt' => $startedAt,
@@ -125,7 +142,25 @@ try {
         'modelUsed' => $aiMeta['modelUsed'],
         'httpStatus' => $aiMeta['httpStatus'],
         'requestId' => $aiMeta['requestId'],
+        'responseId' => $aiMeta['responseId'],
+        'finishReasons' => $aiMeta['finishReasons'],
+        'blockReason' => $aiMeta['blockReason'],
+        'textLength' => $aiMeta['textLength'],
     ];
+
+    content_v2_save_raw_response($jobId, [
+        'purpose' => 'contentTopics',
+        'provider' => $aiMeta['provider'],
+        'modelUsed' => $aiMeta['modelUsed'],
+        'httpStatus' => $aiMeta['httpStatus'],
+        'requestId' => $aiMeta['requestId'],
+        'responseId' => $aiMeta['responseId'],
+        'finishReasons' => $aiMeta['finishReasons'],
+        'blockReason' => $aiMeta['blockReason'],
+        'rawSnippet' => $aiResult['rawBodySnippet'] ?? $rawSnippet,
+        'textLen' => $aiMeta['textLength'],
+        'errors' => $errors,
+    ]);
 
     writeJsonAtomic(topic_v2_job_path($jobId), $jobPayload);
 
@@ -138,9 +173,13 @@ try {
         'modelUsed' => $aiMeta['modelUsed'],
         'httpStatus' => $aiMeta['httpStatus'],
         'requestId' => $aiMeta['requestId'],
+        'responseId' => $aiMeta['responseId'],
         'promptHash' => $prompts['promptHash'],
         'resultsCount' => count($results),
         'rawSnippet' => $rawSnippet,
+        'finishReasons' => $aiMeta['finishReasons'],
+        'blockReason' => $aiMeta['blockReason'],
+        'textLength' => $aiMeta['textLength'],
         'errors' => $errors,
         'error' => $aiMeta['error'],
     ]);

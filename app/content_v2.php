@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 const CONTENT_V2_BASE = DATA_PATH . '/content_v2';
 const CONTENT_V2_LOG_FILE = DATA_PATH . '/logs/content_v2.log';
+const CONTENT_V2_DEBUG_DIR = CONTENT_V2_BASE . '/debug/raw_responses';
 
 function ensure_content_v2_structure(): void
 {
@@ -17,6 +18,7 @@ function ensure_content_v2_structure(): void
         CONTENT_V2_BASE . '/drafts',
         CONTENT_V2_BASE . '/drafts/blog',
         CONTENT_V2_BASE . '/drafts/news',
+        CONTENT_V2_DEBUG_DIR,
     ];
 
     foreach ($directories as $dir) {
@@ -45,6 +47,20 @@ function ensure_content_v2_structure(): void
 function content_v2_log(array $context): void
 {
     logEvent(CONTENT_V2_LOG_FILE, $context);
+}
+
+function content_v2_raw_response_path(string $jobId): string
+{
+    return CONTENT_V2_DEBUG_DIR . '/' . $jobId . '.json';
+}
+
+function content_v2_save_raw_response(string $jobId, array $payload): void
+{
+    $payload['savedAt'] = now_kolkata()->format(DateTime::ATOM);
+    $payload['rawSnippet'] = function_exists('mb_substr')
+        ? mb_substr((string)($payload['rawSnippet'] ?? ''), 0, 800, 'UTF-8')
+        : substr((string)($payload['rawSnippet'] ?? ''), 0, 800);
+    writeJsonAtomic(content_v2_raw_response_path($jobId), $payload);
 }
 
 function topic_v2_index_path(string $type): string
