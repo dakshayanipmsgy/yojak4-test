@@ -32,6 +32,21 @@ safe_page(function () {
                             • <?= sanitize(($pack['sourceTender']['type'] ?? '') . ' ' . ($pack['sourceTender']['id'] ?? '')); ?>
                         <?php endif; ?>
                     </p>
+                    <?php if (($pack['source'] ?? '') === 'dept'): ?>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                            <span class="pill"><?= sanitize('Department Published'); ?></span>
+                            <?php if (!empty($pack['prefillApplied'])): ?>
+                                <span class="pill success"><?= sanitize('Prefill applied'); ?></span>
+                            <?php else: ?>
+                                <span class="pill"><?= sanitize('Prefill not applied'); ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($pack['requirementSetApplied'])): ?>
+                                <span class="pill success"><?= sanitize('Official checklist applied'); ?></span>
+                            <?php elseif (!empty($pack['officialChecklistLocked'])): ?>
+                                <span class="pill"><?= sanitize('Official checklist locked (link dept to unlock)'); ?></span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div class="buttons" style="gap:8px;">
                     <a class="btn secondary" href="/contractor/packs.php"><?= sanitize('Back to packs'); ?></a>
@@ -62,6 +77,12 @@ safe_page(function () {
                         <div style="font-size:12px; color:var(--muted); text-align:right;"><?= sanitize('Update multiple items together'); ?></div>
                     </div>
                 </div>
+                <?php if (!empty($pack['officialChecklistLocked'])): ?>
+                    <div class="flash" style="background:#0f1625;border:1px solid #1f6feb;">
+                        <?= sanitize('Official checklist available. Link to the department to auto-load it.'); ?>
+                        <a class="btn secondary" style="margin-left:8px;" href="/contractor/departments.php"><?= sanitize('Link now'); ?></a>
+                    </div>
+                <?php endif; ?>
                 <div style="display:grid; gap:10px;">
                     <?php foreach ($pack['items'] ?? [] as $item): ?>
                         <div style="border:1px solid #30363d; border-radius:12px; padding:10px; display:grid; gap:8px;">

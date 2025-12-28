@@ -25,21 +25,30 @@ safe_page(function () {
         $emdText = trim($_POST['emdText'] ?? '');
         $sdPercent = trim($_POST['sdPercent'] ?? '');
         $pgPercent = trim($_POST['pgPercent'] ?? '');
-        $reqIds = $_POST['requirementSetIds'] ?? [];
+        $reqId = trim($_POST['requirementSetId'] ?? '');
         $publishedToContractors = isset($_POST['publishedToContractors']) && $_POST['publishedToContractors'] === 'on';
+        $titlePublic = trim($_POST['titlePublic'] ?? '');
+        $summaryPublic = trim($_POST['summaryPublic'] ?? '');
 
         if ($title === '') {
             $errors[] = 'Title required.';
         }
 
-        $validReqs = [];
+        $validReq = null;
         foreach ($requirementSets as $set) {
-            if (in_array($set['setId'] ?? '', $reqIds, true)) {
-                $validReqs[] = $set['setId'];
+            if (($set['setId'] ?? '') === $reqId) {
+                $validReq = $set['setId'];
+                break;
             }
         }
 
         if (!$errors) {
+            $contractorSummary = [
+                'titlePublic' => $titlePublic !== '' ? $titlePublic : null,
+                'summaryPublic' => $summaryPublic,
+                'attachmentsPublic' => [],
+            ];
+
             $tender = [
                 'id' => '', // auto fill
                 'title' => $title,
@@ -58,7 +67,8 @@ safe_page(function () {
                 'emdText' => $emdText,
                 'sdPercent' => $sdPercent,
                 'pgPercent' => $pgPercent,
-                'requirementSetIds' => $validReqs,
+                'requirementSetId' => $validReq,
+                'contractorVisibleSummary' => $contractorSummary,
                 'createdAt' => now_kolkata()->format(DateTime::ATOM),
                 'updatedAt' => now_kolkata()->format(DateTime::ATOM),
                 'status' => 'draft',
@@ -66,6 +76,18 @@ safe_page(function () {
                 'publishedAt' => $publishedToContractors ? now_kolkata()->format(DateTime::ATOM) : null,
             ];
             save_department_tender($deptId, $tender);
+            if ($publishedToContractors) {
+                $attachments = save_public_attachments($deptId, $tender['id'], $_FILES['publicAttachments'] ?? [], []);
+                $tender['contractorVisibleSummary']['attachmentsPublic'] = $attachments;
+                save_department_tender($deptId, $tender);
+                write_public_tender_snapshot(load_department($deptId) ?? ['deptId' => $deptId], $tender, $requirementSets, $attachments);
+                logEvent(DATA_PATH . '/logs/tenders_publication.log', [
+                    'event' => 'tender_published',
+                    'deptId' => $deptId,
+                    'ytdId' => $tender['id'],
+                    'actor' => $user['username'] ?? '',
+                ]);
+            }
             append_department_audit($deptId, [
                 'by' => $user['username'] ?? '',
                 'action' => 'tender_created',
@@ -94,7 +116,7 @@ safe_page(function () {
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
-            <form method="post" style="margin-top:12px;display:grid;gap:12px;">
+            <form method="post" enctype="multipart/form-data" style="margin-top:12px;display:grid;gap:12px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                 <div class="field">
                     <label for="title"><?= sanitize('Title'); ?></label>
@@ -138,19 +160,34 @@ safe_page(function () {
                         <input id="pgPercent" name="pgPercent">
                     </div>
                 </div>
-                <div class="field" style="display:flex;align-items:center;gap:10px;">
-                    <input type="checkbox" id="publishedToContractors" name="publishedToContractors" style="width:auto;">
-                    <label for="publishedToContractors" style="margin:0;"><?= sanitize('Publish to linked contractors'); ?></label>
-                </div>
-                <div class="field">
-                    <label><?= sanitize('Attach Requirement Sets'); ?></label>
-                    <div style="display:flex;flex-wrap:wrap;gap:10px;">
-                        <?php foreach ($requirementSets as $set): ?>
-                            <label style="display:flex;align-items:center;gap:6px;">
-                                <input type="checkbox" name="requirementSetIds[]" value="<?= sanitize($set['setId'] ?? ''); ?>">
-                                <span class="pill"><?= sanitize($set['title'] ?? ''); ?></span>
-                            </label>
-                        <?php endforeach; ?>
+                <div class="card" style="background:#0f1625;border:1px solid #1f6feb;display:grid;gap:10px;">
+                    <h3 style="margin:0;"><?= sanitize('Contractor Visibility'); ?></h3>
+                    <div class="field" style="display:flex;align-items:center;gap:10px;">
+                        <input type="checkbox" id="publishedToContractors" name="publishedToContractors" style="width:auto;">
+                        <label for="publishedToContractors" style="margin:0;"><?= sanitize('Publish to contractors (visible even without linking)'); ?></label>
+                    </div>
+                    <div class="field">
+                        <label for="titlePublic"><?= sanitize('Public Title (optional override)'); ?></label>
+                        <input id="titlePublic" name="titlePublic" placeholder="If empty, use tender title">
+                    </div>
+                    <div class="field">
+                        <label for="summaryPublic"><?= sanitize('Public Summary (contractor safe)'); ?></label>
+                        <textarea id="summaryPublic" name="summaryPublic" rows="3" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="requirementSetId"><?= sanitize('Official Requirement Set'); ?></label>
+                        <select id="requirementSetId" name="requirementSetId">
+                            <option value=""><?= sanitize('None'); ?></option>
+                            <?php foreach ($requirementSets as $set): ?>
+                                <option value="<?= sanitize($set['setId'] ?? ''); ?>"><?= sanitize(($set['name'] ?? $set['title'] ?? '') ?: ($set['setId'] ?? '')); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="muted" style="margin:4px 0 0;"><?= sanitize('Linked contractors can auto-apply this checklist.'); ?></p>
+                    </div>
+                    <div class="field">
+                        <label for="publicAttachments"><?= sanitize('Public Attachments (PDF/JPG/PNG)'); ?></label>
+                        <input id="publicAttachments" type="file" name="publicAttachments[]" multiple accept=".pdf,.jpg,.jpeg,.png">
+                        <p class="muted" style="margin:4px 0 0;"><?= sanitize('Uploaded files are shared with contractors via a safe download link.'); ?></p>
                     </div>
                 </div>
                 <button class="btn" type="submit"><?= sanitize('Save Tender'); ?></button>

@@ -119,6 +119,41 @@ function department_tenders_path(string $deptId): string
     return department_path($deptId) . '/tenders';
 }
 
+function department_public_tenders_path(string $deptId): string
+{
+    return department_path($deptId) . '/public_tenders';
+}
+
+function department_public_tenders_index_path(string $deptId): string
+{
+    return department_public_tenders_path($deptId) . '/index.json';
+}
+
+function department_public_tender_snapshot_path(string $deptId, string $ytdId): string
+{
+    return department_public_tenders_path($deptId) . '/' . $ytdId . '.json';
+}
+
+function department_public_tender_attachment_dir(string $deptId, string $ytdId): string
+{
+    return department_public_tenders_path($deptId) . '/files/' . $ytdId;
+}
+
+function department_requirement_sets_path_v2(string $deptId): string
+{
+    return department_path($deptId) . '/requirement_sets';
+}
+
+function department_requirement_sets_index_path(string $deptId): string
+{
+    return department_requirement_sets_path_v2($deptId) . '/index.json';
+}
+
+function department_requirement_set_path(string $deptId, string $setId): string
+{
+    return department_requirement_sets_path_v2($deptId) . '/' . $setId . '.json';
+}
+
 function department_workorders_path(string $deptId): string
 {
     return department_path($deptId) . '/workorders';
@@ -438,6 +473,8 @@ function ensure_department_env(string $deptId): void
         department_tenders_path($deptId),
         department_workorders_path($deptId),
         department_requirements_path($deptId),
+        department_requirement_sets_path_v2($deptId),
+        department_public_tenders_path($deptId),
         department_dak_path($deptId),
         dirname(department_audit_log_path($deptId)),
         department_path($deptId) . '/contractor_requests',
@@ -465,6 +502,14 @@ function ensure_department_env(string $deptId): void
 
     if (!file_exists(department_requirements_path($deptId) . '/sets.json')) {
         writeJsonAtomic(department_requirements_path($deptId) . '/sets.json', []);
+    }
+
+    if (!file_exists(department_requirement_sets_index_path($deptId))) {
+        writeJsonAtomic(department_requirement_sets_index_path($deptId), []);
+    }
+
+    if (!file_exists(department_public_tenders_index_path($deptId))) {
+        writeJsonAtomic(department_public_tenders_index_path($deptId), []);
     }
 
     if (!file_exists(department_dak_path($deptId) . '/index.json')) {
@@ -1182,6 +1227,173 @@ function load_department_published_tenders(string $deptId): array
     return $visible;
 }
 
+function public_tender_index(string $deptId): array
+{
+    ensure_department_env($deptId);
+    $index = readJson(department_public_tenders_index_path($deptId));
+    return is_array($index) ? array_values($index) : [];
+}
+
+function save_public_tender_index(string $deptId, array $entries): void
+{
+    ensure_department_env($deptId);
+    writeJsonAtomic(department_public_tenders_index_path($deptId), array_values($entries));
+}
+
+function sanitize_public_attachment(string $deptId, string $ytdId, array $file): ?array
+{
+    $name = trim((string)($file['name'] ?? ''));
+    $storedPath = trim((string)($file['storedPath'] ?? ''));
+    $mime = trim((string)($file['mime'] ?? ''));
+    $size = (int)($file['size'] ?? 0);
+    if ($name === '' || $storedPath === '') {
+        return null;
+    }
+
+    $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $name);
+    $safePath = preg_replace('/[^a-zA-Z0-9._\\/-]/', '_', $storedPath);
+    return [
+        'name' => $safeName,
+        'storedPath' => $safePath,
+        'mime' => $mime !== '' ? $mime : 'application/octet-stream',
+        'size' => max(0, $size),
+        'deptId' => $deptId,
+        'ytdId' => $ytdId,
+    ];
+}
+
+function save_public_attachments(string $deptId, string $ytdId, array $files, array $existing = []): array
+{
+    $attachments = array_values($existing);
+    $destDir = department_public_tender_attachment_dir($deptId, $ytdId);
+    if (!is_dir($destDir)) {
+        mkdir($destDir, 0775, true);
+    }
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $count = is_array($files['name'] ?? null) ? count($files['name']) : 0;
+    for ($i = 0; $i < $count; $i++) {
+        if (($files['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            continue;
+        }
+        $original = $files['name'][$i] ?? ('file_' . $i);
+        $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($original));
+        if ($safeName === '' || $safeName === '.' || $safeName === '..') {
+            $safeName = 'public_' . $i . '.bin';
+        }
+        $tmpPath = $files['tmp_name'][$i] ?? null;
+        if (!$tmpPath || !file_exists($tmpPath)) {
+            continue;
+        }
+        $mime = $finfo->file($tmpPath) ?: 'application/octet-stream';
+        $size = (int)($files['size'][$i] ?? 0);
+        $destPath = $destDir . '/' . $safeName;
+        if (!move_uploaded_file($tmpPath, $destPath)) {
+            continue;
+        }
+        $attachments[] = [
+            'name' => $safeName,
+            'storedPath' => 'files/' . $ytdId . '/' . $safeName,
+            'mime' => $mime,
+            'size' => $size,
+            'deptId' => $deptId,
+            'ytdId' => $ytdId,
+        ];
+    }
+    return $attachments;
+}
+
+function build_public_tender_snapshot(array $department, array $tender, array $requirementSets, array $attachmentsPublic): array
+{
+    $deptId = $department['deptId'] ?? '';
+    $ytdId = $tender['id'] ?? '';
+    $title = $tender['contractorVisibleSummary']['titlePublic'] ?? $tender['title'] ?? $ytdId;
+    $summaryPublic = $tender['contractorVisibleSummary']['summaryPublic'] ?? '';
+    $snapshot = [
+        'deptId' => $deptId,
+        'deptPublic' => [
+            'nameEn' => $department['nameEn'] ?? $deptId,
+            'district' => $department['district'] ?? '',
+            'deptId' => $deptId,
+        ],
+        'ytdId' => $ytdId,
+        'title' => $title,
+        'tenderNumber' => $tender['tenderNumberFormat']['prefix'] ?? '',
+        'publishedAt' => $tender['publishedAt'] ?? now_kolkata()->format(DateTime::ATOM),
+        'submissionDeadline' => $tender['dates']['submission'] ?? null,
+        'openingDate' => $tender['dates']['opening'] ?? null,
+        'completionMonths' => $tender['completionMonths'] ?? null,
+        'emd' => $tender['emdText'] ?? '',
+        'tenderFee' => $tender['tenderFee'] ?? '',
+        'summaryPublic' => $summaryPublic,
+        'attachmentsPublic' => $attachmentsPublic,
+        'requirementSetId' => $tender['requirementSetId'] ?? null,
+    ];
+    return $snapshot;
+}
+
+function write_public_tender_snapshot(array $department, array $tender, array $requirementSets, array $attachmentsPublic): void
+{
+    $deptId = $department['deptId'] ?? '';
+    $ytdId = $tender['id'] ?? '';
+    if ($deptId === '' || $ytdId === '') {
+        return;
+    }
+    $snapshot = build_public_tender_snapshot($department, $tender, $requirementSets, $attachmentsPublic);
+    $path = department_public_tender_snapshot_path($deptId, $ytdId);
+    writeJsonAtomic($path, $snapshot);
+
+    $index = public_tender_index($deptId);
+    $found = false;
+    foreach ($index as &$entry) {
+        if (($entry['ytdId'] ?? '') === $ytdId) {
+            $entry = [
+                'deptId' => $deptId,
+                'ytdId' => $ytdId,
+                'title' => $snapshot['title'],
+                'submissionDeadline' => $snapshot['submissionDeadline'],
+                'publishedAt' => $snapshot['publishedAt'],
+            ];
+            $found = true;
+            break;
+        }
+    }
+    unset($entry);
+    if (!$found) {
+        $index[] = [
+            'deptId' => $deptId,
+            'ytdId' => $ytdId,
+            'title' => $snapshot['title'],
+            'submissionDeadline' => $snapshot['submissionDeadline'],
+            'publishedAt' => $snapshot['publishedAt'],
+        ];
+    }
+    save_public_tender_index($deptId, $index);
+}
+
+function remove_public_tender_snapshot(string $deptId, string $ytdId): void
+{
+    $path = department_public_tender_snapshot_path($deptId, $ytdId);
+    if (file_exists($path)) {
+        unlink($path);
+    }
+    $index = public_tender_index($deptId);
+    $index = array_values(array_filter($index, fn($entry) => ($entry['ytdId'] ?? '') !== $ytdId));
+    save_public_tender_index($deptId, $index);
+}
+
+function load_public_tender_snapshot(string $deptId, string $ytdId): ?array
+{
+    $path = department_public_tender_snapshot_path($deptId, $ytdId);
+    if (!file_exists($path)) {
+        return null;
+    }
+    $data = readJson($path);
+    if (!$data) {
+        return null;
+    }
+    return $data;
+}
+
 function save_department_tenders(string $deptId, array $records): void
 {
     ensure_tender_index($deptId);
@@ -1209,6 +1421,16 @@ function save_department_tender(string $deptId, array $tender): void
     ensure_tender_index($deptId);
     if (empty($tender['id'])) {
         $tender['id'] = generate_ytd_id($deptId);
+    }
+    if (!array_key_exists('requirementSetId', $tender)) {
+        $tender['requirementSetId'] = null;
+    }
+    if (!array_key_exists('contractorVisibleSummary', $tender) || !is_array($tender['contractorVisibleSummary'])) {
+        $tender['contractorVisibleSummary'] = [
+            'titlePublic' => null,
+            'summaryPublic' => '',
+            'attachmentsPublic' => [],
+        ];
     }
     if (!array_key_exists('publishedToContractors', $tender)) {
         $tender['publishedToContractors'] = false;
@@ -1271,6 +1493,20 @@ function load_department_tender(string $deptId, string $tenderId): ?array
     $data = readJson($path);
     if (!$data) {
         return null;
+    }
+    if (!array_key_exists('requirementSetId', $data)) {
+        $data['requirementSetId'] = null;
+    }
+    if (!array_key_exists('contractorVisibleSummary', $data) || !is_array($data['contractorVisibleSummary'])) {
+        $data['contractorVisibleSummary'] = [
+            'titlePublic' => null,
+            'summaryPublic' => '',
+            'attachmentsPublic' => [],
+        ];
+    } else {
+        if (!array_key_exists('attachmentsPublic', $data['contractorVisibleSummary']) || !is_array($data['contractorVisibleSummary']['attachmentsPublic'])) {
+            $data['contractorVisibleSummary']['attachmentsPublic'] = [];
+        }
     }
     if (!array_key_exists('publishedToContractors', $data)) {
         $data['publishedToContractors'] = false;
@@ -1355,27 +1591,83 @@ function load_department_workorder(string $deptId, string $woId): ?array
 function load_requirement_sets(string $deptId): array
 {
     ensure_department_env($deptId);
-    $path = department_requirements_path($deptId) . '/sets.json';
-    $sets = readJson($path);
-    return is_array($sets) ? array_values($sets) : [];
+    $index = readJson(department_requirement_sets_index_path($deptId));
+    $index = is_array($index) ? array_values($index) : [];
+    $sets = [];
+    foreach ($index as $meta) {
+        $setId = $meta['setId'] ?? '';
+        if ($setId === '') {
+            continue;
+        }
+        $path = department_requirement_set_path($deptId, $setId);
+        $record = readJson($path);
+        if (!$record) {
+            continue;
+        }
+        $record['setId'] = $setId;
+        if (!array_key_exists('visibleToContractors', $record)) {
+            $record['visibleToContractors'] = true;
+        }
+        if (!array_key_exists('items', $record) || !is_array($record['items'])) {
+            $record['items'] = [];
+        }
+        $sets[] = $record;
+    }
+
+    return $sets;
 }
 
 function save_requirement_sets(string $deptId, array $sets): void
 {
     ensure_department_env($deptId);
-    $path = department_requirements_path($deptId) . '/sets.json';
-    writeJsonAtomic($path, array_values($sets));
+    $index = [];
+    foreach ($sets as $set) {
+        if (empty($set['setId'])) {
+            continue;
+        }
+        $path = department_requirement_set_path($deptId, $set['setId']);
+        writeJsonAtomic($path, $set);
+        $index[] = [
+            'setId' => $set['setId'],
+            'name' => $set['name'] ?? ($set['title'] ?? $set['setId']),
+            'visibleToContractors' => !empty($set['visibleToContractors']),
+            'updatedAt' => $set['updatedAt'] ?? now_kolkata()->format(DateTime::ATOM),
+        ];
+    }
+    writeJsonAtomic(department_requirement_sets_index_path($deptId), array_values($index));
 }
 
 function create_requirement_set(string $deptId, string $title, array $items): array
 {
     $sets = load_requirement_sets($deptId);
+    $setId = 'REQ-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+    $normalizedItems = [];
+    foreach ($items as $idx => $item) {
+        $titleItem = is_array($item) ? trim((string)($item['title'] ?? '')) : trim((string)$item);
+        if ($titleItem === '') {
+            continue;
+        }
+        $normalizedItems[] = [
+            'key' => 'REQITEM-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => $titleItem,
+            'description' => is_array($item) ? trim((string)($item['description'] ?? '')) : '',
+            'required' => (bool)($item['required'] ?? true),
+            'category' => is_array($item) ? trim((string)($item['category'] ?? '')) : '',
+        ];
+        if ($idx >= 200) {
+            break;
+        }
+    }
+
+    $now = now_kolkata()->format(DateTime::ATOM);
     $set = [
-        'setId' => 'REQ-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
-        'title' => $title,
-        'items' => array_values(array_map('trim', $items)),
-        'createdAt' => now_kolkata()->format(DateTime::ATOM),
-        'updatedAt' => now_kolkata()->format(DateTime::ATOM),
+        'setId' => $setId,
+        'name' => $title,
+        'description' => '',
+        'visibleToContractors' => true,
+        'items' => $normalizedItems,
+        'createdAt' => $now,
+        'updatedAt' => $now,
     ];
     $sets[] = $set;
     save_requirement_sets($deptId, $sets);
@@ -1388,8 +1680,28 @@ function update_requirement_set(string $deptId, string $setId, string $title, ar
     $found = false;
     foreach ($sets as &$set) {
         if (($set['setId'] ?? '') === $setId) {
+            $normalizedItems = [];
+            foreach ($items as $idx => $item) {
+                $titleItem = is_array($item) ? trim((string)($item['title'] ?? '')) : trim((string)$item);
+                if ($titleItem === '') {
+                    continue;
+                }
+                $normalizedItems[] = [
+                    'key' => $item['key'] ?? ('REQITEM-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6))),
+                    'title' => $titleItem,
+                    'description' => is_array($item) ? trim((string)($item['description'] ?? '')) : '',
+                    'required' => (bool)($item['required'] ?? true),
+                    'category' => is_array($item) ? trim((string)($item['category'] ?? '')) : '',
+                ];
+                if ($idx >= 200) {
+                    break;
+                }
+            }
+
+            $set['name'] = $title;
             $set['title'] = $title;
-            $set['items'] = array_values(array_map('trim', $items));
+            $set['items'] = $normalizedItems;
+            $set['visibleToContractors'] = !empty($set['visibleToContractors']);
             $set['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
             $found = true;
             break;
@@ -1400,6 +1712,28 @@ function update_requirement_set(string $deptId, string $setId, string $title, ar
         save_requirement_sets($deptId, $sets);
     }
     return $found;
+}
+
+function delete_requirement_set(string $deptId, string $setId): bool
+{
+    $sets = load_requirement_sets($deptId);
+    $filtered = [];
+    $deleted = false;
+    foreach ($sets as $set) {
+        if (($set['setId'] ?? '') === $setId) {
+            $deleted = true;
+            continue;
+        }
+        $filtered[] = $set;
+    }
+    if ($deleted) {
+        $setPath = department_requirement_set_path($deptId, $setId);
+        if (file_exists($setPath)) {
+            unlink($setPath);
+        }
+        save_requirement_sets($deptId, $filtered);
+    }
+    return $deleted;
 }
 
 function load_dak_index(string $deptId): array
