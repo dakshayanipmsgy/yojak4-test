@@ -36,11 +36,12 @@ safe_page(function () {
             <?php if ($tempDisplay): ?>
                 <div class="card" style="margin-bottom:12px;border-color:var(--primary);">
                     <h3 style="margin-top:0;"><?= sanitize('Temporary password generated'); ?></h3>
-                    <p class="muted" style="margin:4px 0 10px;"><?= sanitize('Share securely. User must reset on first login.'); ?></p>
+                    <p class="muted" style="margin:4px 0 10px;"><?= sanitize('Share securely. Must reset on first login.'); ?></p>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
                         <input id="tempPw" value="<?= sanitize($tempDisplay['password'] ?? ''); ?>" readonly style="flex:1;min-width:220px;">
                         <button class="btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('tempPw').value)"><?= sanitize('Copy'); ?></button>
                     </div>
+                    <div class="pill" style="margin-top:8px;background:#c084fc22;border-color:#c084fc;"><?= sanitize('Must reset on first login'); ?></div>
                     <div class="pill" style="margin-top:8px;"><?= sanitize('Request ' . ($tempDisplay['requestId'] ?? '')); ?></div>
                     <?php if (!empty($tempDisplay['user'] ?? '')): ?>
                         <div class="pill" style="margin-top:8px;background:#1f6feb22;border-color:#1f6feb;"><?= sanitize($tempDisplay['user']); ?></div>
@@ -76,6 +77,9 @@ safe_page(function () {
                                     <?php else: ?>
                                         <div><?= sanitize($req['fullUserId'] ?? $req['adminUserId'] ?? ''); ?></div>
                                         <div class="muted"><?= sanitize('Dept: ' . ($req['deptId'] ?? '')); ?></div>
+                                        <?php if (!empty($req['resolvedAdminUserId'])): ?>
+                                            <div class="pill" style="margin-top:6px;background:#1f6feb22;border-color:#1f6feb;"><?= sanitize('Resolved: ' . $req['resolvedAdminUserId']); ?></div>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                 </td>
                                 <td>
