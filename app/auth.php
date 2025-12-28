@@ -45,6 +45,47 @@ function rate_limit_key(string $loginId): string
     return hash('sha256', $ip . '|' . $ua . '|' . normalize_login_identifier($loginId));
 }
 
+function password_reset_rate_limit_path(string $key): string
+{
+    return DATA_PATH . '/security/password_resets/ratelimits/' . $key . '.json';
+}
+
+function password_reset_rate_limit_state(string $key): array
+{
+    $path = password_reset_rate_limit_path($key);
+    $state = readJson($path);
+    if (!isset($state['attempts'])) {
+        $state['attempts'] = [];
+    }
+    return $state;
+}
+
+function password_reset_rate_limit_allowed(string $key, int $windowSeconds, int $maxAttempts): bool
+{
+    $state = password_reset_rate_limit_state($key);
+    $now = time();
+    $state['attempts'] = array_values(array_filter(
+        $state['attempts'],
+        fn($timestamp) => ($now - (int)$timestamp) <= $windowSeconds
+    ));
+    writeJsonAtomic(password_reset_rate_limit_path($key), $state);
+    return count($state['attempts']) < $maxAttempts;
+}
+
+function password_reset_rate_limit_record(string $key, int $windowSeconds, int $maxAttempts): void
+{
+    $state = password_reset_rate_limit_state($key);
+    $now = time();
+    $state['attempts'] = array_values(array_filter(
+        $state['attempts'],
+        fn($timestamp) => ($now - (int)$timestamp) <= $windowSeconds
+    ));
+    if (count($state['attempts']) < $maxAttempts) {
+        $state['attempts'][] = $now;
+    }
+    writeJsonAtomic(password_reset_rate_limit_path($key), $state);
+}
+
 function fetch_rate_limit_state(string $key): array
 {
     $path = DATA_PATH . '/security/ratelimits/' . $key . '.json';

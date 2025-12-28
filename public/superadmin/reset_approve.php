@@ -25,6 +25,58 @@ safe_page(function () {
         redirect('/superadmin/reset_requests.php');
     }
 
+    $now = now_kolkata()->format(DateTime::ATOM);
+    $decider = $actor['username'] ?? ($actor['empId'] ?? 'system');
+
+    if (($request['userType'] ?? 'dept_admin') === 'contractor') {
+        $contractor = null;
+        if (!empty($request['yojId'])) {
+            $contractor = load_contractor($request['yojId']);
+        }
+        if (!$contractor) {
+            $contractor = find_contractor_by_mobile($request['mobile'] ?? '');
+        }
+        if (!$contractor) {
+            set_flash('error', 'Contractor not found.');
+            redirect('/superadmin/reset_requests.php');
+        }
+        $tempPassword = generate_temp_password(12);
+        $contractor['passwordHash'] = password_hash($tempPassword, PASSWORD_DEFAULT);
+        $contractor['mustResetPassword'] = true;
+        $contractor['lastPasswordResetAt'] = $now;
+        $contractor['passwordResetBy'] = 'superadmin';
+        save_contractor($contractor);
+
+        $request['status'] = 'approved';
+        $request['decidedAt'] = $now;
+        $request['decidedBy'] = $decider;
+        $request['updatedAt'] = $now;
+        $request['tempPasswordHash'] = $contractor['passwordHash'];
+        $request['tempPasswordIssuedAt'] = $now;
+        $request['tempPasswordDelivery'] = 'show_once';
+        save_password_reset_request($request);
+
+        logEvent(DATA_PATH . '/logs/superadmin.log', [
+            'event' => 'contractor_reset_approved',
+            'requestId' => $requestId,
+            'yojId' => $contractor['yojId'] ?? null,
+            'decidedBy' => $decider,
+        ]);
+        logEvent(DATA_PATH . '/logs/reset.log', [
+            'event' => 'contractor_reset_approved',
+            'requestId' => $requestId,
+            'mobile' => $contractor['mobile'] ?? null,
+            'decidedBy' => $decider,
+        ]);
+        $_SESSION['temp_password_once'] = [
+            'requestId' => $requestId,
+            'password' => $tempPassword,
+            'mobile' => $contractor['mobile'] ?? '',
+        ];
+        set_flash('success', 'Reset approved. Temporary password generated.');
+        redirect('/superadmin/reset_requests.php');
+    }
+
     $deptId = $request['deptId'] ?? '';
     $fullUserId = $request['fullUserId'] ?? '';
     $tempPassword = 'Temp' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 6)) . '!';
@@ -37,9 +89,9 @@ safe_page(function () {
         redirect('/superadmin/reset_requests.php');
     }
 
-    update_password_reset_status($requestId, 'approved', $actor['username'] ?? ($actor['empId'] ?? 'system'));
+    update_password_reset_status($requestId, 'approved', $decider);
     append_department_audit($deptId, [
-        'by' => $actor['username'] ?? ($actor['empId'] ?? 'system'),
+        'by' => $decider,
         'action' => 'password_reset_approved',
         'meta' => ['requestId' => $requestId, 'fullUserId' => $fullUserId],
     ]);
@@ -49,7 +101,7 @@ safe_page(function () {
         'deptId' => $deptId,
         'fullUserId' => $fullUserId,
         'requestId' => $requestId,
-        'decidedBy' => $actor['username'] ?? ($actor['empId'] ?? 'system'),
+        'decidedBy' => $decider,
     ]);
 
     set_flash('success', 'Reset approved. Temporary password: ' . $tempPassword . ' (force change on next login).');

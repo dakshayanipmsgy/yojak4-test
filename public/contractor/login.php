@@ -80,6 +80,7 @@ safe_page(function () {
                 </div>
                 <button class="btn" type="submit"><?= sanitize(t('login')); ?></button>
                 <a class="btn secondary" href="/contractor/signup.php"><?= sanitize('Create account'); ?></a>
+                <a class="btn secondary" href="/contractor/forgot_password.php"><?= sanitize('Forgot password'); ?></a>
             </form>
         </div>
         <?php

@@ -1046,7 +1046,17 @@ function load_all_password_reset_requests(): array
 {
     ensure_password_reset_index();
     $requests = readJson(password_reset_index_path());
-    return is_array($requests) ? array_values($requests) : [];
+    $requests = is_array($requests) ? array_values($requests) : [];
+
+    return array_map(function ($req) {
+        if (!isset($req['userType'])) {
+            $req['userType'] = 'dept_admin';
+        }
+        if (!array_key_exists('updatedAt', $req)) {
+            $req['updatedAt'] = $req['requestedAt'] ?? now_kolkata()->format(DateTime::ATOM);
+        }
+        return $req;
+    }, $requests);
 }
 
 function save_all_password_reset_requests(array $requests): void
@@ -1091,8 +1101,10 @@ function add_password_reset_request(string $deptId, string $fullUserId, string $
         'status' => 'pending',
         'requestedBy' => $requestedBy,
         'requestedAt' => now_kolkata()->format(DateTime::ATOM),
+        'updatedAt' => now_kolkata()->format(DateTime::ATOM),
         'decidedAt' => null,
         'decidedBy' => null,
+        'userType' => 'dept_admin',
     ];
     $requests[] = $req;
     save_all_password_reset_requests($requests);
@@ -1108,6 +1120,7 @@ function update_password_reset_status(string $requestId, string $status, string 
             $req['status'] = $status;
             $req['decidedAt'] = now_kolkata()->format(DateTime::ATOM);
             $req['decidedBy'] = $decidedBy;
+            $req['updatedAt'] = $req['decidedAt'];
             $updated = $req;
             break;
         }
@@ -1117,6 +1130,77 @@ function update_password_reset_status(string $requestId, string $status, string 
         save_all_password_reset_requests($requests);
     }
     return $updated;
+}
+
+function save_password_reset_request(array $request): void
+{
+    $requests = load_all_password_reset_requests();
+    $found = false;
+    foreach ($requests as &$req) {
+        if (($req['requestId'] ?? '') === ($request['requestId'] ?? '')) {
+            $req = $request;
+            $found = true;
+            break;
+        }
+    }
+    unset($req);
+    if (!$found) {
+        $requests[] = $request;
+    }
+    save_all_password_reset_requests($requests);
+}
+
+function add_contractor_password_reset_request(string $mobile, ?string $yojId, string $requesterIp, string $userAgent): array
+{
+    ensure_contractors_root();
+    ensure_password_reset_index();
+    $requests = load_all_password_reset_requests();
+    $normalizedMobile = normalize_mobile($mobile);
+    $now = now_kolkata();
+
+    $recentPending = array_values(array_filter(
+        $requests,
+        function ($req) use ($normalizedMobile, $now) {
+            if (($req['userType'] ?? '') !== 'contractor') {
+                return false;
+            }
+            if (($req['mobile'] ?? '') !== $normalizedMobile) {
+                return false;
+            }
+            if (($req['status'] ?? '') !== 'pending') {
+                return false;
+            }
+            $created = isset($req['createdAt']) ? strtotime((string)$req['createdAt']) : 0;
+            return ($now->getTimestamp() - $created) <= 900;
+        }
+    ));
+    if ($recentPending) {
+        return $recentPending[0];
+    }
+
+    $requestId = 'PR-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 6));
+    $createdAt = $now->format(DateTime::ATOM);
+    $request = [
+        'requestId' => $requestId,
+        'userType' => 'contractor',
+        'status' => 'pending',
+        'createdAt' => $createdAt,
+        'updatedAt' => $createdAt,
+        'requesterIp' => $requesterIp,
+        'requesterUaHash' => hash('sha256', $userAgent),
+        'mobile' => $normalizedMobile,
+        'yojId' => $yojId,
+        'decidedAt' => null,
+        'decidedBy' => null,
+        'decisionNote' => null,
+        'tempPasswordHash' => null,
+        'tempPasswordIssuedAt' => null,
+        'tempPasswordDelivery' => 'show_once',
+    ];
+
+    $requests[] = $request;
+    save_all_password_reset_requests($requests);
+    return $request;
 }
 
 function department_health_scan(string $deptId): array

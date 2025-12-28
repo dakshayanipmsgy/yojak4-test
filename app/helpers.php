@@ -25,6 +25,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/sessions',
         DATA_PATH . '/security/ratelimits',
         DATA_PATH . '/security/password_resets',
+        DATA_PATH . '/security/password_resets/ratelimits',
         DATA_PATH . '/staff/employees',
         DATA_PATH . '/backups',
         DATA_PATH . '/logs',
@@ -99,6 +100,7 @@ function ensure_data_structure(): void
 
     $logFiles = [
         DATA_PATH . '/logs/superadmin.log',
+        DATA_PATH . '/logs/auth.log',
         DATA_PATH . '/logs/backup.log',
         DATA_PATH . '/logs/reset.log',
         DATA_PATH . '/logs/tender_discovery.log',
@@ -224,6 +226,39 @@ function now_kolkata(): DateTimeImmutable
 function sanitize(string $value): string
 {
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+function mask_ip(string $ip): string
+{
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $parts = explode('.', $ip);
+        if (count($parts) === 4) {
+            $parts[3] = 'xxx';
+            return implode('.', $parts);
+        }
+    }
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        return substr($ip, 0, 6) . '::xxxx';
+    }
+    return $ip !== '' ? 'masked' : 'unknown';
+}
+
+function generate_temp_password(int $length = 12): string
+{
+    $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    $lower = 'abcdefghjkmnpqrstuvwxyz';
+    $digits = '23456789';
+    $all = $upper . $lower . $digits;
+
+    $password = $upper[random_int(0, strlen($upper) - 1)]
+        . $lower[random_int(0, strlen($lower) - 1)]
+        . $digits[random_int(0, strlen($digits) - 1)];
+
+    while (strlen($password) < $length) {
+        $password .= $all[random_int(0, strlen($all) - 1)];
+    }
+
+    return str_shuffle($password);
 }
 
 function redirect(string $path): void
