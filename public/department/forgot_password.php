@@ -6,115 +6,90 @@ safe_page(function () {
     $title = get_app_config()['appName'] . ' | Department Forgot Password';
     $errors = [];
     $deptId = '';
+    $loginId = '';
     $contact = '';
-    $successMessage = 'If the department exists, a reset request has been sent for approval.';
+    $message = '';
+    $successMessage = 'If the account exists, your reset request was received. Superadmin will review it.';
     $showInfo = true;
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_csrf();
-        $deptId = normalize_dept_id((string)($_POST['deptId'] ?? ''));
-        $contact = trim((string)($_POST['contact'] ?? ''));
+        $deptId = strtolower(trim($_POST['deptId'] ?? ''));
+        $loginId = strtolower(trim($_POST['loginId'] ?? ''));
+        $contact = trim($_POST['contact'] ?? '');
+        $message = trim($_POST['message'] ?? '');
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
-        $uaHash = hash('sha256', $ua);
 
         if (!is_valid_dept_id($deptId)) {
             $errors[] = 'Enter a valid department ID.';
         }
-
-        $deviceKey = 'dept_admin_reset_device_' . hash('sha256', ($ip ?? '') . '|' . $ua);
-        $deptKey = 'dept_admin_reset_' . $deptId . '_' . hash('sha256', ($ip ?? '') . '|' . $ua);
-        $deviceAllowed = password_reset_rate_limit_allowed($deviceKey, 86400, 3);
-        $deptAllowed = password_reset_rate_limit_allowed($deptKey, 86400, 3);
-        if (!$deviceAllowed || !$deptAllowed) {
-            $errors[] = 'Too many reset requests. Please try again tomorrow.';
+        if ($loginId === '') {
+            $errors[] = 'Login ID is required.';
         }
 
-        $requestId = null;
-        $resolvedAdminUserId = null;
-        $result = 'validation_failed';
+        $deviceKey = 'device_' . hash('sha256', ($ip ?? '') . '|' . $ua);
+        $deptKey = 'dept_' . $deptId . '_' . hash('sha256', $ip . '|' . $ua);
+        $deviceAllowed = password_reset_rate_limit_allowed($deviceKey, 86400, 8);
+        $deptAllowed = password_reset_rate_limit_allowed($deptKey, 86400, 5);
+        if (!$deviceAllowed || !$deptAllowed) {
+            $errors[] = 'Too many reset requests. Please try again later.';
+        }
+
+        $fullUserId = $loginId;
+        if (!str_contains($fullUserId, '.')) {
+            $fullUserId = $loginId . '.admin.' . $deptId;
+        }
+        $parsed = parse_department_login_identifier($fullUserId);
+        if (!$parsed || ($parsed['roleId'] ?? '') !== 'admin' || ($parsed['deptId'] ?? '') !== $deptId) {
+            $errors[] = 'Invalid admin login ID.';
+        }
 
         if (!$errors) {
-            $department = load_department($deptId);
-            if (!$department) {
-                $result = 'department_missing';
+            $record = load_active_department_user($parsed['fullUserId']);
+            $exists = $record && ($record['type'] ?? '') === 'department' && ($record['roleId'] ?? '') === 'admin';
+            if ($exists) {
+                add_password_reset_request(
+                    $deptId,
+                    $parsed['fullUserId'],
+                    'self_service',
+                    $contact !== '' ? $contact : null,
+                    $message !== '' ? $message : null,
+                    $ip,
+                    $ua
+                );
+                logEvent(DATA_PATH . '/logs/auth.log', [
+                    'event' => 'dept_admin_password_reset_requested',
+                    'deptId' => $deptId,
+                    'adminUserId' => $parsed['fullUserId'],
+                    'ip' => $ip,
+                ]);
             } else {
-                $resolvedAdminUserId = $department['activeAdminUserId'] ?? null;
-                if (!$resolvedAdminUserId) {
-                    $result = 'no_active_admin';
-                } else {
-                    $parsedAdmin = parse_department_login_identifier($resolvedAdminUserId);
-                    if (!$parsedAdmin || ($parsedAdmin['deptId'] ?? '') !== $deptId || ($parsedAdmin['roleId'] ?? '') !== 'admin') {
-                        $result = 'invalid_admin_pointer';
-                    } else {
-                        $adminRecord = load_active_department_user($resolvedAdminUserId);
-                        if (!$adminRecord || ($adminRecord['type'] ?? '') !== 'department' || ($adminRecord['roleId'] ?? '') !== 'admin') {
-                            $result = 'admin_record_missing';
-                        } else {
-                            $req = add_password_reset_request(
-                                $deptId,
-                                $resolvedAdminUserId,
-                                'dept_admin_portal',
-                                $contact !== '' ? $contact : null,
-                                null,
-                                $ip,
-                                $ua
-                            );
-                            $requestId = $req['requestId'] ?? null;
-                            $result = 'created';
-                        }
-                    }
-                }
+                logEvent(DATA_PATH . '/logs/auth.log', [
+                    'event' => 'dept_admin_password_reset_skipped',
+                    'deptId' => $deptId,
+                    'adminUserId' => $parsed['fullUserId'],
+                    'ip' => $ip,
+                    'reason' => 'not_found',
+                ]);
             }
-
-            password_reset_rate_limit_record($deviceKey, 86400, 3);
-            password_reset_rate_limit_record($deptKey, 86400, 3);
-
-            logEvent(DATA_PATH . '/logs/auth.log', [
-                'at' => now_kolkata()->format(DateTime::ATOM),
-                'event' => 'DEPT_ADMIN_RESET_REQUEST',
-                'deptId' => $deptId,
-                'resolvedAdminUserId' => $resolvedAdminUserId,
-                'requestId' => $requestId,
-                'result' => $result,
-                'requesterIp' => $ip,
-                'requesterUaHash' => $uaHash,
-            ]);
-
+            password_reset_rate_limit_record($deviceKey, 86400, 8);
+            password_reset_rate_limit_record($deptKey, 86400, 5);
             set_flash('success', $successMessage);
             redirect('/department/reset_requested.php');
-        } else {
-            logEvent(DATA_PATH . '/logs/auth.log', [
-                'at' => now_kolkata()->format(DateTime::ATOM),
-                'event' => 'DEPT_ADMIN_RESET_REQUEST',
-                'deptId' => $deptId,
-                'resolvedAdminUserId' => null,
-                'requestId' => null,
-                'result' => 'rate_limited_or_invalid',
-                'requesterIp' => $ip,
-                'requesterUaHash' => $uaHash,
-            ]);
         }
         $showInfo = false;
     }
 
-    $lang = get_language();
-    $languages = available_languages();
-
-    render_layout($title, function () use ($errors, $deptId, $successMessage, $showInfo, $contact, $lang, $languages) {
+    render_layout($title, function () use ($errors, $deptId, $loginId, $successMessage, $showInfo, $contact, $message) {
         ?>
         <div class="card">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-                <div style="flex:1;min-width:220px;">
-                    <h2 style="margin-bottom:6px;"><?= sanitize('Forgot Password (Department Admin)'); ?></h2>
-                    <p class="muted" style="margin:0;"><?= sanitize('Submit a secure reset request for the active department admin. Superadmin will review and approve.'); ?></p>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                <div>
+                    <h2 style="margin-bottom:6px;"><?= sanitize('Forgot Password'); ?></h2>
+                    <p class="muted" style="margin:0;"><?= sanitize('Send a reset request to superadmin.'); ?></p>
                 </div>
-                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                    <?php foreach ($languages as $code): ?>
-                        <a class="pill" style="padding:8px 10px;border-color: <?= $lang === $code ? 'var(--primary)' : '#30363d'; ?>; background: <?= $lang === $code ? '#1f6feb22' : '#111820'; ?>; color: <?= $lang === $code ? '#fff' : 'var(--muted)'; ?>" href="?lang=<?= sanitize($code); ?>"><?= sanitize($code === 'en' ? 'English' : 'हिन्दी'); ?></a>
-                    <?php endforeach; ?>
-                    <a class="btn secondary" href="/department/login.php"><?= sanitize('Back to Login'); ?></a>
-                </div>
+                <a class="btn secondary" href="/department/login.php"><?= sanitize('Back to Login'); ?></a>
             </div>
             <?php if ($errors): ?>
                 <div class="flashes" style="margin-top:12px;">
@@ -125,23 +100,26 @@ safe_page(function () {
             <?php elseif ($showInfo): ?>
                 <div class="flash" style="margin-top:12px;border-color:#30363d;"><?= sanitize($successMessage); ?></div>
             <?php endif; ?>
-            <form method="post" action="/department/forgot_password.php" style="margin-top:12px;display:grid;gap:12px;">
+            <form method="post" style="margin-top:12px;display:grid;gap:12px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                 <div class="field">
                     <label for="deptId"><?= sanitize('Department ID'); ?></label>
-                    <input id="deptId" name="deptId" value="<?= sanitize($deptId); ?>" required minlength="2" maxlength="12" pattern="[a-z0-9]{2,12}" placeholder="e.g., jhdpw">
-                    <p class="muted" style="margin:6px 0 0;font-size:0.9rem;"><?= sanitize('Enter lowercase letters or numbers only.'); ?></p>
+                    <input id="deptId" name="deptId" value="<?= sanitize($deptId); ?>" required minlength="3" maxlength="10" pattern="[a-z0-9]+">
                 </div>
                 <div class="field">
-                    <label for="contact"><?= sanitize('Contact number/email (optional)'); ?></label>
-                    <input id="contact" name="contact" value="<?= sanitize($contact ?? ''); ?>" placeholder="Share a phone or email for follow-up">
-                    <p class="muted" style="margin:6px 0 0;font-size:0.9rem;"><?= sanitize('We will share this with superadmin for verification.'); ?></p>
+                    <label for="loginId"><?= sanitize('Admin Login ID'); ?></label>
+                    <input id="loginId" name="loginId" value="<?= sanitize($loginId); ?>" required placeholder="user.admin.dept or user short id">
+                    <p class="muted" style="margin:6px 0 0;font-size:0.9rem;"><?= sanitize('Example: ramesh.admin.jhdpw'); ?></p>
                 </div>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-                    <button class="btn" type="submit"><?= sanitize('Submit Reset Request'); ?></button>
-                    <div class="pill" style="border-color:#30363d;"><?= sanitize('Requests are rate limited for your safety.'); ?></div>
+                <div class="field">
+                    <label for="contact"><?= sanitize('Contact (optional)'); ?></label>
+                    <input id="contact" name="contact" value="<?= sanitize($contact ?? ''); ?>" placeholder="Email or phone to reach you">
                 </div>
-                <p class="muted" style="margin:0;font-size:0.95rem;"><?= sanitize('For security, we never reveal whether a department exists. Approved requests receive a temporary password from superadmin.'); ?></p>
+                <div class="field">
+                    <label for="message"><?= sanitize('Message to Superadmin (optional)'); ?></label>
+                    <textarea id="message" name="message" rows="3" placeholder="Reason for reset or any note"><?= sanitize($message ?? ''); ?></textarea>
+                </div>
+                <button class="btn" type="submit"><?= sanitize('Submit Reset Request'); ?></button>
             </form>
         </div>
         <?php
