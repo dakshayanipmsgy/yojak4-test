@@ -45,6 +45,66 @@ function contractors_index(): array
     return is_array($index) ? array_values($index) : [];
 }
 
+function contractor_profile_defaults(): array
+{
+    return [
+        'firmName' => null,
+        'firmType' => null,
+        'addressLine1' => null,
+        'addressLine2' => null,
+        'district' => null,
+        'state' => null,
+        'pincode' => null,
+        'authorizedSignatoryName' => null,
+        'authorizedSignatoryDesignation' => null,
+        'mobile' => null,
+        'email' => null,
+        'gstNumber' => null,
+        'panNumber' => null,
+        'bankName' => null,
+        'bankAccount' => null,
+        'ifsc' => null,
+        'placeDefault' => null,
+    ];
+}
+
+function normalize_contractor_profile(array $contractor): array
+{
+    $defaults = contractor_profile_defaults();
+    foreach ($defaults as $key => $default) {
+        if (!array_key_exists($key, $contractor)) {
+            $contractor[$key] = $default;
+        }
+    }
+
+    if (empty($contractor['addressLine1']) && !empty($contractor['address'])) {
+        $contractor['addressLine1'] = $contractor['address'];
+    }
+
+    if (!isset($contractor['name']) && !empty($contractor['authorizedSignatoryName'])) {
+        $contractor['name'] = $contractor['authorizedSignatoryName'];
+    }
+
+    return $contractor;
+}
+
+function contractor_profile_address(array $contractor): string
+{
+    $parts = [];
+    foreach (['addressLine1', 'addressLine2', 'district', 'state', 'pincode'] as $field) {
+        $value = trim((string)($contractor[$field] ?? ''));
+        if ($value !== '') {
+            $parts[] = $value;
+        }
+    }
+
+    if (!$parts && !empty($contractor['address'])) {
+        $parts[] = $contractor['address'];
+    }
+
+    return trim(implode(', ', $parts));
+}
+
 function save_contractors_index(array $entries): void
 {
     writeJsonAtomic(contractors_index_path(), array_values($entries));
@@ -225,14 +285,28 @@ function approve_pending_contractor(string $signupId, string $actor): ?array
         'status' => 'approved',
         'name' => $pending['name'] ?? '',
         'firmName' => '',
+        'firmType' => '',
         'address' => '',
+        'addressLine1' => '',
+        'addressLine2' => '',
         'district' => '',
+        'state' => '',
+        'pincode' => '',
+        'authorizedSignatoryName' => $pending['name'] ?? '',
+        'authorizedSignatoryDesignation' => '',
+        'email' => '',
+        'gstNumber' => '',
+        'panNumber' => '',
+        'bankName' => '',
+        'bankAccount' => '',
+        'ifsc' => '',
+        'placeDefault' => '',
         'linkedDepartments' => [],
         'createdAt' => $pending['createdAt'] ?? $now,
         'approvedAt' => $now,
         'lastLoginAt' => null,
     ];
-
+    $contractor = normalize_contractor_profile($contractor);
     writeJsonAtomic($basePath . '/contractor.json', $contractor);
     writeJsonAtomic(contractors_vault_index_path($yojId), []);
 
@@ -309,7 +383,7 @@ function load_contractor(string $yojId): ?array
         $data['passwordResetBy'] = null;
     }
 
-    return $data;
+    return normalize_contractor_profile($data);
 }
 
 function find_contractor_by_mobile(string $mobile): ?array
@@ -328,6 +402,7 @@ function save_contractor(array $contractor): void
     if (empty($contractor['yojId'])) {
         throw new InvalidArgumentException('Missing contractor id.');
     }
+    $contractor = normalize_contractor_profile($contractor);
     if (!array_key_exists('mustResetPassword', $contractor)) {
         $contractor['mustResetPassword'] = false;
     }

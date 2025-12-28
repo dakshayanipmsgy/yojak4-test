@@ -14,18 +14,27 @@ safe_page(function () {
         render_error_page('Pack not found.');
         return;
     }
+    $contractor = load_contractor($yojId) ?? [];
+    $vaultFiles = contractor_vault_index($yojId);
+    $suggestions = pack_vault_suggestions($pack, $vaultFiles);
+    $mappings = [];
+    foreach ($pack['vaultMappings'] ?? [] as $map) {
+        if (!empty($map['checklistItemId'])) {
+            $mappings[$map['checklistItemId']] = $map;
+        }
+    }
 
     $progress = pack_progress_percent($pack);
     $stats = pack_stats($pack);
     $title = get_app_config()['appName'] . ' | ' . ($pack['title'] ?? 'Tender Pack');
     $signedToken = pack_signed_token($pack['packId'], $yojId);
 
-    render_layout($title, function () use ($pack, $progress, $stats, $signedToken) {
+    render_layout($title, function () use ($pack, $progress, $stats, $signedToken, $contractor, $suggestions, $mappings) {
         ?>
         <div class="card" style="display:grid; gap:10px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
                 <div>
-                    <h2 style="margin:0;"><?= sanitize($pack['title'] ?? 'Tender Pack'); ?></h2>
+                    <h2 style="margin:0;"><?= sanitize($pack['tenderTitle'] ?? $pack['title'] ?? 'Tender Pack'); ?></h2>
                     <p class="muted" style="margin:4px 0 0;">
                         <?= sanitize($pack['packId']); ?> • <?= sanitize($pack['status'] ?? 'Pending'); ?>
                         <?php if (!empty($pack['sourceTender']['id'])): ?>
@@ -55,7 +64,7 @@ safe_page(function () {
                 </div>
                 <div class="buttons" style="gap:8px;">
                     <a class="btn secondary" href="/contractor/packs.php"><?= sanitize('Back to packs'); ?></a>
-                    <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>" target="_blank" rel="noopener"><?= sanitize('Print index'); ?></a>
+                    <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=full" target="_blank" rel="noopener"><?= sanitize('Print pack'); ?></a>
                     <a class="btn" href="/contractor/pack_export_zip.php?packId=<?= sanitize($pack['packId']); ?>&token=<?= sanitize($signedToken); ?>"><?= sanitize('Export ZIP'); ?></a>
                 </div>
             </div>
@@ -96,6 +105,11 @@ safe_page(function () {
                                     <strong><?= sanitize($item['title'] ?? ''); ?></strong>
                                     <div class="muted" style="margin-top:4px;"><?= sanitize($item['description'] ?? ''); ?></div>
                                     <div class="pill" style="margin-top:6px;"><?= !empty($item['required']) ? sanitize('Required') : sanitize('Optional'); ?></div>
+                                    <?php if (!empty($mappings[$item['itemId']] ?? null)): ?>
+                                        <div class="pill" style="margin-top:6px; border-color:#1f6feb; color:#9cc4ff;">
+                                            <?= sanitize('Mapped: ' . (($mappings[$item['itemId']]['fileTitle'] ?? 'Vault doc')) . ' (' . ($mappings[$item['itemId']]['suggestedVaultDocId'] ?? '') . ')'); ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                                 <select name="statuses[<?= sanitize($item['itemId']); ?>]" class="pill" style="min-width:140px;" form="status-form">
                                     <?php foreach (['pending','uploaded','generated','done'] as $status): ?>
@@ -123,21 +137,39 @@ safe_page(function () {
                 </div>
             </div>
             <div class="card" style="display:grid; gap:12px;">
-                <h3 style="margin:0;"><?= sanitize('Generate letters'); ?></h3>
-                <p class="muted" style="margin:0;">Simple placeholders. Regenerate anytime.</p>
-                <form method="post" action="/contractor/pack_generate_docs.php" style="display:grid; gap:10px;">
+                <div>
+                    <h3 style="margin:0;"><?= sanitize('Templates & letters'); ?></h3>
+                    <p class="muted" style="margin:0;">Auto-filled using your contractor profile. Regenerate to refresh details.</p>
+                </div>
+                <form method="post" action="/contractor/pack_generate_templates.php" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                     <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
-                    <label class="pill" style="display:inline-flex; gap:6px; align-items:center;">
-                        <input type="checkbox" name="docs[]" value="cover" checked> <?= sanitize('Cover letter'); ?>
-                    </label>
-                    <label class="pill" style="display:inline-flex; gap:6px; align-items:center;">
-                        <input type="checkbox" name="docs[]" value="undertaking"> <?= sanitize('Undertaking/Declaration'); ?>
-                    </label>
-                    <button class="btn" type="submit"><?= sanitize('Generate'); ?></button>
+                    <button class="btn" type="submit"><?= sanitize('Generate / Refresh templates'); ?></button>
+                    <div class="muted" style="font-size:12px;"><?= sanitize('Refresh pulls the latest profile values (GST, PAN, signatory).'); ?></div>
                 </form>
                 <div>
-                    <h4 style="margin:0 0 8px 0;"><?= sanitize('Generated documents'); ?></h4>
+                    <h4 style="margin:0 0 8px 0;"><?= sanitize('Auto-filled templates'); ?></h4>
+                    <div style="display:grid; gap:8px;">
+                        <?php foreach ($pack['generatedTemplates'] ?? [] as $tpl): ?>
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid #30363d; padding:8px 10px; border-radius:10px; flex-wrap:wrap;">
+                                <div>
+                                    <strong><?= sanitize($tpl['name'] ?? 'Template'); ?></strong>
+                                    <div class="muted" style="margin-top:4px;"><?= sanitize($tpl['lastGeneratedAt'] ?? ''); ?></div>
+                                </div>
+                                <?php if (!empty($tpl['storedPath'])): ?>
+                                    <a class="btn secondary" href="<?= sanitize($tpl['storedPath']); ?>" target="_blank" rel="noopener"><?= sanitize('Open'); ?></a>
+                                <?php else: ?>
+                                    <span class="pill"><?= sanitize('Printable only'); ?></span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php if (empty($pack['generatedTemplates'])): ?>
+                            <p class="muted" style="margin:0;"><?= sanitize('No templates generated yet. Use "Generate / Refresh" to create them.'); ?></p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div>
+                    <h4 style="margin:0 0 8px 0;"><?= sanitize('Other generated documents'); ?></h4>
                     <div style="display:grid; gap:6px;">
                         <?php foreach ($pack['generatedDocs'] ?? [] as $doc): ?>
                             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid #30363d; padding:8px 10px; border-radius:10px;">
@@ -149,18 +181,92 @@ safe_page(function () {
                             </div>
                         <?php endforeach; ?>
                         <?php if (empty($pack['generatedDocs'])): ?>
-                            <p class="muted" style="margin:0;"><?= sanitize('No generated documents yet.'); ?></p>
+                            <p class="muted" style="margin:0;"><?= sanitize('No other generated documents yet.'); ?></p>
                         <?php endif; ?>
                     </div>
                 </div>
-                <div class="card" style="background:#111820; border-color:#1f6feb;">
-                    <h4 style="margin:0 0 6px 0;"><?= sanitize('Export & print'); ?></h4>
-                    <p class="muted" style="margin:0;">Export ZIP with uploaded files, generated docs, and a printable index.</p>
-                    <div class="buttons" style="margin-top:8px; gap:8px;">
-                        <a class="btn" href="/contractor/pack_export_zip.php?packId=<?= sanitize($pack['packId']); ?>&token=<?= sanitize($signedToken); ?>"><?= sanitize('Download ZIP'); ?></a>
-                        <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>" target="_blank" rel="noopener"><?= sanitize('Open print view'); ?></a>
-                    </div>
+            </div>
+            <div class="card" style="display:grid; gap:12px;">
+                <div>
+                    <h3 style="margin:0;"><?= sanitize('Print / Export'); ?></h3>
+                    <p class="muted" style="margin:0;">Print clean layouts or export ZIPs. No bid values are printed.</p>
                 </div>
+                <form id="print-options" method="get" action="/contractor/pack_print.php" style="display:grid; gap:8px;">
+                    <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
+                    <label class="field" style="margin:0;">
+                        <span class="muted" style="font-size:12px;"><?= sanitize('Include source snippets'); ?></span>
+                        <select name="snippets">
+                            <option value="1"><?= sanitize('Yes'); ?></option>
+                            <option value="0"><?= sanitize('No'); ?></option>
+                        </select>
+                    </label>
+                    <label class="field" style="margin:0;">
+                        <span class="muted" style="font-size:12px;"><?= sanitize('Include restricted annexure warning'); ?></span>
+                        <select name="restricted">
+                            <option value="1"><?= sanitize('Yes'); ?></option>
+                            <option value="0"><?= sanitize('No'); ?></option>
+                        </select>
+                    </label>
+                    <label class="field" style="margin:0;">
+                        <span class="muted" style="font-size:12px;"><?= sanitize('Print only pending checklist items'); ?></span>
+                        <select name="pendingOnly">
+                            <option value="0"><?= sanitize('No'); ?></option>
+                            <option value="1"><?= sanitize('Yes'); ?></option>
+                        </select>
+                    </label>
+                </form>
+                <div class="buttons" style="gap:8px;">
+                    <button class="btn secondary" type="submit" form="print-options" name="doc" value="checklist"><?= sanitize('Print Checklist'); ?></button>
+                    <button class="btn secondary" type="submit" form="print-options" name="doc" value="annexures"><?= sanitize('Print Annexures'); ?></button>
+                    <button class="btn secondary" type="submit" form="print-options" name="doc" value="templates"><?= sanitize('Print Templates'); ?></button>
+                    <button class="btn" type="submit" form="print-options" name="doc" value="full"><?= sanitize('Print Full Pack'); ?></button>
+                </div>
+                <div class="buttons" style="gap:8px;">
+                    <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=index" target="_blank" rel="noopener"><?= sanitize('Print Index'); ?></a>
+                    <a class="btn" href="/contractor/pack_export_zip.php?packId=<?= sanitize($pack['packId']); ?>&token=<?= sanitize($signedToken); ?>"><?= sanitize('Export ZIP'); ?></a>
+                </div>
+            </div>
+            <div class="card" style="display:grid; gap:12px;">
+                <div>
+                    <h3 style="margin:0;"><?= sanitize('Suggested attachments'); ?></h3>
+                    <p class="muted" style="margin:0;">Based on your vault tags. Attachments are linked, not copied.</p>
+                </div>
+                <div style="display:grid; gap:10px;">
+                    <?php $displayed = 0; ?>
+                    <?php foreach ($pack['checklist'] ?? [] as $item): ?>
+                        <?php if ($displayed >= 25) { break; } ?>
+                        <?php $displayed++; $itemId = $item['itemId'] ?? ($item['id'] ?? ''); $map = $itemId !== '' && isset($mappings[$itemId]) ? $mappings[$itemId] : null; $suggested = $itemId !== '' && isset($suggestions[$itemId]) ? $suggestions[$itemId] : null; ?>
+                        <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:grid; gap:6px;">
+                            <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
+                                <div>
+                                    <strong><?= sanitize($item['title'] ?? ''); ?></strong>
+                                    <div class="muted"><?= sanitize($item['category'] ?? ''); ?></div>
+                                </div>
+                                <span class="pill"><?= sanitize(ucfirst($item['status'] ?? 'pending')); ?></span>
+                            </div>
+                            <?php if ($map): ?>
+                                <div class="pill" style="border-color:#2ea043; color:#8ce99a;"><?= sanitize('Mapped: ' . ($map['fileTitle'] ?? 'Vault doc') . ' (' . ($map['suggestedVaultDocId'] ?? '') . ')'); ?></div>
+                            <?php elseif ($suggested): ?>
+                                <form method="post" action="/contractor/pack_map_vault.php" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                    <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
+                                    <input type="hidden" name="itemId" value="<?= sanitize($itemId); ?>">
+                                    <input type="hidden" name="fileId" value="<?= sanitize($suggested['suggestedVaultDocId'] ?? ''); ?>">
+                                    <input type="hidden" name="reason" value="<?= sanitize($suggested['reason'] ?? 'Suggested match'); ?>">
+                                    <input type="hidden" name="confidence" value="<?= sanitize((string)($suggested['confidence'] ?? 0.6)); ?>">
+                                    <div class="muted" style="flex:1; min-width:200px;"><?= sanitize('Suggested: ' . ($suggested['fileTitle'] ?? '') . ' (' . ($suggested['suggestedVaultDocId'] ?? '') . ')'); ?></div>
+                                    <button class="btn secondary" type="submit"><?= sanitize('Attach from Vault'); ?></button>
+                                </form>
+                            <?php else: ?>
+                                <div class="muted"><?= sanitize('No suggestion yet. Tag vault files to improve matches.'); ?></div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                    <?php if (($pack['checklist'] ?? []) === []): ?>
+                        <p class="muted" style="margin:0;"><?= sanitize('No checklist items available.'); ?></p>
+                    <?php endif; ?>
+                </div>
+                <a class="btn secondary" href="/contractor/vault.php"><?= sanitize('Open Vault'); ?></a>
             </div>
         </div>
         <?php

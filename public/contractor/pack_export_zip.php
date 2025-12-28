@@ -33,7 +33,9 @@ safe_page(function () {
         return;
     }
 
-    $zip->addFromString('pack_index.html', pack_index_html($pack));
+    $contractor = load_contractor($yojId) ?? [];
+    $vaultFiles = contractor_vault_index($yojId);
+    $zip->addFromString('pack_index.html', pack_index_html($pack, $contractor, [], $vaultFiles));
 
     $baseUpload = packs_upload_root($yojId, $context);
     foreach ($pack['items'] ?? [] as $item) {
@@ -62,6 +64,18 @@ safe_page(function () {
         }
         $name = safe_pack_filename(($doc['title'] ?? 'doc') . '.html', 'html');
         $zip->addFile($fullPath, 'generated/' . $name);
+    }
+    foreach ($pack['generatedTemplates'] ?? [] as $tpl) {
+        $relative = $tpl['storedPath'] ?? '';
+        $fullPath = $relative !== '' ? PUBLIC_PATH . $relative : '';
+        if ($fullPath === '' || !file_exists($fullPath)) {
+            continue;
+        }
+        if (!is_path_within($fullPath, $baseUpload)) {
+            continue;
+        }
+        $name = safe_pack_filename(($tpl['name'] ?? 'template') . '.html', 'html');
+        $zip->addFile($fullPath, 'generated/templates/' . $name);
     }
 
     $zip->close();
