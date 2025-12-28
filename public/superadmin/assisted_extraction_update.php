@@ -45,6 +45,9 @@ safe_page(function () {
 
     $validation = assisted_validate_payload($decoded);
     $errors = $validation['errors'] ?? [];
+    $nonBlockingFindings = array_values(array_filter($validation['allFindings'] ?? [], static function ($finding) {
+        return ($finding['blocked'] ?? true) === false;
+    }));
     if ($errors) {
         $_SESSION['assisted_draft_input'][$reqId] = $sanitizedInput;
         $_SESSION['assisted_validation'][$reqId] = $validation;
@@ -63,6 +66,8 @@ safe_page(function () {
                 'reqId' => $reqId,
                 'actor' => assisted_actor_label($actor),
                 'findings' => $findingsToLog,
+                'restrictedAnnexuresCount' => $validation['restrictedAnnexuresCount'] ?? 0,
+                'nonBlockingFindings' => $nonBlockingFindings,
             ]);
         } else {
             logEvent(ASSISTED_EXTRACTION_LOG, [
@@ -72,6 +77,8 @@ safe_page(function () {
                 'reqId' => $reqId,
                 'actor' => assisted_actor_label($actor),
                 'missingKeys' => $validation['missingKeys'] ?? [],
+                'restrictedAnnexuresCount' => $validation['restrictedAnnexuresCount'] ?? 0,
+                'nonBlockingFindings' => $nonBlockingFindings,
             ]);
         }
         set_flash('error', implode(' ', $errors));
@@ -92,6 +99,8 @@ safe_page(function () {
         'actor' => assisted_actor_label($actor),
         'missingKeys' => [],
         'forbiddenFindings' => [],
+        'restrictedAnnexuresCount' => $validation['restrictedAnnexuresCount'] ?? 0,
+        'nonBlockingFindings' => $nonBlockingFindings,
     ]);
 
     $normalized = $validation['normalized'] ?? assisted_normalize_payload($decoded);

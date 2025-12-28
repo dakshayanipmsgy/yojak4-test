@@ -307,6 +307,21 @@ safe_page(function () {
                         <?php else: ?>
                             <p class="muted" style="margin:0;"><?= sanitize('No checklist entries found in the delivered draft.'); ?></p>
                         <?php endif; ?>
+                        <?php $restrictedAnnexures = $assistedDraft['restrictedAnnexures'] ?? []; ?>
+                        <?php if (!empty($restrictedAnnexures) && is_array($restrictedAnnexures)): ?>
+                            <div style="border:1px solid #3a2a18;border-radius:10px;padding:10px;background:#1a1208;display:grid;gap:6px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                                    <h4 style="margin:0;display:flex;align-items:center;gap:6px;"><?= sanitize('Restricted (Not supported in YOJAK)'); ?></h4>
+                                    <span class="pill" style="border-color:#f59f00;color:#fcd34d;"><?= sanitize('Financial/pricing annexure'); ?></span>
+                                </div>
+                                <p class="muted" style="margin:0;"><?= sanitize('This tender references financial/pricing documents. YOJAK will not ask you to enter rates.'); ?></p>
+                                <ul style="margin:0;padding-left:18px;display:grid;gap:4px;">
+                                    <?php foreach ($restrictedAnnexures as $annex): ?>
+                                        <li style="color:#fcd34d;"><?= sanitize($annex); ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php else: ?>
                     <p class="muted" style="margin:0;"><?= sanitize('Team is working on your request. You will see the checklist here once delivered.'); ?></p>
