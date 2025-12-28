@@ -9,25 +9,47 @@ safe_page(function () {
     }
 
     $requests = load_all_password_reset_requests();
-    usort($requests, fn($a, $b) => strcmp($b['requestedAt'] ?? '', $a['requestedAt'] ?? ''));
+    usort($requests, fn($a, $b) => strcmp(($b['updatedAt'] ?? $b['requestedAt'] ?? $b['createdAt'] ?? ''), ($a['updatedAt'] ?? $a['requestedAt'] ?? $a['createdAt'] ?? '')));
+
+    $statusFilter = $_GET['status'] ?? 'pending';
+    $statusFilter = in_array($statusFilter, ['pending', 'approved', 'rejected'], true) ? $statusFilter : 'pending';
+    $filtered = array_values(array_filter($requests, fn($r) => ($r['status'] ?? '') === $statusFilter));
+    $tempDisplay = $_SESSION['temp_password_once'] ?? null;
+    unset($_SESSION['temp_password_once']);
 
     $title = get_app_config()['appName'] . ' | Reset Approvals';
-    render_layout($title, function () use ($requests) {
+    render_layout($title, function () use ($filtered, $statusFilter, $tempDisplay) {
         ?>
         <div class="card">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                 <div>
                     <h2 style="margin-bottom:4px;"><?= sanitize('Password Reset Requests'); ?></h2>
-                    <p class="muted" style="margin:0;"><?= sanitize('Approve or reject department admin/user reset requests. No document access involved.'); ?></p>
+                    <p class="muted" style="margin:0;"><?= sanitize('Approve or reject reset requests from departments or contractors. No document access involved.'); ?></p>
                 </div>
-                <div class="pill"><?= sanitize('Pending only: secure approvals & audit.'); ?></div>
+                <div class="pill"><?= sanitize('Secure approvals with audit trail.'); ?></div>
             </div>
+            <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;">
+                <?php foreach (['pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected'] as $key => $label): ?>
+                    <a class="pill" style="border-color: <?= $statusFilter === $key ? 'var(--primary)' : '#30363d'; ?>; color: <?= $statusFilter === $key ? '#fff' : 'var(--muted)'; ?>; background: <?= $statusFilter === $key ? '#1f6feb22' : '#111820'; ?>" href="/superadmin/reset_requests.php?status=<?= sanitize($key); ?>"><?= sanitize($label); ?></a>
+                <?php endforeach; ?>
+            </div>
+            <?php if ($tempDisplay): ?>
+                <div class="card" style="margin-bottom:12px;border-color:var(--primary);">
+                    <h3 style="margin-top:0;"><?= sanitize('Temporary password generated'); ?></h3>
+                    <p class="muted" style="margin:4px 0 10px;"><?= sanitize('Share securely. Contractor must reset on first login.'); ?></p>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                        <input id="tempPw" value="<?= sanitize($tempDisplay['password'] ?? ''); ?>" readonly style="flex:1;min-width:220px;">
+                        <button class="btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('tempPw').value)"><?= sanitize('Copy'); ?></button>
+                    </div>
+                    <div class="pill" style="margin-top:8px;"><?= sanitize('Request ' . ($tempDisplay['requestId'] ?? '')); ?></div>
+                </div>
+            <?php endif; ?>
             <table>
                 <thead>
                     <tr>
                         <th><?= sanitize('Request'); ?></th>
                         <th><?= sanitize('User'); ?></th>
-                        <th><?= sanitize('Dept'); ?></th>
+                        <th><?= sanitize('Meta'); ?></th>
                         <th><?= sanitize('Status'); ?></th>
                         <th><?= sanitize('Requested At'); ?></th>
                         <th><?= sanitize('Decided'); ?></th>
@@ -35,19 +57,30 @@ safe_page(function () {
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!$requests): ?>
+                    <?php if (!$filtered): ?>
                         <tr><td colspan="7" class="muted"><?= sanitize('No reset requests found.'); ?></td></tr>
                     <?php else: ?>
-                        <?php foreach ($requests as $req): ?>
+                        <?php foreach ($filtered as $req): ?>
                             <tr>
                                 <td>
                                     <div><?= sanitize($req['requestId'] ?? ''); ?></div>
-                                    <div class="muted"><?= sanitize($req['requestedBy'] ?? ''); ?></div>
+                                    <div class="muted"><?= sanitize(strtoupper($req['userType'] ?? '')); ?></div>
                                 </td>
-                                <td><?= sanitize($req['fullUserId'] ?? ''); ?></td>
-                                <td><span class="tag"><?= sanitize($req['deptId'] ?? ''); ?></span></td>
+                                <td>
+                                    <?php if (($req['userType'] ?? '') === 'contractor'): ?>
+                                        <div><?= sanitize($req['mobile'] ?? ''); ?></div>
+                                        <div class="muted"><?= sanitize($req['yojId'] ?? ''); ?></div>
+                                    <?php else: ?>
+                                        <div><?= sanitize($req['fullUserId'] ?? ''); ?></div>
+                                        <div class="muted"><?= sanitize($req['deptId'] ?? ''); ?></div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="muted"><?= sanitize('IP ' . mask_ip($req['requesterIp'] ?? '')); ?></div>
+                                    <div class="pill"><?= sanitize('UA ' . substr($req['requesterUaHash'] ?? '', 0, 10) . '...'); ?></div>
+                                </td>
                                 <td><span class="tag <?= ($req['status'] ?? '') === 'pending' ? 'success' : ''; ?>"><?= sanitize(ucfirst($req['status'] ?? '')); ?></span></td>
-                                <td><?= sanitize($req['requestedAt'] ?? ''); ?></td>
+                                <td><?= sanitize($req['requestedAt'] ?? $req['createdAt'] ?? ''); ?></td>
                                 <td>
                                     <?php if (!empty($req['decidedAt'])): ?>
                                         <div><?= sanitize($req['decidedAt']); ?></div>
