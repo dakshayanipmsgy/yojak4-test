@@ -48,15 +48,32 @@ safe_page(function () {
     if ($errors) {
         $_SESSION['assisted_draft_input'][$reqId] = $sanitizedInput;
         $_SESSION['assisted_validation'][$reqId] = $validation;
-        logEvent(ASSISTED_EXTRACTION_LOG, [
-            'at' => now_kolkata()->format(DateTime::ATOM),
-            'event' => 'ASSISTED_PASTE_VALIDATE',
-            'ok' => false,
-            'reqId' => $reqId,
-            'actor' => assisted_actor_label($actor),
-            'missingKeys' => $validation['missingKeys'] ?? [],
-            'forbiddenFindings' => $validation['forbiddenFindings'] ?? [],
-        ]);
+        $forbidden = $validation['forbiddenFindings'] ?? [];
+        if (!empty($forbidden)) {
+            $findingsToLog = [];
+            foreach ($forbidden as $finding) {
+                $findingsToLog[] = [
+                    'path' => $finding['path'] ?? '',
+                    'reasonCode' => $finding['reasonCode'] ?? '',
+                ];
+            }
+            logEvent(ASSISTED_EXTRACTION_LOG, [
+                'at' => now_kolkata()->format(DateTime::ATOM),
+                'event' => 'ASSISTED_VALIDATE_BLOCK',
+                'reqId' => $reqId,
+                'actor' => assisted_actor_label($actor),
+                'findings' => $findingsToLog,
+            ]);
+        } else {
+            logEvent(ASSISTED_EXTRACTION_LOG, [
+                'at' => now_kolkata()->format(DateTime::ATOM),
+                'event' => 'ASSISTED_PASTE_VALIDATE',
+                'ok' => false,
+                'reqId' => $reqId,
+                'actor' => assisted_actor_label($actor),
+                'missingKeys' => $validation['missingKeys'] ?? [],
+            ]);
+        }
         set_flash('error', implode(' ', $errors));
         redirect('/superadmin/assisted_extraction_view.php?reqId=' . urlencode($reqId));
         return;

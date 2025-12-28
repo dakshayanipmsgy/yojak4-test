@@ -43,6 +43,23 @@ safe_page(function () {
     $validation = assisted_validate_payload($draft);
     $errors = $validation['errors'] ?? [];
     if ($errors) {
+        $forbidden = $validation['forbiddenFindings'] ?? [];
+        if (!empty($forbidden)) {
+            $findingsToLog = [];
+            foreach ($forbidden as $finding) {
+                $findingsToLog[] = [
+                    'path' => $finding['path'] ?? '',
+                    'reasonCode' => $finding['reasonCode'] ?? '',
+                ];
+            }
+            logEvent(ASSISTED_EXTRACTION_LOG, [
+                'at' => now_kolkata()->format(DateTime::ATOM),
+                'event' => 'ASSISTED_VALIDATE_BLOCK',
+                'reqId' => $reqId,
+                'actor' => $yojId,
+                'findings' => $findingsToLog,
+            ]);
+        }
         set_flash('error', implode(' ', $errors));
         redirect('/contractor/offline_tender_view.php?id=' . urlencode($offtdId));
         return;
