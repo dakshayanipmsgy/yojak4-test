@@ -24,7 +24,7 @@ safe_page(function () {
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                 <div>
                     <h2 style="margin-bottom:4px;"><?= sanitize('Password Reset Requests'); ?></h2>
-                    <p class="muted" style="margin:0;"><?= sanitize('Approve or reject reset requests from departments or contractors. No document access involved.'); ?></p>
+                    <p class="muted" style="margin:0;"><?= sanitize('Approve or reject reset requests from department admins or contractors.'); ?></p>
                 </div>
                 <div class="pill"><?= sanitize('Secure approvals with audit trail.'); ?></div>
             </div>
@@ -36,12 +36,15 @@ safe_page(function () {
             <?php if ($tempDisplay): ?>
                 <div class="card" style="margin-bottom:12px;border-color:var(--primary);">
                     <h3 style="margin-top:0;"><?= sanitize('Temporary password generated'); ?></h3>
-                    <p class="muted" style="margin:4px 0 10px;"><?= sanitize('Share securely. Contractor must reset on first login.'); ?></p>
+                    <p class="muted" style="margin:4px 0 10px;"><?= sanitize('Share securely. User must reset on first login.'); ?></p>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
                         <input id="tempPw" value="<?= sanitize($tempDisplay['password'] ?? ''); ?>" readonly style="flex:1;min-width:220px;">
                         <button class="btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('tempPw').value)"><?= sanitize('Copy'); ?></button>
                     </div>
                     <div class="pill" style="margin-top:8px;"><?= sanitize('Request ' . ($tempDisplay['requestId'] ?? '')); ?></div>
+                    <?php if (!empty($tempDisplay['user'] ?? '')): ?>
+                        <div class="pill" style="margin-top:8px;background:#1f6feb22;border-color:#1f6feb;"><?= sanitize($tempDisplay['user']); ?></div>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
             <table>
@@ -49,7 +52,7 @@ safe_page(function () {
                     <tr>
                         <th><?= sanitize('Request'); ?></th>
                         <th><?= sanitize('User'); ?></th>
-                        <th><?= sanitize('Meta'); ?></th>
+                        <th><?= sanitize('Details'); ?></th>
                         <th><?= sanitize('Status'); ?></th>
                         <th><?= sanitize('Requested At'); ?></th>
                         <th><?= sanitize('Decided'); ?></th>
@@ -66,18 +69,24 @@ safe_page(function () {
                                     <div><?= sanitize($req['requestId'] ?? ''); ?></div>
                                     <div class="muted"><?= sanitize(strtoupper($req['userType'] ?? '')); ?></div>
                                 </td>
-                                <td>
+                                <td style="min-width:180px;">
                                     <?php if (($req['userType'] ?? '') === 'contractor'): ?>
                                         <div><?= sanitize($req['mobile'] ?? ''); ?></div>
                                         <div class="muted"><?= sanitize($req['yojId'] ?? ''); ?></div>
                                     <?php else: ?>
-                                        <div><?= sanitize($req['fullUserId'] ?? ''); ?></div>
-                                        <div class="muted"><?= sanitize($req['deptId'] ?? ''); ?></div>
+                                        <div><?= sanitize($req['fullUserId'] ?? $req['adminUserId'] ?? ''); ?></div>
+                                        <div class="muted"><?= sanitize('Dept: ' . ($req['deptId'] ?? '')); ?></div>
                                     <?php endif; ?>
                                 </td>
                                 <td>
                                     <div class="muted"><?= sanitize('IP ' . mask_ip($req['requesterIp'] ?? '')); ?></div>
                                     <div class="pill"><?= sanitize('UA ' . substr($req['requesterUaHash'] ?? '', 0, 10) . '...'); ?></div>
+                                    <?php if (!empty($req['contact'])): ?>
+                                        <div class="pill" style="margin-top:6px;"><?= sanitize('Contact: ' . $req['contact']); ?></div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($req['message'])): ?>
+                                        <div class="muted" style="margin-top:4px;font-size:0.9rem;"><?= sanitize($req['message']); ?></div>
+                                    <?php endif; ?>
                                 </td>
                                 <td><span class="tag <?= ($req['status'] ?? '') === 'pending' ? 'success' : ''; ?>"><?= sanitize(ucfirst($req['status'] ?? '')); ?></span></td>
                                 <td><?= sanitize($req['requestedAt'] ?? $req['createdAt'] ?? ''); ?></td>
