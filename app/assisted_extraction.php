@@ -279,7 +279,7 @@ function assisted_validate_payload(array $payload): array
 
     $forbiddenFindings = assisted_detect_forbidden_pricing($mapped);
     if ($forbiddenFindings) {
-        $errors[] = 'Bid/price content is not allowed in YOJAK. Remove pricing/rate details and try again.';
+        $errors[] = 'Pricing/rate content detected. Remove BOQ/quoted rates; tender fee/EMD/security amounts are allowed.';
     }
 
     return [
@@ -511,24 +511,29 @@ function assisted_normalize_checklist(array $payload): array
 function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'): array
 {
     $findings = [];
-    $safeKeys = array_map('strtolower', array_merge(
-        ASSISTED_REQUIRED_FIELDS,
-        ['checklist', 'fees', 'emd', 'tenderfee', 'securitydeposit', 'sd', 'pg', 'performanceguarantee']
-    ));
-    $valueSafeKeys = ['emd', 'tenderfee', 'securitydeposit', 'sd', 'pg', 'performanceguarantee'];
-    $suspiciousKeys = ['bidamount', 'quotedrate', 'boqrate', 'unitrate', 'priceschedule', 'financialbid', 'l1amount', 'comparisonstatement'];
-    foreach ($payload as $key => $value) {
-        $keyString = strtolower((string)$key);
-        $currentPath = $path === '' ? (string)$key : $path . '.' . $key;
-        $skipValueDetection = in_array($keyString, $valueSafeKeys, true);
+    $skipKeys = ['bidvaliditydays'];
+    $allowPathSegments = ['fees', 'emd', 'tenderfee', 'securitydeposit', 'performanceguarantee', 'pg', 'sd'];
+    $blockPathTokens = ['boq', 'rate', 'quoted', 'financialbid', 'priceschedule', 'bidamount', 'l1'];
 
-        if (!in_array($keyString, $safeKeys, true)) {
-            foreach ($suspiciousKeys as $suspicious) {
-                if (str_contains($keyString, $suspicious)) {
+    foreach ($payload as $key => $value) {
+        $keyString = (string)$key;
+        $keyLower = strtolower($keyString);
+        $currentPath = $path === '' ? $keyString : $path . '.' . $keyString;
+
+        if (in_array($keyLower, $skipKeys, true)) {
+            continue;
+        }
+
+        $pathSegments = explode('.', strtolower($currentPath));
+        $pathHasAllowContext = assisted_path_has_allowed_segment($pathSegments, $allowPathSegments);
+
+        if (!$pathHasAllowContext) {
+            foreach ($blockPathTokens as $token) {
+                if (str_contains($keyLower, $token)) {
                     $findings[] = [
                         'path' => $currentPath,
-                        'reason' => 'suspicious_key',
-                        'snippet' => $key,
+                        'reasonCode' => 'BLOCK_RATE_CONTEXT',
+                        'snippet' => assisted_redact_snippet($keyString),
                     ];
                     break;
                 }
@@ -536,15 +541,9 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
         }
 
         if (is_string($value)) {
-            if (assisted_string_has_price_pattern($value)) {
-                if ($skipValueDetection) {
-                    continue;
-                }
-                $findings[] = [
-                    'path' => $currentPath,
-                    'reason' => 'suspicious_value',
-                    'snippet' => assisted_redact_snippet($value),
-                ];
+            $stringFinding = assisted_evaluate_string_forbidden($value, $currentPath, $pathHasAllowContext);
+            if ($stringFinding) {
+                $findings[] = $stringFinding;
             }
         } elseif (is_array($value)) {
             $findings = array_merge($findings, assisted_detect_forbidden_pricing($value, $currentPath));
@@ -554,12 +553,106 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
     return $findings;
 }
 
-function assisted_string_has_price_pattern(string $value): bool
+function assisted_evaluate_string_forbidden(string $value, string $path, bool $pathHasAllowContext): ?array
 {
     $lower = mb_strtolower($value);
-    $patterns = ['₹', 'rs.', 'inr', 'per item rate', 'unit rate', 'quoted rate', 'boq', 'schedule of rates', 'sor'];
+    $hasBlock = assisted_contains_block_marker($lower);
+    $hasCurrency = assisted_contains_currency_marker($lower);
+    $hasAllowContext = $pathHasAllowContext || assisted_contains_allow_marker($lower);
+
+    if ($hasBlock) {
+        return [
+            'path' => $path,
+            'reasonCode' => 'BLOCK_RATE_CONTEXT',
+            'snippet' => assisted_redact_snippet($value),
+        ];
+    }
+
+    if (!$hasCurrency) {
+        return null;
+    }
+
+    if ($hasAllowContext) {
+        return null;
+    }
+
+    return [
+        'path' => $path,
+        'reasonCode' => 'CURRENCY_UNKNOWN_CONTEXT',
+        'snippet' => assisted_redact_snippet($value),
+    ];
+}
+
+function assisted_contains_currency_marker(string $value): bool
+{
+    return (bool)preg_match('/(₹|\bRs\.?\b|\bINR\b)/iu', $value);
+}
+
+function assisted_contains_allow_marker(string $value): bool
+{
+    $patterns = [
+        '/\bemd\b/i',
+        '/earnest\s+money/i',
+        '/bid\s+security/i',
+        '/security\s+money/i',
+        '/\bdeposit\b/i',
+        '/\bsd\b/i',
+        '/security\s+deposit/i',
+        '/\bpg\b/i',
+        '/performance\s+guarantee/i',
+        '/tender\s+fee/i',
+        '/tender\s+cost/i',
+        '/cost\s+of\s+tender/i',
+        '/document\s+fee/i',
+        '/processing\s+fee/i',
+        '/\bgst\b/i',
+        '/bank\s+guarantee/i',
+    ];
+
     foreach ($patterns as $pattern) {
-        if (str_contains($lower, mb_strtolower($pattern))) {
+        if (preg_match($pattern, $value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function assisted_contains_block_marker(string $value): bool
+{
+    $patterns = [
+        '/\bboq\b/i',
+        '/schedule\s+of\s+rates/i',
+        '/\bsor\b/i',
+        '/item\s+rate/i',
+        '/unit\s+rate/i',
+        '/rate\s+quoted/i',
+        '/quoted\s+rate/i',
+        '/financial\s+bid/i',
+        '/price\s+bid/i',
+        '/bid\s+value/i',
+        '/total\s+value/i',
+        '/contract\s+value/i',
+        '/\bl1\b/i',
+        '/lowest/i',
+        '/comparative\s+statement/i',
+        '/\bcs\b/i',
+        '/price\s+schedule/i',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function assisted_path_has_allowed_segment(array $segments, array $allowed): bool
+{
+    foreach ($segments as $segment) {
+        if (in_array($segment, $allowed, true)) {
             return true;
         }
     }
@@ -569,8 +662,8 @@ function assisted_string_has_price_pattern(string $value): bool
 function assisted_redact_snippet(string $value): string
 {
     $clean = assisted_clean_string($value);
-    if (mb_strlen($clean) > 120) {
-        return mb_substr($clean, 0, 117) . '...';
+    if (mb_strlen($clean) > 160) {
+        return mb_substr($clean, 0, 157) . '...';
     }
     return $clean;
 }

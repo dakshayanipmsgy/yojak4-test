@@ -104,7 +104,7 @@ safe_page(function () {
             <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
                 <div>
                     <h3 style="margin:0;">Assistant Draft</h3>
-                    <p class="muted" style="margin:4px 0 0;">Paste structured JSON matching the assisted extraction schema. Rates/amounts are blocked; metadata like bidValidityDays is allowed.</p>
+                    <p class="muted" style="margin:4px 0 0;">Paste structured JSON matching the assisted extraction schema. BOQ/bid rates are blocked; tender fee/EMD/security amounts and metadata like bidValidityDays are allowed.</p>
                 </div>
                 <div class="pill">Actor: <?= sanitize(assisted_actor_label($actor)); ?></div>
             </div>
@@ -136,10 +136,11 @@ safe_page(function () {
                     <?php endif; ?>
                     <?php if (!empty($validation['forbiddenFindings'])): ?>
                         <div class="muted" style="margin-top:6px;">
-                            <strong>Forbidden pricing hints:</strong>
+                            <strong>Pricing/rate content detected.</strong>
+                            <p style="margin:4px 0 0;">Tender fee/EMD/security amounts are allowed; BOQ/quoted rates and item prices are not.</p>
                             <ul style="margin:6px 0 0 16px;padding:0;">
                                 <?php foreach ($validation['forbiddenFindings'] as $finding): ?>
-                                    <li><?= sanitize(($finding['path'] ?? 'field') . ' • ' . ($finding['snippet'] ?? '')); ?></li>
+                                    <li><?= sanitize(($finding['path'] ?? 'field') . ' • ' . ($finding['reasonCode'] ?? 'reason') . ' • ' . ($finding['snippet'] ?? '')); ?></li>
                                 <?php endforeach; ?>
                             </ul>
                         </div>
