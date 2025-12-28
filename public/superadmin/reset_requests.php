@@ -14,54 +14,11 @@ safe_page(function () {
     $statusFilter = $_GET['status'] ?? 'pending';
     $statusFilter = in_array($statusFilter, ['pending', 'approved', 'rejected'], true) ? $statusFilter : 'pending';
     $filtered = array_values(array_filter($requests, fn($r) => ($r['status'] ?? '') === $statusFilter));
-
-    $departmentsCache = [];
-    $hydrated = array_map(function (array $request) use (&$departmentsCache): array {
-        if (($request['userType'] ?? '') === 'contractor') {
-            return $request;
-        }
-
-        $deptId = trim((string)($request['deptId'] ?? ''));
-        $requestedAdminUserId = strtolower(trim((string)($request['fullUserId'] ?? $request['adminUserId'] ?? '')));
-
-        if ($deptId !== '') {
-            if (!array_key_exists($deptId, $departmentsCache)) {
-                $departmentsCache[$deptId] = load_department($deptId);
-                if (!$departmentsCache[$deptId]) {
-                    logEvent(DATA_PATH . '/logs/superadmin.log', [
-                        'event' => 'reset_request_resolve_failed',
-                        'deptId' => $deptId,
-                        'requestId' => $request['requestId'] ?? null,
-                        'reason' => 'department_missing',
-                    ]);
-                }
-            }
-
-            $department = $departmentsCache[$deptId] ?? null;
-            $resolvedAdminUserId = strtolower(trim((string)($department['activeAdminUserId'] ?? '')));
-            if ($department && $resolvedAdminUserId !== '') {
-                $request['resolvedDisplayAdminUserId'] = $resolvedAdminUserId;
-                if ($requestedAdminUserId !== '' && $requestedAdminUserId !== $resolvedAdminUserId) {
-                    $request['legacyAdminUserIdMismatch'] = true;
-                }
-            } elseif ($department) {
-                logEvent(DATA_PATH . '/logs/superadmin.log', [
-                    'event' => 'reset_request_resolve_failed',
-                    'deptId' => $deptId,
-                    'requestId' => $request['requestId'] ?? null,
-                    'reason' => 'active_admin_missing',
-                ]);
-            }
-        }
-
-        return $request;
-    }, $filtered);
-
     $tempDisplay = $_SESSION['temp_password_once'] ?? null;
     unset($_SESSION['temp_password_once']);
 
     $title = get_app_config()['appName'] . ' | Reset Approvals';
-    render_layout($title, function () use ($hydrated, $statusFilter, $tempDisplay) {
+    render_layout($title, function () use ($filtered, $statusFilter, $tempDisplay) {
         ?>
         <div class="card">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
@@ -104,10 +61,10 @@ safe_page(function () {
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!$hydrated): ?>
+                    <?php if (!$filtered): ?>
                         <tr><td colspan="7" class="muted"><?= sanitize('No reset requests found.'); ?></td></tr>
                     <?php else: ?>
-                        <?php foreach ($hydrated as $req): ?>
+                        <?php foreach ($filtered as $req): ?>
                             <tr>
                                 <td>
                                     <div><?= sanitize($req['requestId'] ?? ''); ?></div>
@@ -120,12 +77,8 @@ safe_page(function () {
                                     <?php else: ?>
                                         <div><?= sanitize($req['fullUserId'] ?? $req['adminUserId'] ?? ''); ?></div>
                                         <div class="muted"><?= sanitize('Dept: ' . ($req['deptId'] ?? '')); ?></div>
-                                        <?php $resolvedAdminUserId = $req['resolvedDisplayAdminUserId'] ?? $req['resolvedAdminUserId'] ?? ''; ?>
-                                        <?php if ($resolvedAdminUserId !== ''): ?>
-                                            <div class="pill" style="margin-top:6px;background:#1f6feb22;border-color:#1f6feb;"><?= sanitize('Resolved Admin: ' . $resolvedAdminUserId); ?></div>
-                                        <?php endif; ?>
-                                        <?php if (!empty($req['legacyAdminUserIdMismatch'])): ?>
-                                            <div class="pill" style="margin-top:6px;background:#f9731622;border-color:#f97316;color:#f97316;"><?= sanitize('Legacy request id ignored'); ?></div>
+                                        <?php if (!empty($req['resolvedAdminUserId'])): ?>
+                                            <div class="pill" style="margin-top:6px;background:#1f6feb22;border-color:#1f6feb;"><?= sanitize('Resolved: ' . $req['resolvedAdminUserId']); ?></div>
                                         <?php endif; ?>
                                     <?php endif; ?>
                                 </td>
