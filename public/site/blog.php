@@ -9,7 +9,7 @@ safe_page(function () {
         ?>
         <div class="card">
             <h1 style="margin-top:0;">Blog</h1>
-            <p class="muted">Stories and guides were previously generated in Content Studio. That studio has been removed.</p>
+            <p class="muted">Stories and guides are not available in this app.</p>
             <div class="pill" style="display:inline-block;margin-top:8px;"><?= sanitize('Blog content is not available.'); ?></div>
             <div class="buttons" style="margin-top:12px;">
                 <a class="btn" href="/site/index.php"><?= sanitize('Back to Home'); ?></a>
