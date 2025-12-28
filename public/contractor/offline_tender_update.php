@@ -187,6 +187,7 @@ safe_page(function () {
     $feesInput = $_POST['fees'] ?? [];
 
     $extracted = offline_tender_defaults();
+    $extracted['restrictedAnnexures'] = $tender['extracted']['restrictedAnnexures'] ?? [];
     $extracted['publishDate'] = $publishDate !== '' ? $publishDate : null;
     $extracted['submissionDeadline'] = $submissionDeadline !== '' ? $submissionDeadline : null;
     $extracted['openingDate'] = $openingDate !== '' ? $openingDate : null;

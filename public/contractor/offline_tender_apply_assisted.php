@@ -58,6 +58,7 @@ safe_page(function () {
                 'reqId' => $reqId,
                 'actor' => $yojId,
                 'findings' => $findingsToLog,
+                'restrictedAnnexuresCount' => $validation['restrictedAnnexuresCount'] ?? 0,
             ]);
         }
         set_flash('error', implode(' ', $errors));
@@ -85,6 +86,7 @@ safe_page(function () {
     $tender['extracted']['bidValidityDays'] = $normalized['bidValidityDays'];
     $tender['extracted']['eligibilityDocs'] = $normalized['eligibilityDocs'];
     $tender['extracted']['annexures'] = $normalized['annexures'];
+    $tender['extracted']['restrictedAnnexures'] = $normalized['restrictedAnnexures'];
     $tender['extracted']['formats'] = $normalized['formats'];
 
     $tender['checklist'] = [];

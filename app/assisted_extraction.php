@@ -242,7 +242,12 @@ function assisted_save_request(array $request): void
 function assisted_forbidden_fields_present(array $payload): bool
 {
     $findings = assisted_detect_forbidden_pricing($payload);
-    return !empty($findings);
+    foreach ($findings as $finding) {
+        if (($finding['blocked'] ?? true) === true) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function assisted_validate_payload(array $payload): array
@@ -278,14 +283,20 @@ function assisted_validate_payload(array $payload): array
     }
 
     $forbiddenFindings = assisted_detect_forbidden_pricing($mapped);
-    if ($forbiddenFindings) {
+    $blockedFindings = array_values(array_filter($forbiddenFindings, static function ($finding) {
+        return ($finding['blocked'] ?? true) === true;
+    }));
+    if ($blockedFindings) {
         $errors[] = 'Pricing/rate content detected. Remove BOQ/quoted rates; tender fee/EMD/security amounts are allowed.';
     }
+    $restrictedAnnexuresCount = is_array($normalized['restrictedAnnexures'] ?? null) ? count($normalized['restrictedAnnexures']) : 0;
 
     return [
         'errors' => $errors,
         'missingKeys' => $missingKeys,
-        'forbiddenFindings' => $forbiddenFindings,
+        'forbiddenFindings' => $blockedFindings,
+        'allFindings' => $forbiddenFindings,
+        'restrictedAnnexuresCount' => $restrictedAnnexuresCount,
         'normalized' => $normalized,
     ];
 }
@@ -298,10 +309,19 @@ function assisted_normalize_payload(array $payload): array
         'completionMonths' => assisted_clean_numeric($payload['completionMonths'] ?? null),
         'bidValidityDays' => assisted_clean_numeric($payload['bidValidityDays'] ?? null),
         'eligibilityDocs' => assisted_normalize_string_list($payload['eligibilityDocs'] ?? []),
-        'annexures' => assisted_normalize_string_list($payload['annexures'] ?? []),
-        'formats' => assisted_normalize_formats($payload['formats'] ?? []),
+        'annexures' => [],
+        'restrictedAnnexures' => [],
+        'formats' => [],
         'checklist' => assisted_normalize_checklist($payload),
     ];
+
+    $annexures = assisted_normalize_string_list($payload['annexures'] ?? []);
+    $formats = assisted_normalize_formats($payload['formats'] ?? []);
+    [$safeAnnexures, $safeFormats, $restrictedAnnexures] = assisted_split_restricted_annexures($annexures, $formats);
+
+    $normalized['annexures'] = $safeAnnexures;
+    $normalized['restrictedAnnexures'] = $restrictedAnnexures;
+    $normalized['formats'] = $safeFormats;
 
     return $normalized;
 }
@@ -508,7 +528,38 @@ function assisted_normalize_checklist(array $payload): array
     return $normalized;
 }
 
-function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'): array
+function assisted_split_restricted_annexures(array $annexures, array $formats): array
+{
+    $restricted = [];
+    $safeAnnexures = [];
+    foreach ($annexures as $annexure) {
+        if (assisted_is_restricted_financial_label(mb_strtolower($annexure))) {
+            $restricted[] = $annexure;
+            continue;
+        }
+        $safeAnnexures[] = $annexure;
+        if (count($safeAnnexures) >= 200) {
+            break;
+        }
+    }
+
+    $safeFormats = [];
+    foreach ($formats as $format) {
+        $name = $format['name'] ?? '';
+        if (assisted_is_restricted_financial_label(mb_strtolower($name))) {
+            $restricted[] = $name;
+            continue;
+        }
+        $safeFormats[] = $format;
+        if (count($safeFormats) >= 200) {
+            break;
+        }
+    }
+
+    return [$safeAnnexures, $safeFormats, $restricted];
+}
+
+function assisted_detect_forbidden_pricing(array $payload, string $path = 'root', array $context = []): array
 {
     $findings = [];
     $skipKeys = ['bidvaliditydays'];
@@ -525,7 +576,8 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
         }
 
         $pathSegments = explode('.', strtolower($currentPath));
-        $pathHasAllowContext = assisted_path_has_allowed_segment($pathSegments, $allowPathSegments);
+        $pathHasAllowContext = assisted_path_has_allowed_segment($pathSegments, $allowPathSegments) || !empty($context['allowCurrency']);
+        $isAnnexurePath = assisted_is_annexure_like_path($pathSegments);
 
         if (!$pathHasAllowContext) {
             foreach ($blockPathTokens as $token) {
@@ -534,6 +586,7 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
                         'path' => $currentPath,
                         'reasonCode' => 'BLOCK_RATE_CONTEXT',
                         'snippet' => assisted_redact_snippet($keyString),
+                        'blocked' => true,
                     ];
                     break;
                 }
@@ -541,30 +594,52 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
         }
 
         if (is_string($value)) {
-            $stringFinding = assisted_evaluate_string_forbidden($value, $currentPath, $pathHasAllowContext);
+            $stringFinding = assisted_evaluate_string_forbidden($value, $currentPath, $pathHasAllowContext, [
+                'allowCurrency' => !empty($context['allowCurrency']),
+                'isAnnexure' => $isAnnexurePath,
+            ]);
             if ($stringFinding) {
                 $findings[] = $stringFinding;
             }
         } elseif (is_array($value)) {
-            $findings = array_merge($findings, assisted_detect_forbidden_pricing($value, $currentPath));
+            $nextContext = $context;
+            if (assisted_path_is_checklist_item($pathSegments) && assisted_checklist_item_allows_currency($value)) {
+                $nextContext['allowCurrency'] = true;
+            }
+            if ($pathHasAllowContext) {
+                $nextContext['allowCurrency'] = true;
+            }
+            $findings = array_merge($findings, assisted_detect_forbidden_pricing($value, $currentPath, $nextContext));
         }
     }
 
     return $findings;
 }
 
-function assisted_evaluate_string_forbidden(string $value, string $path, bool $pathHasAllowContext): ?array
+function assisted_evaluate_string_forbidden(string $value, string $path, bool $pathHasAllowContext, array $context = []): ?array
 {
     $lower = mb_strtolower($value);
     $hasBlock = assisted_contains_block_marker($lower);
     $hasCurrency = assisted_contains_currency_marker($lower);
-    $hasAllowContext = $pathHasAllowContext || assisted_contains_allow_marker($lower);
+    $hasAllowContext = $pathHasAllowContext || assisted_contains_allow_marker($lower) || !empty($context['allowCurrency']);
+    $isAnnexure = !empty($context['isAnnexure']);
+    $isRestrictedLabel = assisted_is_restricted_financial_label($lower);
+
+    if ($isRestrictedLabel && $isAnnexure) {
+        return [
+            'path' => $path,
+            'reasonCode' => 'RESTRICTED_FINANCIAL_ANNEXURE',
+            'snippet' => assisted_redact_snippet($value),
+            'blocked' => false,
+        ];
+    }
 
     if ($hasBlock) {
         return [
             'path' => $path,
             'reasonCode' => 'BLOCK_RATE_CONTEXT',
             'snippet' => assisted_redact_snippet($value),
+            'blocked' => true,
         ];
     }
 
@@ -573,13 +648,19 @@ function assisted_evaluate_string_forbidden(string $value, string $path, bool $p
     }
 
     if ($hasAllowContext) {
-        return null;
+        return [
+            'path' => $path,
+            'reasonCode' => 'CURRENCY_ALLOWED_FEE_CONTEXT',
+            'snippet' => assisted_redact_snippet($value),
+            'blocked' => false,
+        ];
     }
 
     return [
         'path' => $path,
         'reasonCode' => 'CURRENCY_UNKNOWN_CONTEXT',
         'snippet' => assisted_redact_snippet($value),
+        'blocked' => true,
     ];
 }
 
@@ -593,6 +674,7 @@ function assisted_contains_allow_marker(string $value): bool
     $patterns = [
         '/\bemd\b/i',
         '/earnest\s+money/i',
+        '/earnest\s+money\s+deposit/i',
         '/bid\s+security/i',
         '/security\s+money/i',
         '/\bdeposit\b/i',
@@ -600,6 +682,7 @@ function assisted_contains_allow_marker(string $value): bool
         '/security\s+deposit/i',
         '/\bpg\b/i',
         '/performance\s+guarantee/i',
+        '/\bbg\b/i',
         '/tender\s+fee/i',
         '/tender\s+cost/i',
         '/cost\s+of\s+tender/i',
@@ -622,6 +705,7 @@ function assisted_contains_block_marker(string $value): bool
 {
     $patterns = [
         '/\bboq\b/i',
+        '/bill\s+of\s+quantity/i',
         '/schedule\s+of\s+rates/i',
         '/\bsor\b/i',
         '/item\s+rate/i',
@@ -638,6 +722,7 @@ function assisted_contains_block_marker(string $value): bool
         '/comparative\s+statement/i',
         '/\bcs\b/i',
         '/price\s+schedule/i',
+        '/rate\s+sheet/i',
     ];
 
     foreach ($patterns as $pattern) {
@@ -646,6 +731,51 @@ function assisted_contains_block_marker(string $value): bool
         }
     }
 
+    return false;
+}
+
+function assisted_is_restricted_financial_label(string $lower): bool
+{
+    $patterns = [
+        '/price\s+bid/i',
+        '/financial\s+bid/i',
+        '/\bboq\b/i',
+        '/bill\s+of\s+quantity/i',
+        '/schedule\s+of\s+rates/i',
+        '/\bsor\b/i',
+        '/rate\s+sheet/i',
+        '/price\s+schedule/i',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $lower)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function assisted_is_annexure_like_path(array $segments): bool
+{
+    return in_array('annexures', $segments, true) || in_array('formats', $segments, true) || in_array('formatsandannexures', $segments, true);
+}
+
+function assisted_path_is_checklist_item(array $segments): bool
+{
+    return in_array('checklist', $segments, true);
+}
+
+function assisted_checklist_item_allows_currency(array $item): bool
+{
+    $category = mb_strtolower(trim((string)($item['category'] ?? '')));
+    if ($category !== '' && $category === 'fees') {
+        $title = mb_strtolower((string)($item['title'] ?? ''));
+        $desc = mb_strtolower((string)($item['description'] ?? ''));
+        $quote = mb_strtolower((string)($item['sourceQuote'] ?? ''));
+        if (assisted_contains_allow_marker($title) || assisted_contains_allow_marker($desc) || assisted_contains_allow_marker($quote)) {
+            return true;
+        }
+    }
     return false;
 }
 

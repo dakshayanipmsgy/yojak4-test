@@ -207,6 +207,7 @@ function offline_tender_defaults(): array
         'bidValidityDays' => null,
         'eligibilityDocs' => [],
         'annexures' => [],
+        'restrictedAnnexures' => [],
         'formats' => [],
         'checklist' => [],
     ];
