@@ -55,7 +55,7 @@ function normalize_dept_id(string $deptId): string
 
 function is_valid_dept_id(string $deptId): bool
 {
-    return (bool)preg_match('/^[a-z0-9]{3,10}$/', $deptId);
+    return (bool)preg_match('/^[a-z0-9]{2,12}$/', $deptId);
 }
 
 function is_valid_admin_short_id(string $shortId): bool

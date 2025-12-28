@@ -109,6 +109,9 @@ safe_page(function () {
                 <div class="field">
                     <label for="password"><?= sanitize(t('password')); ?></label>
                     <input id="password" name="password" type="password" required>
+                    <div style="margin-top:6px;">
+                        <a class="muted" style="font-size:0.95rem;" href="/department/forgot_password.php"><?= sanitize('Forgot password (Admin)?'); ?></a>
+                    </div>
                 </div>
                 <button class="btn" type="submit"><?= sanitize(t('submit')); ?></button>
             </form>
