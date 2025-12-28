@@ -320,7 +320,7 @@ function create_department_admin(string $deptId, string $adminShortId, string $p
     return $user;
 }
 
-function update_department_user_password(string $deptId, string $fullUserId, string $newPassword, bool $mustReset = false): void
+function update_department_user_password(string $deptId, string $fullUserId, string $newPassword, bool $mustReset = false, ?string $resetBy = null): void
 {
     $record = load_active_department_user($fullUserId);
     if (!$record || $record['deptId'] !== $deptId) {
@@ -330,6 +330,10 @@ function update_department_user_password(string $deptId, string $fullUserId, str
     $record['passwordHash'] = password_hash($newPassword, PASSWORD_DEFAULT);
     $record['mustResetPassword'] = $mustReset;
     $record['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
+    $record['lastPasswordResetAt'] = $record['updatedAt'];
+    if ($resetBy !== null) {
+        $record['passwordResetBy'] = $resetBy;
+    }
 
     writeJsonAtomic(department_user_path($deptId, $fullUserId, false), $record);
     if (!$mustReset) {
@@ -1081,23 +1085,38 @@ function load_password_reset_requests(string $deptId): array
     return array_values(array_filter($requests, fn($req) => ($req['deptId'] ?? '') === $deptId));
 }
 
-function add_password_reset_request(string $deptId, string $fullUserId, string $requestedBy): array
+function add_password_reset_request(
+    string $deptId,
+    string $fullUserId,
+    string $requestedBy,
+    ?string $contact = null,
+    ?string $message = null,
+    ?string $requesterIp = null,
+    ?string $userAgent = null
+): array
 {
     ensure_department_env($deptId);
     $requests = load_all_password_reset_requests();
+    $normalizedUserId = strtolower($fullUserId);
     $existing = array_values(array_filter(
         $requests,
-        fn($req) => ($req['fullUserId'] ?? '') === $fullUserId
+        fn($req) => ($req['fullUserId'] ?? '') === $normalizedUserId
             && ($req['deptId'] ?? '') === $deptId
             && ($req['status'] ?? '') === 'pending'
     ));
     if ($existing) {
+        $existing[0]['contact'] = $existing[0]['contact'] ?? $contact;
+        $existing[0]['message'] = $existing[0]['message'] ?? $message;
+        $existing[0]['requesterIp'] = $existing[0]['requesterIp'] ?? $requesterIp;
+        $existing[0]['requesterUaHash'] = $existing[0]['requesterUaHash'] ?? ($userAgent ? hash('sha256', $userAgent) : null);
+        save_password_reset_request($existing[0]);
         return $existing[0];
     }
     $req = [
         'requestId' => 'RESET-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
         'deptId' => $deptId,
-        'fullUserId' => strtolower($fullUserId),
+        'fullUserId' => $normalizedUserId,
+        'adminUserId' => $normalizedUserId,
         'status' => 'pending',
         'requestedBy' => $requestedBy,
         'requestedAt' => now_kolkata()->format(DateTime::ATOM),
@@ -1105,6 +1124,13 @@ function add_password_reset_request(string $deptId, string $fullUserId, string $
         'decidedAt' => null,
         'decidedBy' => null,
         'userType' => 'dept_admin',
+        'contact' => $contact,
+        'message' => $message,
+        'requesterIp' => $requesterIp,
+        'requesterUaHash' => $userAgent ? hash('sha256', $userAgent) : null,
+        'tempPasswordHash' => null,
+        'tempPasswordIssuedAt' => null,
+        'tempPasswordDelivery' => 'show_once',
     ];
     $requests[] = $req;
     save_all_password_reset_requests($requests);

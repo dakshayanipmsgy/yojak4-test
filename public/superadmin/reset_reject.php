@@ -25,13 +25,22 @@ safe_page(function () {
         redirect('/superadmin/reset_requests.php');
     }
 
-    update_password_reset_status($requestId, 'rejected', $actor['username'] ?? ($actor['empId'] ?? 'system'));
+    $decider = $actor['username'] ?? ($actor['empId'] ?? 'system');
+    update_password_reset_status($requestId, 'rejected', $decider);
     logEvent(DATA_PATH . '/logs/reset.log', [
         'event' => 'password_reset_rejected',
         'deptId' => $request['deptId'] ?? '',
         'fullUserId' => $request['fullUserId'] ?? '',
         'requestId' => $requestId,
-        'decidedBy' => $actor['username'] ?? ($actor['empId'] ?? 'system'),
+        'decidedBy' => $decider,
+    ]);
+    logEvent(DATA_PATH . '/logs/superadmin.log', [
+        'event' => 'password_reset_rejected',
+        'userType' => $request['userType'] ?? 'dept_admin',
+        'deptId' => $request['deptId'] ?? null,
+        'fullUserId' => $request['fullUserId'] ?? null,
+        'requestId' => $requestId,
+        'decidedBy' => $decider,
     ]);
 
     set_flash('success', 'Reset request rejected.');

@@ -46,7 +46,7 @@ safe_page(function () {
             if (($record['type'] ?? '') === 'superadmin') {
                 update_password($record['username'], $newPassword);
             } elseif ($isDepartment) {
-                update_department_user_password($record['deptId'], $record['fullUserId'], $newPassword);
+                update_department_user_password($record['deptId'], $record['fullUserId'], $newPassword, false, $record['fullUserId']);
             } elseif ($isContractor) {
                 update_contractor_password($record['yojId'], $newPassword, 'self');
             }

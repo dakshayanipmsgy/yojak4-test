@@ -62,6 +62,12 @@ safe_page(function () {
             'yojId' => $contractor['yojId'] ?? null,
             'decidedBy' => $decider,
         ]);
+        logEvent(DATA_PATH . '/logs/auth.log', [
+            'event' => 'contractor_temp_password_issued',
+            'requestId' => $requestId,
+            'mobile' => $contractor['mobile'] ?? null,
+            'decidedBy' => $decider,
+        ]);
         logEvent(DATA_PATH . '/logs/reset.log', [
             'event' => 'contractor_reset_approved',
             'requestId' => $requestId,
@@ -78,32 +84,73 @@ safe_page(function () {
     }
 
     $deptId = $request['deptId'] ?? '';
-    $fullUserId = $request['fullUserId'] ?? '';
-    $tempPassword = 'Temp' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 6)) . '!';
+    $fullUserId = $request['fullUserId'] ?? ($request['adminUserId'] ?? '');
+    $parsed = parse_department_login_identifier($fullUserId);
+    if (!$parsed || ($parsed['deptId'] ?? '') !== $deptId || ($parsed['roleId'] ?? '') !== 'admin') {
+        set_flash('error', 'Invalid department admin account.');
+        redirect('/superadmin/reset_requests.php');
+    }
+
+    $record = load_active_department_user($parsed['fullUserId']);
+    if (!$record || ($record['type'] ?? '') !== 'department' || ($record['roleId'] ?? '') !== 'admin') {
+        set_flash('error', 'Department admin not found.');
+        redirect('/superadmin/reset_requests.php');
+    }
+
+    $tempPassword = generate_temp_password(12);
 
     try {
         ensure_department_env($deptId);
-        update_department_user_password($deptId, $fullUserId, $tempPassword, true);
+        update_department_user_password($deptId, $parsed['fullUserId'], $tempPassword, true, $decider);
     } catch (Throwable $e) {
         set_flash('error', 'Unable to reset password: ' . $e->getMessage());
         redirect('/superadmin/reset_requests.php');
     }
+    $updatedRecord = load_active_department_user($parsed['fullUserId']);
 
-    update_password_reset_status($requestId, 'approved', $decider);
+    $now = now_kolkata()->format(DateTime::ATOM);
+    $request['status'] = 'approved';
+    $request['decidedAt'] = $now;
+    $request['decidedBy'] = $decider;
+    $request['updatedAt'] = $now;
+    $request['tempPasswordHash'] = $updatedRecord['passwordHash'] ?? null;
+    $request['tempPasswordIssuedAt'] = $now;
+    $request['tempPasswordDelivery'] = 'show_once';
+    save_password_reset_request($request);
+
     append_department_audit($deptId, [
         'by' => $decider,
         'action' => 'password_reset_approved',
-        'meta' => ['requestId' => $requestId, 'fullUserId' => $fullUserId],
+        'meta' => ['requestId' => $requestId, 'fullUserId' => $parsed['fullUserId']],
     ]);
 
     logEvent(DATA_PATH . '/logs/reset.log', [
         'event' => 'password_reset_approved',
         'deptId' => $deptId,
-        'fullUserId' => $fullUserId,
+        'fullUserId' => $parsed['fullUserId'],
+        'requestId' => $requestId,
+        'decidedBy' => $decider,
+    ]);
+    logEvent(DATA_PATH . '/logs/auth.log', [
+        'event' => 'dept_admin_temp_password_issued',
+        'deptId' => $deptId,
+        'adminUserId' => $parsed['fullUserId'],
+        'requestId' => $requestId,
+        'issuedBy' => $decider,
+    ]);
+    logEvent(DATA_PATH . '/logs/superadmin.log', [
+        'event' => 'dept_admin_reset_approved',
+        'deptId' => $deptId,
+        'adminUserId' => $parsed['fullUserId'],
         'requestId' => $requestId,
         'decidedBy' => $decider,
     ]);
 
-    set_flash('success', 'Reset approved. Temporary password: ' . $tempPassword . ' (force change on next login).');
+    $_SESSION['temp_password_once'] = [
+        'requestId' => $requestId,
+        'password' => $tempPassword,
+        'user' => $parsed['fullUserId'],
+    ];
+    set_flash('success', 'Reset approved. Temporary password generated and shown once.');
     redirect('/superadmin/reset_requests.php');
 });
