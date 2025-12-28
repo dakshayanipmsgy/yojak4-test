@@ -36,7 +36,7 @@ safe_page(function () {
         redirect('/department/requirements.php');
     }
 
-    $tender['requirementSetIds'] = array_values(array_unique(array_merge($tender['requirementSetIds'] ?? [], [$setId])));
+    $tender['requirementSetId'] = $setId;
     $tender['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
     save_department_tender($deptId, $tender);
     append_department_audit($deptId, [

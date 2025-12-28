@@ -160,6 +160,32 @@ function pack_items_from_checklist(array $checklist): array
     return $items;
 }
 
+function pack_items_from_requirement_set(array $set): array
+{
+    $items = [];
+    foreach ($set['items'] ?? [] as $item) {
+        if (count($items) >= 300) {
+            break;
+        }
+        $title = trim((string)($item['title'] ?? ''));
+        if ($title === '') {
+            continue;
+        }
+        $items[] = [
+            'itemId' => generate_pack_item_id(),
+            'title' => $title,
+            'description' => trim((string)($item['description'] ?? '')),
+            'required' => (bool)($item['required'] ?? true),
+            'status' => 'pending',
+            'fileRefs' => [],
+        ];
+    }
+    if (!$items) {
+        return pack_items_from_checklist([]);
+    }
+    return $items;
+}
+
 function pack_stats(array $pack): array
 {
     $items = $pack['items'] ?? [];

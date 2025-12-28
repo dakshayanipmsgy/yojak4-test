@@ -258,7 +258,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/department/docs_inbox.php"><?= sanitize('Docs'); ?></a>
                         <a href="/department/tenders.php"><?= sanitize('Tenders'); ?></a>
                         <a href="/department/workorders.php"><?= sanitize('Workorders'); ?></a>
-                        <a href="/department/requirements.php"><?= sanitize('Requirements'); ?></a>
+                        <a href="/department/requirement_sets.php"><?= sanitize('Requirement Sets'); ?></a>
                         <a href="/department/dak.php"><?= sanitize('DAK'); ?></a>
                         <a href="/department/health.php"><?= sanitize('Health'); ?></a>
                         <a href="/department/support.php"><?= sanitize('Support'); ?></a>
@@ -273,6 +273,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/contractor/vault.php"><?= sanitize('Vault'); ?></a>
                         <a href="/contractor/bills.php"><?= sanitize('Bills'); ?></a>
                         <a href="/contractor/workorders.php"><?= sanitize('Workorders'); ?></a>
+                        <a href="/contractor/tenders.php"><?= sanitize('Tenders'); ?></a>
                         <a href="/contractor/discovered_tenders.php"><?= sanitize('Discovered'); ?></a>
                         <a href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
                         <a href="/contractor/tender_archive.php"><?= sanitize('Tender Archive'); ?></a>

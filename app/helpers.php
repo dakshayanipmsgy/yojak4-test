@@ -37,6 +37,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/support/tickets',
         DATA_PATH . '/support/uploads',
         DATA_PATH . '/logs/runtime_errors',
+        DATA_PATH . '/logs/public_tenders',
     ];
 
     foreach ($directories as $dir) {
@@ -115,6 +116,8 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/tender_discovery.log',
         DATA_PATH . '/logs/support.log',
         DATA_PATH . '/logs/linking.log',
+        DATA_PATH . '/logs/tenders_publication.log',
+        DATA_PATH . '/logs/packs.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {

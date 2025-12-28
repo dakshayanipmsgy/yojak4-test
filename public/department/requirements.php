@@ -7,6 +7,8 @@ safe_page(function () {
     if (!empty($user['mustResetPassword'])) {
         redirect('/auth/force_reset.php');
     }
+    redirect('/department/requirement_sets.php');
+    return;
     $deptId = $user['deptId'] ?? '';
     ensure_department_env($deptId);
     require_department_permission($user, 'manage_requirements');

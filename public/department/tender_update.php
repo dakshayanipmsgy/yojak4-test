@@ -31,13 +31,16 @@ safe_page(function () {
     $emdText = trim($_POST['emdText'] ?? '');
     $sdPercent = trim($_POST['sdPercent'] ?? '');
     $pgPercent = trim($_POST['pgPercent'] ?? '');
-    $reqIds = $_POST['requirementSetIds'] ?? [];
+    $reqId = trim($_POST['requirementSetId'] ?? '');
     $publishedToContractors = isset($_POST['publishedToContractors']) && $_POST['publishedToContractors'] === 'on';
+    $titlePublic = trim($_POST['titlePublic'] ?? '');
+    $summaryPublic = trim($_POST['summaryPublic'] ?? '');
     $requirementSets = load_requirement_sets($deptId);
-    $validReqs = [];
+    $validReq = null;
     foreach ($requirementSets as $set) {
-        if (in_array($set['setId'] ?? '', $reqIds, true)) {
-            $validReqs[] = $set['setId'];
+        if (($set['setId'] ?? '') === $reqId) {
+            $validReq = $set['setId'];
+            break;
         }
     }
 
@@ -57,7 +60,12 @@ safe_page(function () {
     $tender['emdText'] = $emdText;
     $tender['sdPercent'] = $sdPercent;
     $tender['pgPercent'] = $pgPercent;
-    $tender['requirementSetIds'] = $validReqs;
+    $tender['requirementSetId'] = $validReq;
+    $tender['contractorVisibleSummary'] = [
+        'titlePublic' => $titlePublic !== '' ? $titlePublic : null,
+        'summaryPublic' => $summaryPublic,
+        'attachmentsPublic' => $tender['contractorVisibleSummary']['attachmentsPublic'] ?? [],
+    ];
     $tender['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
     $tender['publishedToContractors'] = $publishedToContractors;
     if ($publishedToContractors && empty($tender['publishedAt'])) {
@@ -67,7 +75,29 @@ safe_page(function () {
         $tender['publishedAt'] = null;
     }
 
+    if (!empty($_FILES['publicAttachments']['name'])) {
+        $existing = $tender['contractorVisibleSummary']['attachmentsPublic'] ?? [];
+        $tender['contractorVisibleSummary']['attachmentsPublic'] = save_public_attachments($deptId, $tender['id'], $_FILES['publicAttachments'], $existing);
+    }
+
     save_department_tender($deptId, $tender);
+    if (!empty($tender['publishedToContractors'])) {
+        write_public_tender_snapshot(load_department($deptId) ?? ['deptId' => $deptId], $tender, $requirementSets, $tender['contractorVisibleSummary']['attachmentsPublic'] ?? []);
+        logEvent(DATA_PATH . '/logs/tenders_publication.log', [
+            'event' => 'tender_published',
+            'deptId' => $deptId,
+            'ytdId' => $tender['id'],
+            'actor' => $user['username'] ?? '',
+        ]);
+    } else {
+        remove_public_tender_snapshot($deptId, $tender['id']);
+        logEvent(DATA_PATH . '/logs/tenders_publication.log', [
+            'event' => 'tender_unpublished',
+            'deptId' => $deptId,
+            'ytdId' => $tender['id'],
+            'actor' => $user['username'] ?? '',
+        ]);
+    }
     append_department_audit($deptId, [
         'by' => $user['username'] ?? '',
         'action' => 'tender_updated',
