@@ -31,12 +31,13 @@ safe_page(function () {
                         <th><?= sanitize('Publish'); ?></th>
                         <th><?= sanitize('Submission'); ?></th>
                         <th><?= sanitize('Opening'); ?></th>
+                        <th><?= sanitize('Contractors'); ?></th>
                         <th><?= sanitize('Actions'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (!$tenders): ?>
-                        <tr><td colspan="6" class="muted"><?= sanitize('No tenders yet.'); ?></td></tr>
+                        <tr><td colspan="7" class="muted"><?= sanitize('No tenders yet.'); ?></td></tr>
                     <?php else: ?>
                         <?php foreach ($tenders as $tender): ?>
                             <tr>
@@ -45,6 +46,13 @@ safe_page(function () {
                                 <td><?= sanitize($tender['publishDate'] ?? ''); ?></td>
                                 <td><?= sanitize($tender['submissionDate'] ?? ''); ?></td>
                                 <td><?= sanitize($tender['openingDate'] ?? ''); ?></td>
+                                <td>
+                                    <?php if (!empty($tender['publishedToContractors'])): ?>
+                                        <span class="pill" style="border-color:var(--success);color:#8ce99a;"><?= sanitize('Published'); ?></span>
+                                    <?php else: ?>
+                                        <span class="pill"><?= sanitize('Internal'); ?></span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><a class="btn secondary" href="/department/tender_view.php?id=<?= urlencode($tender['id'] ?? ''); ?>"><?= sanitize('View'); ?></a></td>
                             </tr>
                         <?php endforeach; ?>

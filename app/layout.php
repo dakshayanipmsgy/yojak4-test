@@ -251,6 +251,8 @@ function render_layout(string $title, callable $content): void
                         <a href="/department/dashboard.php"><?= sanitize('Department'); ?></a>
                         <a href="/department/roles.php"><?= sanitize('Roles'); ?></a>
                         <a href="/department/users.php"><?= sanitize('Users'); ?></a>
+                        <a href="/department/contractors.php"><?= sanitize('Contractors'); ?></a>
+                        <a href="/department/contractor_requests.php"><?= sanitize('Requests'); ?></a>
                         <a href="/department/templates.php"><?= sanitize('Templates'); ?></a>
                         <a href="/department/quick_doc.php"><?= sanitize('Quick Doc'); ?></a>
                         <a href="/department/docs_inbox.php"><?= sanitize('Docs'); ?></a>
@@ -266,6 +268,7 @@ function render_layout(string $title, callable $content): void
                         </form>
                     <?php elseif ($user && ($user['type'] ?? '') === 'contractor'): ?>
                         <a href="/contractor/dashboard.php"><?= sanitize('Contractor'); ?></a>
+                        <a href="/contractor/departments.php"><?= sanitize('Departments'); ?></a>
                         <a href="/contractor/packs.php"><?= sanitize('Tender Packs'); ?></a>
                         <a href="/contractor/vault.php"><?= sanitize('Vault'); ?></a>
                         <a href="/contractor/bills.php"><?= sanitize('Bills'); ?></a>
@@ -273,6 +276,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/contractor/discovered_tenders.php"><?= sanitize('Discovered'); ?></a>
                         <a href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
                         <a href="/contractor/tender_archive.php"><?= sanitize('Tender Archive'); ?></a>
+                        <a href="/contractor/notifications.php"><?= sanitize('Notifications'); ?></a>
                         <a href="/contractor/support.php"><?= sanitize('Support'); ?></a>
                         <form method="post" action="/contractor/logout.php" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">

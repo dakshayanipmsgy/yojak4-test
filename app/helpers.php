@@ -114,6 +114,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/reset.log',
         DATA_PATH . '/logs/tender_discovery.log',
         DATA_PATH . '/logs/support.log',
+        DATA_PATH . '/logs/linking.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {
@@ -251,6 +252,18 @@ function mask_ip(string $ip): string
         return substr($ip, 0, 6) . '::xxxx';
     }
     return $ip !== '' ? 'masked' : 'unknown';
+}
+
+function mask_mobile(string $mobile): string
+{
+    $digits = preg_replace('/\D+/', '', $mobile);
+    if (strlen($digits) === 10) {
+        return substr($digits, 0, 2) . '******' . substr($digits, -2);
+    }
+    if (strlen($digits) > 4) {
+        return substr($digits, 0, 2) . str_repeat('*', max(2, strlen($digits) - 4)) . substr($digits, -2);
+    }
+    return $mobile !== '' ? '******' : 'unknown';
 }
 
 function generate_temp_password(int $length = 12): string

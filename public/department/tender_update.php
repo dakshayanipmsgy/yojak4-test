@@ -32,6 +32,7 @@ safe_page(function () {
     $sdPercent = trim($_POST['sdPercent'] ?? '');
     $pgPercent = trim($_POST['pgPercent'] ?? '');
     $reqIds = $_POST['requirementSetIds'] ?? [];
+    $publishedToContractors = isset($_POST['publishedToContractors']) && $_POST['publishedToContractors'] === 'on';
     $requirementSets = load_requirement_sets($deptId);
     $validReqs = [];
     foreach ($requirementSets as $set) {
@@ -58,6 +59,13 @@ safe_page(function () {
     $tender['pgPercent'] = $pgPercent;
     $tender['requirementSetIds'] = $validReqs;
     $tender['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
+    $tender['publishedToContractors'] = $publishedToContractors;
+    if ($publishedToContractors && empty($tender['publishedAt'])) {
+        $tender['publishedAt'] = now_kolkata()->format(DateTime::ATOM);
+    }
+    if (!$publishedToContractors) {
+        $tender['publishedAt'] = null;
+    }
 
     save_department_tender($deptId, $tender);
     append_department_audit($deptId, [

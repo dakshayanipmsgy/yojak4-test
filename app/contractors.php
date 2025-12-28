@@ -65,6 +65,11 @@ function is_valid_mobile(string $mobile): bool
     return (bool)preg_match('/^[6-9][0-9]{9}$/', $normalized);
 }
 
+function is_valid_yoj_id(string $yojId): bool
+{
+    return (bool)preg_match('/^YOJ-[A-Z0-9]{5}$/', strtoupper(trim($yojId)));
+}
+
 function contractors_pending_path(string $signupId): string
 {
     return DATA_PATH . '/contractors/pending/' . $signupId . '.json';
@@ -350,6 +355,137 @@ function save_contractor(array $contractor): void
 function contractor_upload_dir(string $yojId): string
 {
     return PUBLIC_PATH . '/uploads/contractors/' . $yojId . '/vault';
+}
+
+function contractor_links_dir(string $yojId): string
+{
+    return contractors_approved_path($yojId) . '/links';
+}
+
+function contractor_links_index_path(string $yojId): string
+{
+    return contractor_links_dir($yojId) . '/index.json';
+}
+
+function ensure_contractor_links_env(string $yojId): void
+{
+    $dir = contractor_links_dir($yojId);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+    if (!file_exists(contractor_links_index_path($yojId))) {
+        writeJsonAtomic(contractor_links_index_path($yojId), []);
+    }
+}
+
+function load_contractor_links(string $yojId): array
+{
+    ensure_contractor_links_env($yojId);
+    $links = readJson(contractor_links_index_path($yojId));
+    return is_array($links) ? array_values($links) : [];
+}
+
+function save_contractor_links(string $yojId, array $links): void
+{
+    ensure_contractor_links_env($yojId);
+    writeJsonAtomic(contractor_links_index_path($yojId), array_values($links));
+}
+
+function load_contractor_link(string $yojId, string $deptId): ?array
+{
+    ensure_contractor_links_env($yojId);
+    $path = contractor_links_dir($yojId) . '/' . $deptId . '.json';
+    if (!file_exists($path)) {
+        return null;
+    }
+    $data = readJson($path);
+    return $data ?: null;
+}
+
+function save_contractor_link_file(string $yojId, array $link): void
+{
+    ensure_contractor_links_env($yojId);
+    $path = contractor_links_dir($yojId) . '/' . ($link['deptId'] ?? '') . '.json';
+    writeJsonAtomic($path, $link);
+}
+
+function contractor_notifications_dir(string $yojId): string
+{
+    return contractors_approved_path($yojId) . '/notifications';
+}
+
+function contractor_notifications_index_path(string $yojId): string
+{
+    return contractor_notifications_dir($yojId) . '/index.json';
+}
+
+function ensure_contractor_notifications_env(string $yojId): void
+{
+    $dir = contractor_notifications_dir($yojId);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+    if (!file_exists(contractor_notifications_index_path($yojId))) {
+        writeJsonAtomic(contractor_notifications_index_path($yojId), []);
+    }
+}
+
+function contractor_notifications_index(string $yojId): array
+{
+    ensure_contractor_notifications_env($yojId);
+    $data = readJson(contractor_notifications_index_path($yojId));
+    return is_array($data) ? array_values($data) : [];
+}
+
+function save_contractor_notifications_index(string $yojId, array $records): void
+{
+    ensure_contractor_notifications_env($yojId);
+    writeJsonAtomic(contractor_notifications_index_path($yojId), array_values($records));
+}
+
+function generate_notification_id(): string
+{
+    $date = (new DateTime('now', new DateTimeZone('Asia/Kolkata')))->format('Ymd');
+    $suffix = strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
+    return 'N-' . $date . '-' . $suffix;
+}
+
+function create_contractor_notification(string $yojId, array $payload): ?array
+{
+    if (!is_valid_yoj_id($yojId) || !load_contractor($yojId)) {
+        return null;
+    }
+    ensure_contractor_notifications_env($yojId);
+    do {
+        $notifId = generate_notification_id();
+        $path = contractor_notifications_dir($yojId) . '/' . $notifId . '.json';
+    } while (file_exists($path));
+
+    $now = now_kolkata()->format(DateTime::ATOM);
+    $notification = [
+        'notifId' => $notifId,
+        'type' => $payload['type'] ?? 'info',
+        'title' => $payload['title'] ?? '',
+        'message' => $payload['message'] ?? '',
+        'deptId' => $payload['deptId'] ?? null,
+        'createdAt' => $now,
+        'readAt' => null,
+    ];
+
+    writeJsonAtomic($path, $notification);
+
+    $index = contractor_notifications_index($yojId);
+    $index[] = [
+        'notifId' => $notifId,
+        'type' => $notification['type'],
+        'title' => $notification['title'],
+        'deptId' => $notification['deptId'],
+        'createdAt' => $notification['createdAt'],
+        'readAt' => $notification['readAt'],
+    ];
+    save_contractor_notifications_index($yojId, $index);
+
+    return $notification;
 }
 
 function ensure_contractor_upload_dir(string $yojId): void

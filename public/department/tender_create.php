@@ -26,6 +26,7 @@ safe_page(function () {
         $sdPercent = trim($_POST['sdPercent'] ?? '');
         $pgPercent = trim($_POST['pgPercent'] ?? '');
         $reqIds = $_POST['requirementSetIds'] ?? [];
+        $publishedToContractors = isset($_POST['publishedToContractors']) && $_POST['publishedToContractors'] === 'on';
 
         if ($title === '') {
             $errors[] = 'Title required.';
@@ -61,6 +62,8 @@ safe_page(function () {
                 'createdAt' => now_kolkata()->format(DateTime::ATOM),
                 'updatedAt' => now_kolkata()->format(DateTime::ATOM),
                 'status' => 'draft',
+                'publishedToContractors' => $publishedToContractors,
+                'publishedAt' => $publishedToContractors ? now_kolkata()->format(DateTime::ATOM) : null,
             ];
             save_department_tender($deptId, $tender);
             append_department_audit($deptId, [
@@ -134,6 +137,10 @@ safe_page(function () {
                         <label for="pgPercent"><?= sanitize('PG %'); ?></label>
                         <input id="pgPercent" name="pgPercent">
                     </div>
+                </div>
+                <div class="field" style="display:flex;align-items:center;gap:10px;">
+                    <input type="checkbox" id="publishedToContractors" name="publishedToContractors" style="width:auto;">
+                    <label for="publishedToContractors" style="margin:0;"><?= sanitize('Publish to linked contractors'); ?></label>
                 </div>
                 <div class="field">
                     <label><?= sanitize('Attach Requirement Sets'); ?></label>

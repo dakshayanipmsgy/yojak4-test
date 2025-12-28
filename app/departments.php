@@ -146,7 +146,25 @@ function load_department(string $deptId): ?array
         return null;
     }
     $data = readJson($path);
-    return $data ?: null;
+    if (!$data) {
+        return null;
+    }
+    if (!array_key_exists('visibleToContractors', $data)) {
+        $data['visibleToContractors'] = true;
+    }
+    if (!array_key_exists('acceptingLinkRequests', $data)) {
+        $data['acceptingLinkRequests'] = true;
+    }
+    if (!array_key_exists('activeAdminUserId', $data)) {
+        $data['activeAdminUserId'] = null;
+    }
+    if (!array_key_exists('district', $data)) {
+        $data['district'] = '';
+    }
+    if (!array_key_exists('nameHi', $data)) {
+        $data['nameHi'] = '';
+    }
+    return $data;
 }
 
 function save_department(array $department): void
@@ -173,6 +191,10 @@ function create_department_record(string $deptId, string $nameEn, string $nameHi
         'nameHi' => $nameHi,
         'address' => $address,
         'contactEmail' => $contactEmail,
+        'contactPhone' => '',
+        'district' => '',
+        'visibleToContractors' => true,
+        'acceptingLinkRequests' => true,
         'createdAt' => $now,
         'updatedAt' => $now,
         'status' => 'active',
@@ -418,6 +440,8 @@ function ensure_department_env(string $deptId): void
         department_requirements_path($deptId),
         department_dak_path($deptId),
         dirname(department_audit_log_path($deptId)),
+        department_path($deptId) . '/contractor_requests',
+        department_path($deptId) . '/contractors',
     ];
 
     foreach ($paths as $path) {
@@ -445,6 +469,16 @@ function ensure_department_env(string $deptId): void
 
     if (!file_exists(department_dak_path($deptId) . '/index.json')) {
         writeJsonAtomic(department_dak_path($deptId) . '/index.json', []);
+    }
+
+    $contractorRequestIndex = department_path($deptId) . '/contractor_requests/index.json';
+    if (!file_exists($contractorRequestIndex)) {
+        writeJsonAtomic($contractorRequestIndex, []);
+    }
+
+    $contractorIndex = department_path($deptId) . '/contractors/index.json';
+    if (!file_exists($contractorIndex)) {
+        writeJsonAtomic($contractorIndex, []);
     }
 
     $audit = department_audit_log_path($deptId);
@@ -790,6 +824,307 @@ function department_log(string $deptId, array $context): void
     logEvent(department_log_path($deptId), $context);
 }
 
+function log_link_event(array $context): void
+{
+    $entry = array_merge(['at' => now_kolkata()->format(DateTime::ATOM)], $context);
+    $file = DATA_PATH . '/logs/linking.log';
+    $dir = dirname($file);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+    $handle = fopen($file, 'a');
+    if ($handle) {
+        flock($handle, LOCK_EX);
+        fwrite($handle, json_encode($entry, JSON_UNESCAPED_SLASHES) . PHP_EOL);
+        flock($handle, LOCK_UN);
+        fclose($handle);
+    }
+}
+
+function department_contractor_requests_dir(string $deptId): string
+{
+    return department_path($deptId) . '/contractor_requests';
+}
+
+function department_contractor_requests_index_path(string $deptId): string
+{
+    return department_contractor_requests_dir($deptId) . '/index.json';
+}
+
+function department_contractor_request_path(string $deptId, string $requestId): string
+{
+    return department_contractor_requests_dir($deptId) . '/' . $requestId . '.json';
+}
+
+function load_department_contractor_requests(string $deptId): array
+{
+    ensure_department_env($deptId);
+    $data = readJson(department_contractor_requests_index_path($deptId));
+    return is_array($data) ? array_values($data) : [];
+}
+
+function save_department_contractor_requests(string $deptId, array $requests): void
+{
+    ensure_department_env($deptId);
+    writeJsonAtomic(department_contractor_requests_index_path($deptId), array_values($requests));
+}
+
+function load_department_contractor_request(string $deptId, string $requestId): ?array
+{
+    ensure_department_env($deptId);
+    $path = department_contractor_request_path($deptId, $requestId);
+    if (!file_exists($path)) {
+        return null;
+    }
+    $data = readJson($path);
+    return $data ?: null;
+}
+
+function save_department_contractor_request(string $deptId, array $request): void
+{
+    ensure_department_env($deptId);
+    $path = department_contractor_request_path($deptId, $request['requestId'] ?? '');
+    writeJsonAtomic($path, $request);
+
+    $index = load_department_contractor_requests($deptId);
+    $found = false;
+    foreach ($index as &$entry) {
+        if (($entry['requestId'] ?? '') === ($request['requestId'] ?? '')) {
+            $entry['status'] = $request['status'] ?? $entry['status'];
+            $entry['yojId'] = $request['yojId'] ?? $entry['yojId'];
+            $entry['createdAt'] = $request['createdAt'] ?? $entry['createdAt'];
+            $found = true;
+            break;
+        }
+    }
+    unset($entry);
+    if (!$found) {
+        $index[] = [
+            'requestId' => $request['requestId'] ?? '',
+            'yojId' => $request['yojId'] ?? '',
+            'status' => $request['status'] ?? 'pending',
+            'createdAt' => $request['createdAt'] ?? now_kolkata()->format(DateTime::ATOM),
+        ];
+    }
+    save_department_contractor_requests($deptId, $index);
+}
+
+function department_contractors_dir(string $deptId): string
+{
+    return department_path($deptId) . '/contractors';
+}
+
+function department_contractors_index_path(string $deptId): string
+{
+    return department_contractors_dir($deptId) . '/index.json';
+}
+
+function department_contractor_link_path(string $deptId, string $yojId): string
+{
+    return department_contractors_dir($deptId) . '/' . $yojId . '.json';
+}
+
+function load_department_contractor_links(string $deptId): array
+{
+    ensure_department_env($deptId);
+    $data = readJson(department_contractors_index_path($deptId));
+    return is_array($data) ? array_values($data) : [];
+}
+
+function save_department_contractor_links(string $deptId, array $links): void
+{
+    ensure_department_env($deptId);
+    writeJsonAtomic(department_contractors_index_path($deptId), array_values($links));
+}
+
+function load_department_contractor_link(string $deptId, string $yojId): ?array
+{
+    ensure_department_env($deptId);
+    $path = department_contractor_link_path($deptId, $yojId);
+    if (!file_exists($path)) {
+        return null;
+    }
+    $data = readJson($path);
+    return $data ?: null;
+}
+
+function generate_department_contractor_id(string $deptId): string
+{
+    ensure_department_env($deptId);
+    do {
+        $suffix = strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
+        $candidate = $deptId . '.CON-' . $suffix;
+        $exists = false;
+        foreach (load_department_contractor_links($deptId) as $link) {
+            if (($link['deptContractorId'] ?? '') === $candidate) {
+                $exists = true;
+                break;
+            }
+        }
+    } while ($exists);
+    return $candidate;
+}
+
+function ensure_department_contractor_link(string $deptId, string $yojId, string $linkedBy): array
+{
+    ensure_department_env($deptId);
+    ensure_contractor_links_env($yojId);
+    $existing = load_department_contractor_link($deptId, $yojId);
+    $now = now_kolkata()->format(DateTime::ATOM);
+    $department = load_department($deptId) ?? [];
+
+    $link = [
+        'deptId' => $deptId,
+        'yojId' => $yojId,
+        'deptContractorId' => $existing['deptContractorId'] ?? generate_department_contractor_id($deptId),
+        'status' => 'active',
+        'scopes' => [
+            'canViewPublishedTenders' => true,
+            'canViewAssignedWorkorders' => true,
+        ],
+        'linkedBy' => $existing['linkedBy'] ?? $linkedBy,
+        'linkedAt' => $existing['linkedAt'] ?? $now,
+        'updatedAt' => $now,
+    ];
+
+    writeJsonAtomic(department_contractor_link_path($deptId, $yojId), $link);
+
+    $index = load_department_contractor_links($deptId);
+    $found = false;
+    foreach ($index as &$entry) {
+        if (($entry['yojId'] ?? '') === $yojId) {
+            $entry['deptContractorId'] = $link['deptContractorId'];
+            $entry['status'] = $link['status'];
+            $entry['linkedAt'] = $link['linkedAt'];
+            $found = true;
+            break;
+        }
+    }
+    unset($entry);
+    if (!$found) {
+        $index[] = [
+            'yojId' => $yojId,
+            'deptContractorId' => $link['deptContractorId'],
+            'status' => $link['status'],
+            'linkedAt' => $link['linkedAt'],
+        ];
+    }
+    save_department_contractor_links($deptId, $index);
+
+    $mirror = [
+        'deptId' => $deptId,
+        'deptContractorId' => $link['deptContractorId'],
+        'status' => $link['status'],
+        'linkedAt' => $link['linkedAt'],
+        'updatedAt' => $link['updatedAt'],
+        'deptPublicSnapshot' => [
+            'nameEn' => $department['nameEn'] ?? '',
+            'district' => $department['district'] ?? '',
+        ],
+    ];
+    save_contractor_link_file($yojId, $mirror);
+
+    $contractorLinks = load_contractor_links($yojId);
+    $mirrorFound = false;
+    foreach ($contractorLinks as &$entry) {
+        if (($entry['deptId'] ?? '') === $deptId) {
+            $entry = $mirror;
+            $mirrorFound = true;
+            break;
+        }
+    }
+    unset($entry);
+    if (!$mirrorFound) {
+        $contractorLinks[] = $mirror;
+    }
+    save_contractor_links($yojId, $contractorLinks);
+
+    return $link;
+}
+
+function update_department_contractor_link_status(string $deptId, string $yojId, string $status): bool
+{
+    $link = load_department_contractor_link($deptId, $yojId);
+    if (!$link) {
+        return false;
+    }
+    if (!in_array($status, ['active', 'suspended', 'revoked'], true)) {
+        return false;
+    }
+
+    $link['status'] = $status;
+    $link['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
+    writeJsonAtomic(department_contractor_link_path($deptId, $yojId), $link);
+
+    $index = load_department_contractor_links($deptId);
+    foreach ($index as &$entry) {
+        if (($entry['yojId'] ?? '') === $yojId) {
+            $entry['status'] = $status;
+            break;
+        }
+    }
+    unset($entry);
+    save_department_contractor_links($deptId, $index);
+
+    $mirror = load_contractor_link($yojId, $deptId);
+    if ($mirror) {
+        $mirror['status'] = $status;
+        $mirror['updatedAt'] = $link['updatedAt'];
+        save_contractor_link_file($yojId, $mirror);
+        $contractorLinks = load_contractor_links($yojId);
+        foreach ($contractorLinks as &$entry) {
+            if (($entry['deptId'] ?? '') === $deptId) {
+                $entry['status'] = $status;
+                $entry['updatedAt'] = $mirror['updatedAt'];
+                break;
+            }
+        }
+        unset($entry);
+        save_contractor_links($yojId, $contractorLinks);
+    }
+
+    return true;
+}
+
+function contractor_has_pending_request(string $yojId, string $deptId): bool
+{
+    $requests = load_department_contractor_requests($deptId);
+    foreach ($requests as $request) {
+        if (($request['yojId'] ?? '') === $yojId && ($request['status'] ?? '') === 'pending') {
+            return true;
+        }
+    }
+    return false;
+}
+
+function contractor_pending_requests_count(string $yojId): int
+{
+    $count = 0;
+    $dirs = glob(DATA_PATH . '/departments/*/contractor_requests/index.json') ?: [];
+    foreach ($dirs as $indexPath) {
+        $list = readJson($indexPath);
+        if (!is_array($list)) {
+            continue;
+        }
+        foreach ($list as $entry) {
+            if (($entry['yojId'] ?? '') === $yojId && ($entry['status'] ?? '') === 'pending') {
+                $count++;
+            }
+        }
+    }
+    return $count;
+}
+
+function generate_contractor_request_id(string $deptId): string
+{
+    ensure_department_env($deptId);
+    do {
+        $suffix = str_pad((string)random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+        $candidate = 'LREQ-' . (new DateTime('now', new DateTimeZone('Asia/Kolkata')))->format('Ymd') . '-' . $suffix;
+    } while (file_exists(department_contractor_request_path($deptId, $candidate)));
+    return $candidate;
+}
+
 function department_tender_index_path(string $deptId): string
 {
     return department_tenders_path($deptId) . '/index.json';
@@ -823,6 +1158,30 @@ function load_department_tenders(string $deptId): array
     return is_array($data) ? array_values($data) : [];
 }
 
+function load_department_published_tenders(string $deptId): array
+{
+    $visible = [];
+    foreach (load_department_tenders($deptId) as $indexEntry) {
+        $tenderId = $indexEntry['id'] ?? '';
+        if ($tenderId === '') {
+            continue;
+        }
+        $tender = load_department_tender($deptId, $tenderId);
+        if ($tender && !empty($tender['publishedToContractors'])) {
+            $visible[] = [
+                'id' => $tender['id'] ?? $tenderId,
+                'title' => $tender['title'] ?? $tenderId,
+                'publishDate' => $tender['dates']['publish'] ?? '',
+                'submissionDate' => $tender['dates']['submission'] ?? '',
+                'openingDate' => $tender['dates']['opening'] ?? '',
+                'publishedAt' => $tender['publishedAt'] ?? null,
+            ];
+        }
+    }
+    usort($visible, fn($a, $b) => strcmp($b['publishDate'] ?? '', $a['publishDate'] ?? ''));
+    return $visible;
+}
+
 function save_department_tenders(string $deptId, array $records): void
 {
     ensure_tender_index($deptId);
@@ -851,6 +1210,18 @@ function save_department_tender(string $deptId, array $tender): void
     if (empty($tender['id'])) {
         $tender['id'] = generate_ytd_id($deptId);
     }
+    if (!array_key_exists('publishedToContractors', $tender)) {
+        $tender['publishedToContractors'] = false;
+    }
+    if (!array_key_exists('publishedAt', $tender)) {
+        $tender['publishedAt'] = null;
+    }
+    if (!empty($tender['publishedToContractors']) && empty($tender['publishedAt'])) {
+        $tender['publishedAt'] = now_kolkata()->format(DateTime::ATOM);
+    }
+    if (empty($tender['publishedToContractors'])) {
+        $tender['publishedAt'] = null;
+    }
     $dir = dirname(department_tender_path($deptId, $tender['id']));
     if (!is_dir($dir)) {
         mkdir($dir, 0775, true);
@@ -869,6 +1240,7 @@ function save_department_tender(string $deptId, array $tender): void
                 'submissionDate' => $tender['dates']['submission'] ?? null,
                 'openingDate' => $tender['dates']['opening'] ?? null,
                 'updatedAt' => $tender['updatedAt'],
+                'publishedToContractors' => !empty($tender['publishedToContractors']),
             ]);
             $found = true;
             break;
@@ -884,6 +1256,7 @@ function save_department_tender(string $deptId, array $tender): void
             'submissionDate' => $tender['dates']['submission'] ?? null,
             'openingDate' => $tender['dates']['opening'] ?? null,
             'updatedAt' => $tender['updatedAt'],
+            'publishedToContractors' => !empty($tender['publishedToContractors']),
         ];
     }
     save_department_tenders($deptId, $index);
@@ -896,7 +1269,16 @@ function load_department_tender(string $deptId, string $tenderId): ?array
         return null;
     }
     $data = readJson($path);
-    return $data ?: null;
+    if (!$data) {
+        return null;
+    }
+    if (!array_key_exists('publishedToContractors', $data)) {
+        $data['publishedToContractors'] = false;
+    }
+    if (!array_key_exists('publishedAt', $data)) {
+        $data['publishedAt'] = null;
+    }
+    return $data;
 }
 
 function department_workorder_path(string $deptId, string $woId): string

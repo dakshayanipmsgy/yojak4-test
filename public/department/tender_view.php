@@ -79,6 +79,13 @@ safe_page(function () {
                         <input id="pgPercent" name="pgPercent" value="<?= sanitize($tender['pgPercent'] ?? ''); ?>">
                     </div>
                 </div>
+                <div class="field" style="display:flex;align-items:center;gap:10px;">
+                    <input type="checkbox" id="publishedToContractors" name="publishedToContractors" style="width:auto;" <?= !empty($tender['publishedToContractors']) ? 'checked' : ''; ?>>
+                    <label for="publishedToContractors" style="margin:0;"><?= sanitize('Publish to linked contractors'); ?></label>
+                    <?php if (!empty($tender['publishedAt'])): ?>
+                        <span class="pill"><?= sanitize('Published at ' . ($tender['publishedAt'] ?? '')); ?></span>
+                    <?php endif; ?>
+                </div>
                 <div class="field">
                     <label><?= sanitize('Requirement Sets'); ?></label>
                     <div style="display:flex;flex-wrap:wrap;gap:10px;">
