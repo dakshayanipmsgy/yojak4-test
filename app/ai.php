@@ -448,8 +448,16 @@ function ai_apply_provider_result(array &$result, array $providerResult, array $
     $result['rawText'] = $providerResult['text'] ?? '';
     $result['text'] = $result['rawText'];
     $result['requestId'] = $providerResult['requestId'] ?? $result['requestId'];
-    $result['responseId'] = $providerResult['requestId'] ?? $result['responseId'];
+    $result['responseId'] = $providerResult['responseId'] ?? $result['responseId'] ?? $result['requestId'];
+    if (!$result['requestId'] && $result['responseId']) {
+        $result['requestId'] = $result['responseId'];
+    }
     $result['finishReason'] = $providerResult['finishReason'] ?? $result['finishReason'];
+    $result['finishReasons'] = array_values(array_filter(array_unique(array_merge(
+        $result['finishReasons'],
+        is_array($providerResult['finishReasons'] ?? null) ? $providerResult['finishReasons'] : [],
+        $result['finishReason'] ? [$result['finishReason']] : []
+    ))));
     $result['promptBlockReason'] = $providerResult['blockReason'] ?? $result['promptBlockReason'];
     $result['safetyRatingsSummary'] = $providerResult['safetySummary'] ?? ($result['safetyRatingsSummary'] ?? '');
     $result['providerError'] = $providerResult['providerError'] ?? null;
@@ -470,7 +478,12 @@ function ai_apply_provider_result(array &$result, array $providerResult, array $
         'stream' => $providerResult['stream'] ?? false,
         'structured' => $providerResult['structured'] ?? false,
         'responseMimeType' => $providerResult['responseMimeType'] ?? null,
+        'responseId' => $result['responseId'],
+        'finishReasons' => $result['finishReasons'],
+        'blockReason' => $result['promptBlockReason'],
+        'diagnosticError' => $providerResult['diagnosticError'] ?? null,
     ];
+    $result['diagnosticError'] = $providerResult['diagnosticError'] ?? $result['diagnosticError'];
 
     if ($result['providerError']) {
         $result['errors'][] = $result['providerError'];
@@ -503,7 +516,8 @@ function ai_apply_provider_result(array &$result, array $providerResult, array $
             $result['parsedOk'] = $result['providerOk'];
         }
     } elseif ($result['providerOk']) {
-        $result['errors'][] = 'Provider succeeded but returned empty content.';
+        $result['errors'][] = $providerResult['diagnosticError'] ?? 'empty_content';
+        $result['diagnosticError'] = $providerResult['diagnosticError'] ?? 'empty_content';
     }
 
     $result['ok'] = $result['parsedOk'] || (!$expectJson && $result['providerOk']);
@@ -516,6 +530,7 @@ function ai_log(array $context): void
 
 function ai_provider_log_raw(array $context): void
 {
+    $context['at'] = $context['at'] ?? now_kolkata()->format(DateTime::ATOM);
     logEvent(AI_PROVIDER_RAW_LOG, $context);
 }
 
@@ -558,6 +573,27 @@ function ai_detect_provider_error_payload(array $decoded): ?string
                 return $message;
             }
             return 'Provider errors payload present.';
+        }
+    }
+
+    return null;
+}
+
+function ai_request_id_from_headers(array $headers): ?string
+{
+    $keys = [
+        'x-request-id',
+        'x-goog-request-id',
+        'x-goog-trace-id',
+        'x-b3-traceid',
+        'traceparent',
+        'x-cloud-trace-context',
+    ];
+
+    foreach ($keys as $key) {
+        $value = $headers[$key] ?? ($headers[strtolower($key)] ?? null);
+        if (is_string($value) && trim($value) !== '') {
+            return trim($value);
         }
     }
 
@@ -639,14 +675,25 @@ function ai_extract_gemini_text(array $decoded): string
             continue;
         }
 
-        $content = $candidate['content'] ?? null;
-        if (is_array($content)) {
-            $parts = $content['parts'] ?? ($content[0]['parts'] ?? []);
-            if (is_array($parts)) {
-                $text = ai_flatten_text_parts($parts);
-                if ($text !== '') {
-                    return $text;
+        $contents = [];
+        if (isset($candidate['content']['parts'])) {
+            $contents[] = $candidate['content'];
+        } elseif (is_array($candidate['content'] ?? null)) {
+            foreach ($candidate['content'] as $contentBlock) {
+                if (is_array($contentBlock) && isset($contentBlock['parts'])) {
+                    $contents[] = $contentBlock;
                 }
+            }
+        }
+
+        foreach ($contents as $content) {
+            $parts = $content['parts'] ?? [];
+            if (!is_array($parts)) {
+                continue;
+            }
+            $text = ai_flatten_text_parts($parts);
+            if ($text !== '') {
+                return $text;
             }
         }
     }
@@ -777,6 +824,7 @@ function ai_provider_response_openai(array $config, string $systemPrompt, string
         'text' => $text,
         'providerError' => $providerError,
         'requestId' => $requestId,
+        'responseId' => $requestId,
         'ok' => $ok,
         'modelUsed' => $modelUsed,
         'latencyMs' => $latencyMs,
@@ -821,6 +869,17 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
     }
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $responseHeaders = [];
+    curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($chResource, string $header) use (&$responseHeaders): int {
+        $len = strlen($header);
+        $header = trim($header);
+        if ($header === '' || strpos($header, ':') === false) {
+            return $len;
+        }
+        [$name, $value] = array_map('trim', explode(':', $header, 2));
+        $responseHeaders[strtolower($name)] = $value;
+        return $len;
+    });
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Content-Type: application/json',
         'Accept: ' . ($stream ? 'text/event-stream' : 'application/json'),
@@ -839,11 +898,14 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
     $text = '';
     $decoded = null;
     $requestId = null;
+    $responseId = null;
     $modelUsed = $model;
     $rawBody = (string)($response === false ? '' : $response);
     $finishReason = null;
+    $finishReasons = [];
     $blockReason = null;
     $safetySummary = '';
+    $diagnosticError = null;
 
     if ($response === false) {
         $providerError = 'Request failed: ' . ($curlError !== '' ? $curlError : 'transport error');
@@ -861,13 +923,17 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
                     continue;
                 }
                 $decoded = $candidateDecoded;
-                $requestId = $candidateDecoded['responseId'] ?? $requestId;
+                $responseId = $candidateDecoded['responseId'] ?? $responseId;
                 $modelUsed = $candidateDecoded['model'] ?? $modelUsed;
                 $chunkText = ai_extract_gemini_text($candidateDecoded);
                 if ($chunkText !== '') {
                     $text .= ($text !== '' ? "\n" : '') . $chunkText;
                 }
                 $finishReason = $finishReason ?: ai_gemini_finish_reason($candidateDecoded);
+                $candidateFinish = ai_gemini_finish_reason($candidateDecoded);
+                if ($candidateFinish) {
+                    $finishReasons[] = $candidateFinish;
+                }
                 $blockReason = $blockReason ?: ai_gemini_block_reason($candidateDecoded);
                 $safetySummary = $safetySummary ?: ai_gemini_safety_summary($candidateDecoded['promptFeedback']['safetyRatings'] ?? ($candidateDecoded['candidates'][0]['safetyRatings'] ?? []));
                 $errorPayload = ai_detect_provider_error_payload($candidateDecoded);
@@ -875,6 +941,7 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
                     $providerError = $errorPayload;
                 }
             }
+            $requestId = ai_request_id_from_headers($responseHeaders) ?? $responseId ?? $requestId;
             if ($httpCode < 200 || $httpCode >= 300) {
                 $providerError = $providerError ?? ('HTTP ' . $httpCode);
             } elseif ($providerError === null && $blockReason) {
@@ -883,9 +950,22 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
         } else {
             $decoded = json_decode($rawBody, true);
             if (is_array($decoded)) {
-                $requestId = $decoded['responseId'] ?? null;
+                $responseId = $decoded['responseId'] ?? null;
+                $requestId = ai_request_id_from_headers($responseHeaders) ?? $responseId ?? ($decoded['id'] ?? null);
                 $modelUsed = $decoded['model'] ?? $modelUsed;
                 $finishReason = ai_gemini_finish_reason($decoded);
+                $finishReasons = $finishReason ? [$finishReason] : [];
+                if (!empty($decoded['candidates']) && is_array($decoded['candidates'])) {
+                    foreach ($decoded['candidates'] as $candidate) {
+                        if (!is_array($candidate)) {
+                            continue;
+                        }
+                        if (!empty($candidate['finishReason'])) {
+                            $finishReasons[] = (string)$candidate['finishReason'];
+                        }
+                    }
+                }
+                $finishReasons = array_values(array_filter(array_unique($finishReasons)));
                 $blockReason = ai_gemini_block_reason($decoded);
                 $safetySummary = ai_gemini_safety_summary($decoded['promptFeedback']['safetyRatings'] ?? ($decoded['candidates'][0]['safetyRatings'] ?? []));
                 $errorPayload = ai_detect_provider_error_payload($decoded);
@@ -905,9 +985,18 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
             } elseif ($httpCode < 200 || $httpCode >= 300) {
                 $providerError = 'HTTP ' . $httpCode;
             } else {
-                $providerError = 'Malformed response from provider.';
+                $providerError = 'Invalid JSON response from provider.';
             }
         }
+    }
+    $requestId = $requestId ?? ai_request_id_from_headers($responseHeaders);
+
+    if ($finishReason && !in_array($finishReason, $finishReasons, true)) {
+        $finishReasons[] = $finishReason;
+    }
+    $finishReasons = array_values(array_unique(array_filter($finishReasons)));
+    if ($text === '' && $providerError === null && $blockReason === null && $httpCode >= 200 && $httpCode < 300) {
+        $diagnosticError = 'empty_content';
     }
 
     $ok = $providerError === null && $httpCode >= 200 && $httpCode < 300 && !$blockReason;
@@ -919,10 +1008,12 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
         'text' => $text,
         'providerError' => $providerError,
         'requestId' => $requestId,
+        'responseId' => $responseId,
         'ok' => $ok,
         'modelUsed' => $modelUsed,
         'latencyMs' => $latencyMs,
         'finishReason' => $finishReason,
+        'finishReasons' => $finishReasons,
         'blockReason' => $blockReason,
         'safetySummary' => $safetySummary,
         'attemptType' => $attemptType,
@@ -933,6 +1024,8 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
         'responseMimeType' => $structured ? 'application/json' : null,
         'schemaApplied' => $structured && is_array($responseSchema),
         'responseSchema' => $structured ? $responseSchema : null,
+        'diagnosticError' => $diagnosticError,
+        'rawHeaders' => $responseHeaders,
     ];
 }
 
@@ -948,6 +1041,7 @@ function ai_call(array $params): array
         'errors' => [],
         'httpStatus' => null,
         'requestId' => null,
+        'responseId' => null,
         'parseStage' => 'fallback_manual',
         'providerError' => null,
         'rawEnvelope' => null,
@@ -957,6 +1051,7 @@ function ai_call(array $params): array
         'modelUsed' => null,
         'temperatureUsed' => null,
         'finishReason' => null,
+        'finishReasons' => [],
         'promptBlockReason' => null,
         'safetyRatingsSummary' => '',
         'retryCount' => 0,
@@ -967,6 +1062,8 @@ function ai_call(array $params): array
             'passed' => true,
             'errors' => [],
         ],
+        'diagnosticError' => null,
+        'error' => null,
     ];
 
     $configResult = ai_get_config(true);
@@ -1163,6 +1260,7 @@ function ai_call(array $params): array
 
     $result['rawBodySnippet'] = substr($result['rawBody'] ?: $result['rawText'], 0, 800);
     $result['provider'] = $provider;
+    $result['error'] = $result['errors'][0] ?? ($result['providerError'] ?? ($result['diagnosticError'] ?? null));
 
     foreach ($result['attempts'] as $attempt) {
         ai_log([
@@ -1175,8 +1273,10 @@ function ai_call(array $params): array
             'ok' => $attempt['ok'] ?? false,
             'textLen' => strlen((string)($attempt['text'] ?? '')),
             'finishReason' => $attempt['finishReason'] ?? null,
+            'finishReasons' => $attempt['finishReasons'] ?? [],
             'blockReason' => $attempt['blockReason'] ?? null,
             'requestId' => $attempt['requestId'] ?? null,
+            'responseId' => $attempt['responseId'] ?? null,
             'errorCount' => !empty($attempt['providerError']) ? 1 : 0,
             'errors' => array_filter([$attempt['providerError'] ?? null]),
             'httpStatus' => $attempt['httpStatus'] ?? null,
@@ -1186,21 +1286,29 @@ function ai_call(array $params): array
             'structured' => $attempt['structured'] ?? false,
             'responseMimeType' => $attempt['responseMimeType'] ?? null,
             'schemaApplied' => $attempt['schemaApplied'] ?? false,
+            'diagnosticError' => $attempt['diagnosticError'] ?? null,
         ]);
 
         ai_provider_log_raw([
             'event' => 'ai_provider_raw',
             'provider' => $provider,
-            'model' => $attempt['modelUsed'] ?? ($config['textModel'] ?? ''),
+            'modelUsed' => $attempt['modelUsed'] ?? ($config['textModel'] ?? ''),
             'attemptType' => $attempt['attemptType'] ?? 'primary',
             'httpStatus' => $attempt['httpStatus'] ?? null,
             'requestId' => $attempt['requestId'] ?? null,
-            'responseSnippet' => substr($attempt['rawBody'] ?? ($attempt['text'] ?? ''), 0, 800),
+            'responseId' => $attempt['responseId'] ?? null,
+            'rawSnippet' => substr($attempt['rawBody'] ?? ($attempt['text'] ?? ''), 0, 800),
+            'textLen' => strlen((string)($attempt['text'] ?? '')),
+            'finishReasons' => $attempt['finishReasons'] ?? [],
+            'blockReason' => $attempt['blockReason'] ?? null,
+            'ok' => $attempt['ok'] ?? false,
+            'error' => $attempt['providerError'] ?? ($attempt['diagnosticError'] ?? null),
             'parsedOk' => $result['parsedOk'],
             'errors' => array_slice($result['errors'], 0, 5),
             'latencyMs' => $attempt['latencyMs'] ?? $durationMs,
             'structured' => $attempt['structured'] ?? false,
             'responseMimeType' => $attempt['responseMimeType'] ?? null,
+            'purpose' => $purpose,
         ]);
     }
 
@@ -1220,12 +1328,16 @@ function ai_call(array $params): array
         'runMode' => $runMode,
         'temperature' => $temperature,
         'finishReason' => $result['finishReason'],
+        'finishReasons' => $result['finishReasons'],
         'blockReason' => $result['promptBlockReason'],
+        'requestId' => $result['requestId'],
+        'responseId' => $result['responseId'],
         'retryCount' => $result['retryCount'],
         'fallbackUsed' => $result['fallbackUsed'],
         'structured' => is_array($result['rawEnvelope']) ? ($result['rawEnvelope']['structured'] ?? false) : false,
         'schemaValidation' => $result['schemaValidation'],
         'responseMimeType' => is_array($result['rawEnvelope']) ? ($result['rawEnvelope']['responseMimeType'] ?? null) : null,
+        'diagnosticError' => $result['diagnosticError'],
     ]);
 
     return $result;

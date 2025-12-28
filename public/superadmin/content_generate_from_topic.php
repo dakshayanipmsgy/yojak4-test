@@ -71,6 +71,11 @@ try {
 
     $rawText = (string)($aiResult['rawText'] ?? '');
     $rawTextSnippet = function_exists('mb_substr') ? mb_substr($rawText, 0, 800, 'UTF-8') : substr($rawText, 0, 800);
+    $responseId = $aiResult['responseId'] ?? ($aiResult['rawEnvelope']['responseId'] ?? null);
+    $finishReasons = $aiResult['finishReasons'] ?? ($aiResult['rawEnvelope']['finishReasons'] ?? []);
+    $blockReason = $aiResult['promptBlockReason'] ?? ($aiResult['rawEnvelope']['blockReason'] ?? null);
+    $textLength = strlen($rawText);
+    $errors = $aiResult['errors'] ?? [];
 
     $json = is_array($aiResult['json'] ?? null) ? $aiResult['json'] : null;
     $title = trim((string)($json['title'] ?? ''));
@@ -82,6 +87,15 @@ try {
         $errors = $aiResult['errors'] ?? [];
         if ($title === '' || $bodyHtml === '') {
             $errors[] = 'AI response missing required title or bodyHtml.';
+        }
+        if ($blockReason) {
+            $errors[] = 'Block reason: ' . $blockReason;
+        }
+        if (!empty($finishReasons)) {
+            $errors[] = 'Finish reasons: ' . implode(', ', $finishReasons);
+        }
+        if (($aiResult['diagnosticError'] ?? null) === 'empty_content') {
+            $errors[] = 'empty_content';
         }
         $errorText = implode(' | ', array_slice($errors, 0, 3));
         if ($errorText === '') {
@@ -95,6 +109,10 @@ try {
         'modelUsed' => $aiResult['modelUsed'] ?? ($aiResult['rawEnvelope']['model'] ?? ''),
         'httpStatus' => $aiResult['httpStatus'] ?? ($aiResult['rawEnvelope']['httpStatus'] ?? null),
         'requestId' => $aiResult['requestId'] ?? ($aiResult['rawEnvelope']['requestId'] ?? null),
+        'responseId' => $responseId,
+        'finishReasons' => $finishReasons,
+        'blockReason' => $blockReason,
+        'textLength' => $textLength,
         'nonce' => $nonce,
         'promptHash' => $promptBundle['promptHash'],
         'outputHash' => null,
@@ -145,7 +163,25 @@ try {
         'modelUsed' => $generationMeta['modelUsed'],
         'httpStatus' => $generationMeta['httpStatus'],
         'requestId' => $generationMeta['requestId'],
+        'responseId' => $generationMeta['responseId'],
+        'finishReasons' => $generationMeta['finishReasons'],
+        'blockReason' => $generationMeta['blockReason'],
+        'textLength' => $generationMeta['textLength'],
     ];
+
+    content_v2_save_raw_response($jobId, [
+        'purpose' => 'contentDrafts',
+        'provider' => $generationMeta['provider'],
+        'modelUsed' => $generationMeta['modelUsed'],
+        'httpStatus' => $generationMeta['httpStatus'],
+        'requestId' => $generationMeta['requestId'],
+        'responseId' => $generationMeta['responseId'],
+        'finishReasons' => $generationMeta['finishReasons'],
+        'blockReason' => $generationMeta['blockReason'],
+        'rawSnippet' => $aiResult['rawBodySnippet'] ?? $rawTextSnippet,
+        'textLen' => $generationMeta['textLength'],
+        'errors' => $errorText !== '' ? $errors : [],
+    ]);
 
     if (!$generationMeta['ok']) {
         writeJsonAtomic(content_v2_job_path($jobId), $jobPayload);
@@ -161,14 +197,18 @@ try {
             'modelUsed' => $generationMeta['modelUsed'],
             'httpStatus' => $generationMeta['httpStatus'],
             'requestId' => $generationMeta['requestId'],
+            'responseId' => $generationMeta['responseId'],
             'promptHash' => $promptBundle['promptHash'],
             'outputHash' => null,
+            'finishReasons' => $generationMeta['finishReasons'],
+            'blockReason' => $generationMeta['blockReason'],
+            'textLength' => $generationMeta['textLength'],
             'errors' => $errors,
             'error' => $generationMeta['error'],
         ]);
         $respond([
             'ok' => false,
-            'error' => 'AI returned empty content. Please retry with a new nonce.',
+            'error' => $generationMeta['error'] ?: 'AI returned empty content.',
             'aiMeta' => $generationMeta,
             'jobId' => $jobId,
         ]);
@@ -225,8 +265,12 @@ try {
         'modelUsed' => $generationMeta['modelUsed'],
         'httpStatus' => $generationMeta['httpStatus'],
         'requestId' => $generationMeta['requestId'],
+        'responseId' => $generationMeta['responseId'],
         'promptHash' => $promptBundle['promptHash'],
         'outputHash' => $outputHash,
+        'finishReasons' => $generationMeta['finishReasons'],
+        'blockReason' => $generationMeta['blockReason'],
+        'textLength' => $generationMeta['textLength'],
     ]);
 
     $respond([

@@ -269,19 +269,36 @@ safe_page(function () {
                     el.style.display = 'none';
                     return;
                 }
+                const provider = meta.provider || 'unknown';
                 const model = meta.modelUsed || meta.model || 'unknown';
                 const httpStatus = meta.httpStatus ?? 'n/a';
-                const requestId = meta.requestId || 'n/a';
+                const requestId = meta.requestId || '(not provided)';
+                const responseId = meta.responseId || '';
+                const finishReasons = Array.isArray(meta.finishReasons) && meta.finishReasons.length ? meta.finishReasons.join(', ') : '';
+                const blockReason = meta.blockReason || meta.promptBlockReason || '';
+                const textLength = meta.textLength ?? meta.textLen ?? (meta.rawTextSnippet ? meta.rawTextSnippet.length : '');
                 const line = document.createElement('div');
                 line.className = 'muted-compact';
-                line.innerHTML = `<strong>Model:</strong> ${escapeHtml(model)} • <strong>HTTP:</strong> ${escapeHtml(String(httpStatus))} • <strong>Request:</strong> ${escapeHtml(requestId)}`;
+                line.innerHTML = `<strong>Provider:</strong> ${escapeHtml(provider)} • <strong>Model:</strong> ${escapeHtml(model)} • <strong>HTTP:</strong> ${escapeHtml(String(httpStatus))} • <strong>Request:</strong> ${escapeHtml(requestId)}`;
+                if (responseId) {
+                    const resp = document.createElement('div');
+                    resp.className = 'muted-compact';
+                    resp.textContent = `Response ID: ${responseId}`;
+                    line.appendChild(resp);
+                }
+                if (blockReason || finishReasons || textLength !== '') {
+                    const diagLine = document.createElement('div');
+                    diagLine.className = 'muted-compact';
+                    diagLine.textContent = `${blockReason ? `Block: ${blockReason} • ` : ''}${finishReasons ? `Finish: ${finishReasons} • ` : ''}Text length: ${textLength || 0}`;
+                    line.appendChild(diagLine);
+                }
                 const actions = document.createElement('div');
                 actions.className = 'actions';
                 const copyBtn = document.createElement('button');
                 copyBtn.type = 'button';
                 copyBtn.className = 'btn secondary compact';
                 copyBtn.textContent = 'Copy debug';
-                const debugText = `requestId=${requestId}\nhttpStatus=${httpStatus}\nmodelUsed=${model}`;
+                const debugText = `provider=${provider}\nmodelUsed=${model}\nhttpStatus=${httpStatus}\nrequestId=${requestId}\nresponseId=${responseId || ''}\nfinishReasons=${finishReasons}\nblockReason=${blockReason}\ntextLength=${textLength || 0}`;
                 copyBtn.addEventListener('click', () => {
                     if (navigator.clipboard) {
                         navigator.clipboard.writeText(debugText).then(() => {

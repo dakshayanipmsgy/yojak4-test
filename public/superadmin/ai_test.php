@@ -79,6 +79,9 @@ safe_page(function () {
     render_layout($title, function () use ($config, $callResult, $progress, $displayKey, $mode) {
         $rawSnippet = substr($callResult['rawBody'] ?? ($callResult['rawText'] ?? ''), 0, 800);
         $textLength = strlen((string)($callResult['rawText'] ?? ''));
+        $responseId = $callResult['responseId'] ?? ($callResult['rawEnvelope']['responseId'] ?? null);
+        $finishReasons = $callResult['finishReasons'] ?? [];
+        $blockReason = $callResult['promptBlockReason'] ?? ($callResult['rawEnvelope']['blockReason'] ?? null);
         ?>
         <div class="card">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -111,6 +114,16 @@ safe_page(function () {
                 <div class="pill"><?= sanitize('Latency: ' . (($callResult['latencyMs'] ?? null) !== null ? ($callResult['latencyMs'] . ' ms') : 'n/a')); ?></div>
                 <div class="pill"><?= sanitize('Text length: ' . $textLength); ?></div>
                 <div class="pill"><?= sanitize('Model used: ' . ($callResult['modelUsed'] ?? ($config['textModel'] ?? 'unknown'))); ?></div>
+                <div class="pill muted"><?= sanitize('Request ID: ' . ($callResult['requestId'] ?? '(not provided)')); ?></div>
+                <?php if ($responseId): ?>
+                    <div class="pill muted"><?= sanitize('Response ID: ' . $responseId); ?></div>
+                <?php endif; ?>
+                <?php if (!empty($finishReasons)): ?>
+                    <div class="pill"><?= sanitize('Finish: ' . implode(', ', $finishReasons)); ?></div>
+                <?php endif; ?>
+                <?php if ($blockReason): ?>
+                    <div class="pill danger"><?= sanitize('Block: ' . $blockReason); ?></div>
+                <?php endif; ?>
             </div>
             <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">
                 <div>
