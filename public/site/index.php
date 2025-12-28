@@ -47,7 +47,7 @@ safe_page(function () {
         </section>
         <section class="card" style="margin-top:16px;">
             <h3 style="margin-top:0;">Blog &amp; News</h3>
-            <p class="muted" style="margin:0 0 8px 0;">Content Studio and Content Studio v2 have been removed. Blog and news posts are no longer published from this app.</p>
+            <p class="muted" style="margin:0 0 8px 0;">Blog and news posts are not available in this app.</p>
             <div class="pill" style="display:inline-block;background:#0c111b;color:#9ea7b3;">Content unavailable</div>
             <div class="buttons" style="margin-top:12px;">
                 <a class="btn" href="/site/blog.php"><?= sanitize('Blog'); ?></a>

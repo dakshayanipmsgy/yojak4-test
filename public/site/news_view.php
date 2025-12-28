@@ -11,7 +11,7 @@ safe_page(function () {
         <div class="card error-card">
             <p class="pill" style="display:inline-block;margin:0 0 8px 0;">News</p>
             <h1 style="margin-top:0;"><?= sanitize('Not Found'); ?></h1>
-            <p class="muted">News posts are no longer available because Content Studio has been removed.</p>
+            <p class="muted">News posts are not available in this app.</p>
             <div class="buttons" style="margin-top:10px;">
                 <a class="btn" href="/site/news.php"><?= sanitize('Back to News'); ?></a>
                 <a class="btn secondary" href="/site/index.php"><?= sanitize('Home'); ?></a>

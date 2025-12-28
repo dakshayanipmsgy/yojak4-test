@@ -9,7 +9,7 @@ safe_page(function () {
         ?>
         <div class="card">
             <h1 style="margin-top:0;">News</h1>
-            <p class="muted">Latest platform updates and releases are unavailable because Content Studio has been removed.</p>
+            <p class="muted">Latest platform updates and releases are not available in this app.</p>
             <div class="pill" style="display:inline-block;margin-top:8px;"><?= sanitize('News posts are currently offline.'); ?></div>
             <div class="buttons" style="margin-top:12px;">
                 <a class="btn" href="/site/index.php"><?= sanitize('Back to Home'); ?></a>
