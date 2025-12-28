@@ -362,6 +362,7 @@ function update_password(string $username, string $newPassword): void
     $record['passwordHash'] = password_hash($newPassword, PASSWORD_DEFAULT);
     $record['mustResetPassword'] = false;
     $record['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
+    $record['lastPasswordResetAt'] = $record['updatedAt'];
     persist_user_record($record);
     $_SESSION['user']['mustResetPassword'] = false;
 }

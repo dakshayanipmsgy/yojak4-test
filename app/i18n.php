@@ -57,6 +57,7 @@ function translations(): array
             'nav_dashboard' => 'Superadmin',
             'force_reset_title' => 'Reset Password',
             'force_reset_body' => 'For your security, please set a new password before continuing.',
+            'force_reset_notice' => 'You must set a new password to continue.',
             'password_requirements' => 'Password must be at least 8 characters and differ from your previous password.',
             'error_title' => 'Something went wrong',
             'error_generic' => 'We hit a snag. The team has been notified.',
@@ -100,6 +101,7 @@ function translations(): array
             'nav_dashboard' => 'सुपरएडमिन',
             'force_reset_title' => 'पासवर्ड रीसेट करें',
             'force_reset_body' => 'आपकी सुरक्षा के लिए, आगे बढ़ने से पहले नया पासवर्ड सेट करें।',
+            'force_reset_notice' => 'आगे बढ़ने के लिए आपको नया पासवर्ड सेट करना होगा।',
             'password_requirements' => 'पासवर्ड कम से कम 8 अक्षरों का हो और पुराने से भिन्न हो।',
             'error_title' => 'कुछ गलत हो गया',
             'error_generic' => 'हमें समस्या हुई। टीम को सूचित किया गया है।',
@@ -134,4 +136,3 @@ function t(string $key): string
     }
     return $dictionary['en'][$key] ?? $key;
 }
-
