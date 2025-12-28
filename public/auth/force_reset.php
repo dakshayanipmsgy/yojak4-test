@@ -7,14 +7,19 @@ safe_page(function () {
     $errors = [];
     $record = null;
     $redirectAfter = '/auth/login.php';
-    $isDepartment = ($user['type'] ?? '') === 'department';
+    $type = $user['type'] ?? '';
+    $isDepartment = $type === 'department';
+    $isContractor = $type === 'contractor';
 
-    if (($user['type'] ?? '') === 'superadmin') {
+    if ($type === 'superadmin') {
         $record = get_user_record($user['username']);
         $redirectAfter = '/superadmin/dashboard.php';
     } elseif ($isDepartment) {
         $record = load_active_department_user($user['username']);
         $redirectAfter = '/department/dashboard.php';
+    } elseif ($isContractor) {
+        $record = load_contractor($user['yojId'] ?? '');
+        $redirectAfter = '/contractor/dashboard.php';
     }
 
     if (!$record) {
@@ -42,10 +47,12 @@ safe_page(function () {
                 update_password($record['username'], $newPassword);
             } elseif ($isDepartment) {
                 update_department_user_password($record['deptId'], $record['fullUserId'], $newPassword);
+            } elseif ($isContractor) {
+                update_contractor_password($record['yojId'], $newPassword, 'self');
             }
             logEvent(DATA_PATH . '/logs/auth.log', [
                 'event' => 'password_reset',
-                'username' => $record['username'] ?? ($record['fullUserId'] ?? 'unknown'),
+                'username' => $record['username'] ?? ($record['fullUserId'] ?? ($record['yojId'] ?? 'unknown')),
                 'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
             ]);
             set_flash('success', t('reset_success'));
