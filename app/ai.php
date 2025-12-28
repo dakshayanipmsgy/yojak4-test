@@ -135,6 +135,55 @@ function ai_normalize_purpose_models(array $raw): array
     return $normalized;
 }
 
+function ai_model_validation_error(string $provider, string $model, string $label): ?string
+{
+    if ($model === '' || ($provider !== 'openai' && $provider !== 'gemini')) {
+        return null;
+    }
+    $provider = strtolower($provider);
+    if ($provider === 'gemini') {
+        if (!preg_match('/^(gemini|learnlm)-[a-z0-9][a-z0-9.\-]*$/i', $model)) {
+            return $label . ' must be a Gemini model name (gemini-*).';
+        }
+    } elseif ($provider === 'openai') {
+        if (!preg_match('/^(gpt-|o1-|o3-)/i', $model)) {
+            return $label . ' must be an OpenAI chat model (gpt-*, o1-*, o3-*).';
+        }
+    }
+    return null;
+}
+
+function ai_validate_model_set(string $provider, array $config): array
+{
+    $errors = [];
+    $textModel = trim((string)($config['textModel'] ?? ''));
+    $imageModel = trim((string)($config['imageModel'] ?? ''));
+    $purposeModels = is_array($config['purposeModels'] ?? null) ? $config['purposeModels'] : [];
+
+    foreach ([['label' => 'Text model', 'value' => $textModel], ['label' => 'Image model', 'value' => $imageModel]] as $entry) {
+        $error = ai_model_validation_error($provider, $entry['value'], $entry['label']);
+        if ($error !== null) {
+            $errors[] = $error;
+        }
+    }
+
+    foreach ($purposeModels as $purpose => $models) {
+        if (!is_array($models)) {
+            continue;
+        }
+        $primary = trim((string)($models['primaryModel'] ?? ''));
+        $fallback = trim((string)($models['fallbackModel'] ?? ''));
+        foreach ([['label' => 'Purpose ' . $purpose . ': primary model', 'value' => $primary], ['label' => 'Purpose ' . $purpose . ': fallback model', 'value' => $fallback]] as $entry) {
+            $error = ai_model_validation_error($provider, $entry['value'], $entry['label']);
+            if ($error !== null) {
+                $errors[] = $error;
+            }
+        }
+    }
+
+    return array_values(array_unique($errors));
+}
+
 function ai_get_config(bool $includeKey = false): array
 {
     ensure_ai_storage();
@@ -174,6 +223,7 @@ function ai_get_config(bool $includeKey = false): array
     if (!$config['apiKeyStored']) {
         $errors[] = 'API key is required.';
     }
+    $errors = array_merge($errors, ai_validate_model_set($config['provider'] ?? '', $config));
 
     return [
         'ok' => empty($errors),
@@ -223,6 +273,7 @@ function ai_save_config(array $input): array
     $payload['imageModel'] = $imageModel;
     $payload['purposeModels'] = ai_normalize_purpose_models($purposeModels + ($existingConfig['purposeModels'] ?? []));
     $payload['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
+    $errors = array_merge($errors, ai_validate_model_set($provider, $payload));
 
     if (empty($errors)) {
         writeJsonAtomic(AI_CONFIG_PATH, $payload);
