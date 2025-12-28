@@ -217,14 +217,16 @@ function topic_v2_list(string $type): array
     return $filtered;
 }
 
-function topic_v2_build_prompts(string $type, string $prompt, ?string $newsLength, int $count, string $nonce): array
+function topic_v2_build_prompts(string $type, string $prompt, ?string $newsLength, int $count, string $nonce, string $provider = ''): array
 {
     $baseGuardrails = 'Keep everything fictional, platform-safe, and focused on workflow guidance for Jharkhand government contractors. '
         . 'Do not make real-world claims. Ensure each topic title is unique (no near-duplicates) and 10-120 characters.';
 
+    $jsonGuard = $provider === 'gemini' ? ' Return ONLY valid JSON. No markdown. No backticks.' : '';
+
     $systemPrompt = 'You generate unique topic ideas and return JSON only. '
         . 'Schema: {"topics":[{"title":"string","angle":"string","keywords":["a","b","c"]}]}. '
-        . 'Avoid markdown, avoid numbering, avoid extra text. Keep keywords concise.';
+        . 'Avoid markdown, avoid numbering, avoid extra text. Keep keywords concise.' . $jsonGuard;
 
     $tonePrompt = $type === 'news'
         ? 'Style: bulletin-style news/update, concise, platform tips. Prefer short headlines with a quick angle. '
@@ -292,6 +294,49 @@ function topic_v2_parse_results($json, int $count): array
     }
 
     return $parsed;
+}
+
+function topic_v2_validate_result(?array $json, int $requiredMin, int $requiredMax): array
+{
+    $errors = [];
+    if ($json === null) {
+        return ['ok' => false, 'topics' => [], 'errors' => ['AI response missing or invalid JSON.']];
+    }
+
+    if (!isset($json['topics']) || !is_array($json['topics'])) {
+        $errors[] = 'Expected "topics" array in JSON output.';
+    } else {
+        $count = count($json['topics']);
+        if ($count < $requiredMin || $count > $requiredMax) {
+            $errors[] = 'Expected between ' . $requiredMin . ' and ' . $requiredMax . ' topics, got ' . $count . '.';
+        }
+    }
+
+    $parsed = topic_v2_parse_results($json, $requiredMax);
+    if (count($parsed) < $requiredMin) {
+        $errors[] = 'Parsed ' . count($parsed) . ' valid topics. Titles must be 10-120 characters and unique.';
+    }
+
+    foreach ($parsed as $idx => $item) {
+        if ($item['topicTitle'] === '') {
+            $errors[] = 'Topic #' . ($idx + 1) . ' missing title.';
+        }
+        if (strlen($item['topicTitle']) < 10 || strlen($item['topicTitle']) > 120) {
+            $errors[] = 'Topic #' . ($idx + 1) . ' title length must be 10-120 characters.';
+        }
+        if (!is_string($item['topicAngle'] ?? '')) {
+            $errors[] = 'Topic #' . ($idx + 1) . ' angle must be text.';
+        }
+        if (!is_array($item['keywords'] ?? [])) {
+            $errors[] = 'Topic #' . ($idx + 1) . ' keywords must be an array.';
+        }
+    }
+
+    return [
+        'ok' => empty($errors),
+        'topics' => $parsed,
+        'errors' => $errors,
+    ];
 }
 
 function topic_v2_soft_delete(string $type, string $topicId): bool
@@ -497,7 +542,7 @@ function content_v2_mark_topic_used(string $type, string $topicId): void
     topic_v2_save_record($topic);
 }
 
-function content_v2_build_generation_prompt(string $type, array $topic, array $overrides, string $nonce): array
+function content_v2_build_generation_prompt(string $type, array $topic, array $overrides, string $nonce, string $provider = ''): array
 {
     $now = now_kolkata()->format('Y-m-d H:i T');
     $baseTitle = trim((string)($overrides['customTitle'] ?? ''));
@@ -509,8 +554,10 @@ function content_v2_build_generation_prompt(string $type, array $topic, array $o
     $newsLength = $type === 'news' ? ($overrides['newsLength'] ?? ($topic['newsLength'] ?? 'standard')) : null;
     $newsLength = in_array($newsLength, ['short', 'standard', 'long'], true) ? $newsLength : 'standard';
 
+    $jsonGuard = $provider === 'gemini' ? ' Return ONLY valid JSON. No markdown. No backticks.' : '';
+
     $systemPrompt = 'You are an assistant that returns STRICT JSON only: {"title":"string","excerpt":"<=40 words","bodyHtml":"HTML"} with no code fences. '
-        . 'Sanitize output: no scripts, inline events, or unsafe URLs. Always use fresh wording and a new outline.';
+        . 'Sanitize output: no scripts, inline events, or unsafe URLs. Always use fresh wording and a new outline.' . $jsonGuard;
 
     $directives = [
         'Nonce: ' . $nonce,
@@ -555,5 +602,36 @@ function content_v2_build_generation_prompt(string $type, array $topic, array $o
         'promptHash' => $promptHash,
         'newsLength' => $newsLength,
         'topicTitle' => $topicTitle,
+    ];
+}
+
+function content_v2_validate_draft_payload(?array $json): array
+{
+    if ($json === null) {
+        return ['ok' => false, 'errors' => ['AI response missing or invalid JSON.']];
+    }
+
+    $errors = [];
+    $title = trim((string)($json['title'] ?? ''));
+    $excerpt = trim((string)($json['excerpt'] ?? ''));
+    $bodyHtmlRaw = (string)($json['bodyHtml'] ?? '');
+    $bodyHtml = sanitize_body_html($bodyHtmlRaw);
+
+    if ($title === '') {
+        $errors[] = 'Missing required "title".';
+    }
+    if ($excerpt === '') {
+        $errors[] = 'Missing required "excerpt".';
+    }
+    if (trim($bodyHtml) === '') {
+        $errors[] = 'Missing required "bodyHtml".';
+    }
+
+    return [
+        'ok' => empty($errors),
+        'errors' => $errors,
+        'title' => $title,
+        'excerpt' => $excerpt,
+        'bodyHtml' => $bodyHtml,
     ];
 }

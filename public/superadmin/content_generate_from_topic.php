@@ -42,6 +42,9 @@ try {
         $respond(['ok' => false, 'error' => 'AI is not configured. Superadmin: set provider, API key, and model in AI Studio.', 'details' => $configResult['errors']]);
         return;
     }
+    $config = $configResult['config'] ?? ai_config_defaults();
+    $provider = $config['provider'] ?? '';
+    $purposeModels = ai_resolve_purpose_models($config, 'contentDrafts');
 
     $customTitle = trim((string)($_POST['customTitle'] ?? ''));
     $tone = trim((string)($_POST['tone'] ?? 'modern, confident, concise'));
@@ -56,18 +59,73 @@ try {
         'customTitle' => $customTitle,
         'tone' => $tone,
         'newsLength' => $newsLength,
-    ], $nonce);
+    ], $nonce, $provider);
+
+    $baseOptions = [
+        'expectJson' => true,
+        'temperature' => $type === 'news' ? 0.5 : 0.68,
+        'maxTokens' => $type === 'news' ? 900 : 1400,
+        'allowFallback' => false,
+    ];
+
+    $attempts = [];
+    $retryCount = 0;
+    $fallbackUsed = false;
+    $fallbackModelUsed = null;
 
     $aiResult = ai_call_text(
         'contentDrafts',
         $promptBundle['systemPrompt'],
         $promptBundle['userPrompt'],
-        [
-            'expectJson' => true,
-            'temperature' => $type === 'news' ? 0.5 : 0.68,
-            'maxTokens' => $type === 'news' ? 900 : 1400,
-        ]
+        $baseOptions
     );
+    $attempts[] = $aiResult;
+
+    $validation = content_v2_validate_draft_payload($aiResult['json'] ?? null);
+    $errors = array_values(array_unique(array_merge($aiResult['errors'] ?? [], $validation['errors'] ?? [])));
+    $ok = ($aiResult['ok'] ?? false) && ($validation['ok'] ?? false);
+
+    $emptyContent = ($aiResult['diagnosticError'] ?? null) === 'empty_content' || trim((string)($aiResult['rawText'] ?? '')) === '';
+    if (!$ok && $retryCount < 1) {
+        $retryCount++;
+        $retryPrompt = $promptBundle['userPrompt'] . "\nReturn ONLY valid JSON. No markdown. No backticks. Schema: {\"title\":\"string\",\"excerpt\":\"string\",\"bodyHtml\":\"HTML\"}. DO NOT RETURN EMPTY. MUST RETURN JSON.";
+        $retryOptions = $baseOptions;
+        if ($emptyContent) {
+            $retryOptions['temperature'] = min(1.0, ($baseOptions['temperature'] ?? 0.68) + 0.1);
+            $retryOptions['maxTokens'] = max($baseOptions['maxTokens'], ($type === 'news' ? 1100 : 1600));
+        }
+        $aiResult = ai_call_text(
+            'contentDrafts',
+            $promptBundle['systemPrompt'],
+            $retryPrompt,
+            $retryOptions
+        );
+        $attempts[] = $aiResult;
+        $validation = content_v2_validate_draft_payload($aiResult['json'] ?? null);
+        $errors = array_values(array_unique(array_merge($aiResult['errors'] ?? [], $validation['errors'] ?? [])));
+        $ok = ($aiResult['ok'] ?? false) && ($validation['ok'] ?? false);
+    }
+
+    if (!$ok && !$fallbackUsed && !empty($purposeModels['fallbackModel'])) {
+        $fallbackUsed = true;
+        $fallbackModelUsed = $purposeModels['fallbackModel'];
+        $fallbackPrompt = $promptBundle['userPrompt'] . "\nReturn ONLY valid JSON. No markdown. No backticks. Schema: {\"title\":\"string\",\"excerpt\":\"string\",\"bodyHtml\":\"HTML\"}. DO NOT RETURN EMPTY. MUST RETURN JSON.";
+        $fallbackOptions = $baseOptions;
+        $fallbackOptions['modelOverride'] = $fallbackModelUsed;
+        $fallbackOptions['temperature'] = min(1.0, ($baseOptions['temperature'] ?? 0.68) + 0.05);
+        $fallbackOptions['maxTokens'] = max($baseOptions['maxTokens'], ($type === 'news' ? 1100 : 1600));
+
+        $aiResult = ai_call_text(
+            'contentDrafts',
+            $promptBundle['systemPrompt'],
+            $fallbackPrompt,
+            $fallbackOptions
+        );
+        $attempts[] = $aiResult;
+        $validation = content_v2_validate_draft_payload($aiResult['json'] ?? null);
+        $errors = array_values(array_unique(array_merge($aiResult['errors'] ?? [], $validation['errors'] ?? [])));
+        $ok = ($aiResult['ok'] ?? false) && ($validation['ok'] ?? false);
+    }
 
     $rawText = (string)($aiResult['rawText'] ?? '');
     $rawTextSnippet = function_exists('mb_substr') ? mb_substr($rawText, 0, 800, 'UTF-8') : substr($rawText, 0, 800);
@@ -78,13 +136,13 @@ try {
     $errors = $aiResult['errors'] ?? [];
 
     $json = is_array($aiResult['json'] ?? null) ? $aiResult['json'] : null;
-    $title = trim((string)($json['title'] ?? ''));
-    $bodyHtml = sanitize_body_html((string)($json['bodyHtml'] ?? ''));
-    $excerpt = trim((string)($json['excerpt'] ?? ''));
+    $title = trim((string)($validation['title'] ?? ($json['title'] ?? '')));
+    $bodyHtml = (string)($validation['bodyHtml'] ?? sanitize_body_html((string)($json['bodyHtml'] ?? '')));
+    $excerpt = trim((string)($validation['excerpt'] ?? ($json['excerpt'] ?? '')));
 
     $errorText = '';
     if (!$aiResult['ok'] || $title === '' || $bodyHtml === '') {
-        $errors = $aiResult['errors'] ?? [];
+        $errors = array_values(array_unique(array_merge($errors, $aiResult['errors'] ?? [], $validation['errors'] ?? [])));
         if ($title === '' || $bodyHtml === '') {
             $errors[] = 'AI response missing required title or bodyHtml.';
         }
@@ -97,6 +155,7 @@ try {
         if (($aiResult['diagnosticError'] ?? null) === 'empty_content') {
             $errors[] = 'empty_content';
         }
+        $errors[] = 'AI returned empty/invalid JSON. Retried: ' . ($retryCount > 0 ? 'yes' : 'no') . '. Fallback used: ' . ($fallbackUsed ? 'yes' : 'no') . '.';
         $errorText = implode(' | ', array_slice($errors, 0, 3));
         if ($errorText === '') {
             $errorText = 'AI call failed.';
@@ -120,6 +179,9 @@ try {
         'createdAt' => $startedAt,
         'ok' => $errorText === '',
         'error' => $errorText !== '' ? $errorText : null,
+        'retryCount' => $retryCount,
+        'fallbackUsed' => $fallbackUsed,
+        'fallbackModelUsed' => $fallbackModelUsed,
     ];
 
     $slug = '';
@@ -167,6 +229,9 @@ try {
         'finishReasons' => $generationMeta['finishReasons'],
         'blockReason' => $generationMeta['blockReason'],
         'textLength' => $generationMeta['textLength'],
+        'retryCount' => $retryCount,
+        'fallbackUsed' => $fallbackUsed,
+        'fallbackModelUsed' => $fallbackModelUsed,
     ];
 
     content_v2_save_raw_response($jobId, [
@@ -181,6 +246,9 @@ try {
         'rawSnippet' => $aiResult['rawBodySnippet'] ?? $rawTextSnippet,
         'textLen' => $generationMeta['textLength'],
         'errors' => $errorText !== '' ? $errors : [],
+        'retryCount' => $retryCount,
+        'fallbackUsed' => $fallbackUsed,
+        'fallbackModelUsed' => $fallbackModelUsed,
     ]);
 
     if (!$generationMeta['ok']) {
@@ -205,12 +273,20 @@ try {
             'textLength' => $generationMeta['textLength'],
             'errors' => $errors,
             'error' => $generationMeta['error'],
+            'retryCount' => $retryCount,
+            'fallbackUsed' => $fallbackUsed,
+            'fallbackModelUsed' => $fallbackModelUsed,
         ]);
         $respond([
             'ok' => false,
             'error' => $generationMeta['error'] ?: 'AI returned empty content.',
             'aiMeta' => $generationMeta,
             'jobId' => $jobId,
+            'diagnostic' => [
+                'message' => 'AI returned empty/invalid JSON. Retried: ' . ($retryCount > 0 ? 'yes' : 'no') . '. Fallback used: ' . ($fallbackUsed ? 'yes' : 'no') . '.',
+                'requestId' => $generationMeta['requestId'],
+                'responseId' => $generationMeta['responseId'],
+            ],
         ]);
         return;
     }
@@ -271,6 +347,9 @@ try {
         'finishReasons' => $generationMeta['finishReasons'],
         'blockReason' => $generationMeta['blockReason'],
         'textLength' => $generationMeta['textLength'],
+        'retryCount' => $retryCount,
+        'fallbackUsed' => $fallbackUsed,
+        'fallbackModelUsed' => $fallbackModelUsed,
     ]);
 
     $respond([
