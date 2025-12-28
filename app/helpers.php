@@ -38,6 +38,8 @@ function ensure_data_structure(): void
         DATA_PATH . '/support/uploads',
         DATA_PATH . '/logs/runtime_errors',
         DATA_PATH . '/logs/public_tenders',
+        DATA_PATH . '/support/assisted_extraction',
+        DATA_PATH . '/defaults',
     ];
 
     foreach ($directories as $dir) {
@@ -118,11 +120,16 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/linking.log',
         DATA_PATH . '/logs/tenders_publication.log',
         DATA_PATH . '/logs/packs.log',
+        DATA_PATH . '/logs/assisted_extraction.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {
             touch($logFile);
         }
+    }
+
+    if (!file_exists(default_contractor_templates_path())) {
+        default_contractor_templates();
     }
 }
 

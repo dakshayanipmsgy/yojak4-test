@@ -33,10 +33,12 @@ safe_page(function () {
     $yojId = $user['yojId'];
     ensure_offline_tender_env($yojId);
     ensure_packs_env($yojId);
+    ensure_assisted_extraction_env();
 
     $offtdId = trim($_GET['id'] ?? '');
     $tender = $offtdId !== '' ? load_offline_tender($yojId, $offtdId) : null;
     $existingPack = $offtdId !== '' ? find_pack_by_source($yojId, 'OFFTD', $offtdId) : null;
+    $assistedRequest = $offtdId !== '' ? assisted_active_request_for_tender($yojId, $offtdId) : null;
 
     if (!$tender || ($tender['yojId'] ?? '') !== $yojId) {
         render_error_page('Tender not found.');
@@ -45,7 +47,7 @@ safe_page(function () {
 
     $title = get_app_config()['appName'] . ' | ' . ($tender['title'] ?? 'Offline Tender');
 
-    render_layout($title, function () use ($tender) {
+    render_layout($title, function () use ($tender, $existingPack, $assistedRequest) {
         $extracted = $tender['extracted'] ?? offline_tender_defaults();
         $checklist = $tender['checklist'] ?? [];
         $aiDefaults = [
@@ -124,9 +126,12 @@ safe_page(function () {
                 <?php if ($existingPack): ?>
                     <a class="btn secondary" href="/contractor/pack_view.php?packId=<?= sanitize($existingPack['packId']); ?>"><?= sanitize('Open Tender Pack'); ?></a>
                 <?php else: ?>
-                    <form method="post" action="/contractor/pack_create.php">
+                    <form method="post" action="/contractor/pack_create.php" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                         <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                         <input type="hidden" name="offtdId" value="<?= sanitize($tender['id']); ?>">
+                        <label class="pill" style="display:inline-flex;gap:6px;align-items:center;">
+                            <input type="checkbox" name="include_defaults" value="1" checked> <?= sanitize('Add default tender letters'); ?>
+                        </label>
                         <button class="btn" type="submit"><?= sanitize('Create Tender Pack'); ?></button>
                     </form>
                 <?php endif; ?>
@@ -233,6 +238,81 @@ safe_page(function () {
                 </div>
             </div>
         <?php endif; ?>
+
+        <?php
+        $assistedStatus = $assistedRequest['status'] ?? 'none';
+        $assistedDelivered = $assistedStatus === 'delivered';
+        $assistedDraft = $assistedRequest['assistantDraft'] ?? [];
+        ?>
+        <div class="card" style="margin-top:12px;display:grid;gap:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+                <div>
+                    <h3 style="margin:0;"><?= sanitize('Assisted Extraction'); ?></h3>
+                    <p class="muted" style="margin:4px 0 0;"><?= sanitize('Request human-in-the-loop checklist prep when AI cannot parse your NIT.'); ?></p>
+                </div>
+                <span class="pill" style="<?= $assistedDelivered ? 'border-color:#2ea043;color:#8ce99a;' : 'border-color:#f59f00;color:#fcd34d;'; ?>">
+                    <?= sanitize('Status: ' . ($assistedStatus === 'none' ? 'Not requested' : ucwords(str_replace('_',' ', $assistedStatus)))); ?>
+                </span>
+            </div>
+            <?php if (!$assistedRequest): ?>
+                <form method="post" action="/contractor/offline_tender_request_help.php" style="display:grid;gap:8px;">
+                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                    <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                    <label class="field">
+                        <span><?= sanitize('Notes for Yojak team (optional, max 500 chars)'); ?></span>
+                        <textarea name="notes" rows="3" maxlength="500" style="resize:vertical;"></textarea>
+                    </label>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <button class="btn" type="submit"><?= sanitize('Request Assisted Extraction'); ?></button>
+                        <span class="muted"><?= sanitize('Limit: 3 requests/week per contractor, 1 active per tender.'); ?></span>
+                    </div>
+                </form>
+            <?php else: ?>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                    <span class="pill"><?= sanitize('Created: ' . ($assistedRequest['createdAt'] ?? '')); ?></span>
+                    <?php if (!empty($assistedRequest['assignedTo'])): ?>
+                        <span class="pill"><?= sanitize('Assigned: ' . $assistedRequest['assignedTo']); ?></span>
+                    <?php endif; ?>
+                    <?php if (!empty($assistedRequest['deliveredAt'])): ?>
+                        <span class="pill success"><?= sanitize('Delivered: ' . $assistedRequest['deliveredAt']); ?></span>
+                    <?php endif; ?>
+                </div>
+                <?php if ($assistedDelivered && is_array($assistedDraft)): ?>
+                    <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:8px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                            <h4 style="margin:0;"><?= sanitize('Delivered checklist'); ?></h4>
+                            <form method="post" action="/contractor/offline_tender_apply_assisted.php" style="margin:0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                                <input type="hidden" name="reqId" value="<?= sanitize($assistedRequest['reqId'] ?? ''); ?>">
+                                <button class="btn" type="submit"><?= sanitize('Apply to tender'); ?></button>
+                            </form>
+                        </div>
+                        <?php if (!empty($assistedDraft['checklist']) && is_array($assistedDraft['checklist'])): ?>
+                            <div style="display:grid;gap:8px;">
+                                <?php foreach ($assistedDraft['checklist'] as $item): ?>
+                                    <div style="border:1px solid #30363d;border-radius:10px;padding:10px;">
+                                        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                                            <strong><?= sanitize($item['title'] ?? ''); ?></strong>
+                                            <span class="pill" style="<?= !empty($item['required']) ? 'border-color:#2ea043;color:#8ce99a;' : ''; ?>">
+                                                <?= !empty($item['required']) ? sanitize('Required') : sanitize('Optional'); ?>
+                                            </span>
+                                        </div>
+                                        <?php if (!empty($item['description'])): ?>
+                                            <p class="muted" style="margin:6px 0 0;"><?= sanitize($item['description']); ?></p>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                            <p class="muted" style="margin:0;"><?= sanitize('No checklist entries found in the delivered draft.'); ?></p>
+                        <?php endif; ?>
+                    </div>
+                <?php else: ?>
+                    <p class="muted" style="margin:0;"><?= sanitize('Team is working on your request. You will see the checklist here once delivered.'); ?></p>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
 
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-top:12px;">
             <div class="card" style="display:grid; gap:12px;">
