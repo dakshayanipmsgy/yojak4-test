@@ -30,7 +30,7 @@ safe_page(function () {
         if (!preg_match('/^[a-z0-9]{3,12}$/', $data['userShortId'])) {
             $errors[] = 'User ID must be 3-12 lowercase letters or numbers.';
         }
-        if (!preg_match('/^[a-z0-9_]{3,20}$/', $data['roleId'])) {
+        if (!preg_match('/^[a-z0-9_]{2,20}$/', $data['roleId'])) {
             $errors[] = 'Role ID invalid.';
         }
         $role = find_department_role($deptId, $data['roleId']);
@@ -45,6 +45,9 @@ safe_page(function () {
         }
 
         $fullUserId = $data['userShortId'] . '.' . $data['roleId'] . '.' . $deptId;
+        if (!parse_department_login_identifier($fullUserId)) {
+            $errors[] = 'Full user ID format is invalid.';
+        }
         if (file_exists(department_user_path($deptId, $fullUserId, false))) {
             $errors[] = 'User already exists.';
         }

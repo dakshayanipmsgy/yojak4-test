@@ -138,6 +138,13 @@ function persist_user_record(array $user): void
 function login_user(array $user): void
 {
     session_regenerate_id(true);
+    $auth = [
+        'type' => $user['type'] ?? null,
+        'deptId' => $user['deptId'] ?? null,
+        'fullUserId' => $user['fullUserId'] ?? ($user['username'] ?? null),
+        'roleId' => $user['roleId'] ?? null,
+        'permissions' => $user['permissions'] ?? [],
+    ];
     $_SESSION['user'] = [
         'username' => $user['username'] ?? ($user['fullUserId'] ?? ($user['mobile'] ?? '')),
         'type' => $user['type'],
@@ -154,7 +161,12 @@ function login_user(array $user): void
         $_SESSION['user']['role'] = $user['role'] ?? null;
         $_SESSION['user']['permissions'] = $user['permissions'] ?? [];
         $_SESSION['user']['status'] = $user['status'] ?? null;
+    } elseif (($user['type'] ?? '') === 'department') {
+        $_SESSION['user']['fullUserId'] = $user['fullUserId'] ?? null;
+        $_SESSION['user']['permissions'] = $user['permissions'] ?? [];
     }
+
+    $_SESSION['auth'] = $auth;
 }
 
 function logout_user(): void
@@ -214,24 +226,64 @@ function authenticate_superadmin(string $username, string $password): bool
     return password_verify($password, $record['passwordHash'] ?? '');
 }
 
-function authenticate_department_user(string $identifier, string $password): ?array
+function log_auth_attempt(array $payload): void
 {
-    $parsed = parse_department_login_identifier($identifier);
-    if (!$parsed || $parsed['roleId'] !== 'admin') {
-        return null;
+    $entry = array_merge([
+        'at' => now_kolkata()->format(DateTime::ATOM),
+    ], $payload);
+
+    $file = DATA_PATH . '/logs/auth.log';
+    $dir = dirname($file);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $handle = fopen($file, 'a');
+    if ($handle) {
+        flock($handle, LOCK_EX);
+        fwrite($handle, json_encode($entry, JSON_UNESCAPED_SLASHES) . PHP_EOL);
+        flock($handle, LOCK_UN);
+        fclose($handle);
+    }
+}
+
+function authenticate_department_user(string $identifier, string $password): array
+{
+    $parsed = parse_department_login_identifier(normalize_login_identifier($identifier));
+    if (!$parsed) {
+        return ['record' => null, 'error' => 'invalid_identifier', 'parsed' => null];
     }
     $department = load_department($parsed['deptId']);
     if (!$department || ($department['status'] ?? '') !== 'active') {
-        return null;
+        return ['record' => null, 'error' => 'department_inactive', 'parsed' => $parsed];
     }
     $record = load_active_department_user($parsed['fullUserId']);
-    if (!$record || ($record['status'] ?? '') !== 'active') {
-        return null;
+    if (!$record) {
+        return ['record' => null, 'error' => 'not_found', 'parsed' => $parsed];
+    }
+    if (($record['deptId'] ?? '') !== $parsed['deptId'] || ($record['fullUserId'] ?? '') !== $parsed['fullUserId']) {
+        return ['record' => null, 'error' => 'identifier_mismatch', 'parsed' => $parsed];
+    }
+    if (($record['status'] ?? '') === 'suspended') {
+        return ['record' => $record, 'error' => 'suspended', 'parsed' => $parsed];
+    }
+    if (($record['status'] ?? '') !== 'active') {
+        return ['record' => null, 'error' => 'invalid_status', 'parsed' => $parsed];
     }
     if (!password_verify($password, $record['passwordHash'] ?? '')) {
-        return null;
+        return ['record' => null, 'error' => 'invalid_credentials', 'parsed' => $parsed];
     }
-    return $record;
+
+    $roleId = $record['roleId'] ?? '';
+    $role = find_department_role($parsed['deptId'], $roleId);
+    if (!$role) {
+        return ['record' => null, 'error' => 'role_missing', 'parsed' => $parsed];
+    }
+
+    $record['type'] = 'department';
+    $record['permissions'] = $role['permissions'] ?? [];
+
+    return ['record' => $record, 'error' => null, 'parsed' => $parsed];
 }
 
 function update_last_login(string $username): void

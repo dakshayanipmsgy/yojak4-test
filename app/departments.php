@@ -244,7 +244,7 @@ function load_active_department_user(string $fullUserId): ?array
 function parse_department_login_identifier(string $identifier): ?array
 {
     $normalized = strtolower(trim($identifier));
-    if (!preg_match('/^([a-z0-9]{3,12})\.([a-z0-9]{3,20})\.([a-z0-9]{3,10})$/', $normalized, $matches)) {
+    if (!preg_match('/^([a-z0-9]{3,12})\.([a-z0-9_]{2,20})\.([a-z0-9]{3,10})$/', $normalized, $matches)) {
         return null;
     }
     return [
@@ -499,11 +499,25 @@ function list_department_users(string $deptId, bool $archived = false): array
 
 function save_department_user(array $user, bool $archived = false): void
 {
-    if (empty($user['deptId']) || empty($user['fullUserId'])) {
+    if (empty($user['deptId'])) {
         throw new InvalidArgumentException('Missing department user details.');
     }
-    ensure_department_env($user['deptId']);
-    $path = department_user_path($user['deptId'], $user['fullUserId'], $archived);
+    $fullUserId = strtolower(trim((string)($user['fullUserId'] ?? '')));
+    if ($fullUserId === '' && !empty($user['userShortId']) && !empty($user['roleId'])) {
+        $fullUserId = strtolower(trim((string)$user['userShortId']) . '.' . trim((string)$user['roleId']) . '.' . normalize_dept_id((string)$user['deptId']));
+    }
+    $parsed = parse_department_login_identifier($fullUserId);
+    if (!$parsed || $parsed['deptId'] !== normalize_dept_id((string)$user['deptId'])) {
+        throw new InvalidArgumentException('Invalid department user identifier.');
+    }
+
+    $user['deptId'] = $parsed['deptId'];
+    $user['userShortId'] = $parsed['userShortId'];
+    $user['roleId'] = $parsed['roleId'];
+    $user['fullUserId'] = $parsed['fullUserId'];
+
+    ensure_department_env($parsed['deptId']);
+    $path = department_user_path($parsed['deptId'], $parsed['fullUserId'], $archived);
     writeJsonAtomic($path, $user);
 }
 
