@@ -1103,11 +1103,16 @@ function load_all_password_reset_requests(): array
     $requests = is_array($requests) ? array_values($requests) : [];
 
     return array_map(function ($req) {
-        if (!isset($req['userType'])) {
-            $req['userType'] = 'dept_admin';
-        }
-        if (!isset($req['adminUserId']) && isset($req['fullUserId'])) {
-            $req['adminUserId'] = $req['fullUserId'];
+        $userType = $req['userType'] ?? 'dept_admin';
+        $req['userType'] = $userType;
+        if ($userType === 'dept_admin') {
+            if (!isset($req['adminUserId']) && isset($req['fullUserId'])) {
+                $req['adminUserId'] = $req['fullUserId'];
+            }
+        } else {
+            if (isset($req['adminUserId'])) {
+                unset($req['adminUserId']);
+            }
         }
         if (!array_key_exists('updatedAt', $req)) {
             $req['updatedAt'] = $req['requestedAt'] ?? now_kolkata()->format(DateTime::ATOM);
@@ -1161,36 +1166,51 @@ function add_password_reset_request(
     ensure_department_env($deptId);
     $requests = load_all_password_reset_requests();
     $normalizedUserId = strtolower($fullUserId);
-    $adminUserId = strtolower($adminUserIdOverride ?? $normalizedUserId);
+    $parsedUser = parse_department_login_identifier($normalizedUserId);
+    if (!$parsedUser || $parsedUser['deptId'] !== $deptId) {
+        throw new InvalidArgumentException('Invalid department user identifier.');
+    }
+    $userType = ($parsedUser['roleId'] ?? '') === 'admin' ? 'dept_admin' : 'dept_user';
+    $adminUserId = $userType === 'dept_admin' ? strtolower($adminUserIdOverride ?? $normalizedUserId) : null;
     $existing = array_values(array_filter(
         $requests,
-        fn($req) => ($req['deptId'] ?? '') === $deptId
-            && ($req['status'] ?? '') === 'pending'
-            && (
-                ($req['adminUserId'] ?? $req['fullUserId'] ?? '') === $adminUserId
-                || ($req['fullUserId'] ?? '') === $normalizedUserId
-            )
+        function ($req) use ($deptId, $userType, $adminUserId, $normalizedUserId) {
+            if (($req['deptId'] ?? '') !== $deptId) {
+                return false;
+            }
+            if (($req['status'] ?? '') !== 'pending') {
+                return false;
+            }
+            if (($req['userType'] ?? 'dept_admin') !== $userType) {
+                return false;
+            }
+            if ($userType === 'dept_admin') {
+                return ($req['adminUserId'] ?? $req['fullUserId'] ?? '') === ($adminUserId ?? '')
+                    || ($req['fullUserId'] ?? '') === $normalizedUserId;
+            }
+            return ($req['fullUserId'] ?? '') === $normalizedUserId;
+        }
     ));
     if ($existing) {
         $existing[0]['contact'] = $existing[0]['contact'] ?? $contact;
         $existing[0]['message'] = $existing[0]['message'] ?? $message;
         $existing[0]['requesterIp'] = $existing[0]['requesterIp'] ?? $requesterIp;
         $existing[0]['requesterUaHash'] = $existing[0]['requesterUaHash'] ?? ($userAgent ? hash('sha256', $userAgent) : null);
+        $existing[0]['userType'] = $userType;
         save_password_reset_request($existing[0]);
         return $existing[0];
     }
     $req = [
         'requestId' => 'RESET-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
         'deptId' => $deptId,
-        'fullUserId' => $normalizedUserId,
-        'adminUserId' => $adminUserId,
+        'fullUserId' => $parsedUser['fullUserId'],
         'status' => 'pending',
         'requestedBy' => $requestedBy,
         'requestedAt' => now_kolkata()->format(DateTime::ATOM),
         'updatedAt' => now_kolkata()->format(DateTime::ATOM),
         'decidedAt' => null,
         'decidedBy' => null,
-        'userType' => 'dept_admin',
+        'userType' => $userType,
         'contact' => $contact,
         'message' => $message,
         'requesterIp' => $requesterIp,
@@ -1199,6 +1219,9 @@ function add_password_reset_request(
         'tempPasswordIssuedAt' => null,
         'tempPasswordDelivery' => 'show_once',
     ];
+    if ($userType === 'dept_admin') {
+        $req['adminUserId'] = $adminUserId;
+    }
     $requests[] = $req;
     save_all_password_reset_requests($requests);
     return $req;

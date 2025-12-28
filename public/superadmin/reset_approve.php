@@ -25,10 +25,11 @@ safe_page(function () {
         redirect('/superadmin/reset_requests.php');
     }
 
+    $userType = $request['userType'] ?? 'dept_admin';
     $now = now_kolkata()->format(DateTime::ATOM);
     $decider = $actor['username'] ?? ($actor['empId'] ?? 'system');
 
-    if (($request['userType'] ?? 'dept_admin') === 'contractor') {
+    if ($userType === 'contractor') {
         $contractor = null;
         if (!empty($request['yojId'])) {
             $contractor = load_contractor($request['yojId']);
@@ -83,7 +84,124 @@ safe_page(function () {
         redirect('/superadmin/reset_requests.php');
     }
 
-    if (($request['userType'] ?? 'dept_admin') !== 'dept_admin') {
+    if ($userType === 'dept_user') {
+        $deptId = $request['deptId'] ?? '';
+        $fullUserId = strtolower(trim((string)($request['fullUserId'] ?? '')));
+        $userPath = department_user_path($deptId, $fullUserId, false);
+        $logContext = [
+            'at' => $now,
+            'event' => 'DEPT_USER_RESET_APPROVE',
+            'deptId' => $deptId,
+            'fullUserId' => $fullUserId,
+            'requestId' => $requestId,
+            'decidedBy' => $decider,
+            'updatedPath' => $userPath,
+            'result' => 'failed',
+            'reasonCode' => null,
+        ];
+        $parsed = $fullUserId !== '' ? parse_department_login_identifier($fullUserId) : null;
+        if (!$parsed || ($parsed['deptId'] ?? '') !== $deptId) {
+            $logContext['reasonCode'] = 'invalid_identifier';
+            logEvent(DATA_PATH . '/logs/auth.log', $logContext);
+            set_flash('error', 'Invalid user for this department.');
+            redirect('/superadmin/reset_requests.php');
+        }
+        if (!file_exists($userPath)) {
+            $logContext['reasonCode'] = 'user_file_missing';
+            logEvent(DATA_PATH . '/logs/auth.log', $logContext);
+            set_flash('error', 'Department user file not found for this request.');
+            redirect('/superadmin/reset_requests.php');
+        }
+
+        $record = readJson($userPath);
+        if (($record['deptId'] ?? '') !== $deptId || ($record['fullUserId'] ?? '') !== $fullUserId || ($record['type'] ?? '') !== 'department') {
+            $logContext['reasonCode'] = 'record_mismatch';
+            logEvent(DATA_PATH . '/logs/auth.log', $logContext);
+            set_flash('error', 'User record mismatch for this department.');
+            redirect('/superadmin/reset_requests.php');
+        }
+        if (($record['status'] ?? '') === 'suspended') {
+            $request['status'] = 'rejected';
+            $request['decidedAt'] = $now;
+            $request['decidedBy'] = $decider;
+            $request['updatedAt'] = $now;
+            $request['decisionNote'] = 'Suspended user cannot be reset';
+            save_password_reset_request($request);
+            $logContext['reasonCode'] = 'suspended';
+            $logContext['result'] = 'rejected';
+            logEvent(DATA_PATH . '/logs/auth.log', $logContext);
+            set_flash('error', 'User is suspended and cannot be reset.');
+            redirect('/superadmin/reset_requests.php');
+        }
+        if (($record['status'] ?? '') !== 'active') {
+            $logContext['reasonCode'] = 'invalid_status';
+            logEvent(DATA_PATH . '/logs/auth.log', $logContext);
+            set_flash('error', 'User is not active.');
+            redirect('/superadmin/reset_requests.php');
+        }
+
+        $tempPassword = generate_temp_password(12);
+        $previousHash = $record['passwordHash'] ?? '';
+        $record['passwordHash'] = password_hash($tempPassword, PASSWORD_DEFAULT);
+        $record['mustResetPassword'] = true;
+        $record['lastPasswordResetAt'] = $now;
+        $record['passwordResetBy'] = 'superadmin';
+        writeJsonAtomic($userPath, $record);
+
+        $written = readJson($userPath);
+        $verifyTempOk = password_verify($tempPassword, $written['passwordHash'] ?? '');
+        $hashChanged = ($written['passwordHash'] ?? '') !== $previousHash && ($written['passwordHash'] ?? '') !== '';
+
+        $request['status'] = 'approved';
+        $request['decidedAt'] = $now;
+        $request['decidedBy'] = $decider;
+        $request['updatedAt'] = $now;
+        $request['tempPasswordHash'] = $written['passwordHash'] ?? null;
+        $request['tempPasswordIssuedAt'] = $now;
+        $request['tempPasswordDelivery'] = 'show_once';
+        $request['resolvedFullUserId'] = $fullUserId;
+        save_password_reset_request($request);
+
+        append_department_audit($deptId, [
+            'by' => $decider,
+            'action' => 'password_reset_approved',
+            'meta' => ['requestId' => $requestId, 'fullUserId' => $fullUserId, 'userType' => 'dept_user'],
+        ]);
+
+        $logContext['result'] = 'approved';
+        $logContext['reasonCode'] = $verifyTempOk ? 'ok' : 'write_verify_failed';
+        logEvent(DATA_PATH . '/logs/auth.log', $logContext);
+        logEvent(DATA_PATH . '/logs/auth.log', [
+            'at' => $now,
+            'event' => 'DEPT_USER_RESET_VERIFY',
+            'requestId' => $requestId,
+            'fullUserId' => $fullUserId,
+            'verifyTempOk' => $verifyTempOk,
+            'hashChanged' => $hashChanged,
+            'updatedPath' => $userPath,
+        ]);
+        logEvent(DATA_PATH . '/logs/superadmin.log', [
+            'event' => 'dept_user_reset_approved',
+            'deptId' => $deptId,
+            'fullUserId' => $fullUserId,
+            'requestId' => $requestId,
+            'decidedBy' => $decider,
+        ]);
+
+        $_SESSION['temp_password_once'] = [
+            'requestId' => $requestId,
+            'password' => $tempPassword,
+            'user' => $fullUserId,
+            'deptId' => $deptId,
+            'updatedPath' => $userPath,
+            'mustReset' => true,
+            'userType' => 'dept_user',
+        ];
+        set_flash('success', 'Reset approved. Temporary password generated and shown once.');
+        redirect('/superadmin/reset_requests.php');
+    }
+
+    if ($userType !== 'dept_admin') {
         set_flash('error', 'Unsupported reset request type.');
         redirect('/superadmin/reset_requests.php');
     }
