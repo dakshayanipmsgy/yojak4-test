@@ -11,6 +11,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/staff.php';
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/departments.php';
+require_once __DIR__ . '/login_debug.php';
 require_once __DIR__ . '/contractors.php';
 require_once __DIR__ . '/offline_tenders.php';
 require_once __DIR__ . '/workorders.php';
