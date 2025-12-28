@@ -24,7 +24,7 @@ safe_page(function () {
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                 <div>
                     <h2 style="margin-bottom:4px;"><?= sanitize('Password Reset Requests'); ?></h2>
-                    <p class="muted" style="margin:0;"><?= sanitize('Approve or reject reset requests from department admins or contractors.'); ?></p>
+                    <p class="muted" style="margin:0;"><?= sanitize('Approve or reject reset requests from department admins, users, or contractors.'); ?></p>
                 </div>
                 <div class="pill"><?= sanitize('Secure approvals with audit trail.'); ?></div>
             </div>
@@ -37,6 +37,18 @@ safe_page(function () {
                 <div class="card" style="margin-bottom:12px;border-color:var(--primary);">
                     <h3 style="margin-top:0;"><?= sanitize('Temporary password generated'); ?></h3>
                     <p class="muted" style="margin:4px 0 10px;"><?= sanitize('Share securely. User must reset on first login.'); ?></p>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:10px;">
+                        <div>
+                            <div class="muted" style="font-size:0.9rem;"><?= sanitize('Reset applied to'); ?></div>
+                            <div style="font-weight:700;"><?= sanitize($tempDisplay['user'] ?? ''); ?></div>
+                        </div>
+                        <?php if (!empty($tempDisplay['deptId'])): ?>
+                            <div>
+                                <div class="muted" style="font-size:0.9rem;"><?= sanitize('Department'); ?></div>
+                                <div style="font-weight:700;"><?= sanitize($tempDisplay['deptId']); ?></div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
                         <input id="tempPw" value="<?= sanitize($tempDisplay['password'] ?? ''); ?>" readonly style="flex:1;min-width:220px;">
                         <button class="btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('tempPw').value)"><?= sanitize('Copy'); ?></button>
@@ -45,6 +57,13 @@ safe_page(function () {
                     <?php if (!empty($tempDisplay['user'] ?? '')): ?>
                         <div class="pill" style="margin-top:8px;background:#1f6feb22;border-color:#1f6feb;"><?= sanitize($tempDisplay['user']); ?></div>
                     <?php endif; ?>
+                    <details style="margin-top:12px;">
+                        <summary style="cursor:pointer;font-weight:600;"><?= sanitize('Debug details'); ?></summary>
+                        <div class="muted" style="margin-top:6px;font-size:0.9rem;">
+                            <div><?= sanitize('Updated file: ' . ($tempDisplay['updatedPath'] ?? '')); ?></div>
+                            <div><?= sanitize('mustResetPassword set to true'); ?></div>
+                        </div>
+                    </details>
                 </div>
             <?php endif; ?>
             <table>
