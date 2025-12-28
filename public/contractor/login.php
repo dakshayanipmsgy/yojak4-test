@@ -30,10 +30,13 @@ safe_page(function () {
                         'type' => 'contractor',
                         'yojId' => $contractor['yojId'],
                         'displayName' => $contractor['name'] ?: $contractor['mobile'],
-                        'mustResetPassword' => false,
+                        'mustResetPassword' => $contractor['mustResetPassword'] ?? false,
                         'lastLoginAt' => $contractor['lastLoginAt'] ?? null,
                     ]);
                     set_flash('success', t('login_success'));
+                    if (!empty($contractor['mustResetPassword'])) {
+                        redirect('/auth/force_reset.php');
+                    }
                     redirect('/contractor/dashboard.php');
                 } else {
                     record_rate_limit_attempt($rateKey, false);

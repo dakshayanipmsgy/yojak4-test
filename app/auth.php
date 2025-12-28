@@ -205,6 +205,9 @@ function require_role(string $role): array
         }
         redirect('/auth/login.php');
     }
+    if (($user['type'] ?? '') === $role && !empty($user['mustResetPassword'])) {
+        redirect('/auth/force_reset.php');
+    }
     if (($user['type'] ?? '') !== $role) {
         if ($role === 'contractor') {
             redirect('/contractor/login.php');

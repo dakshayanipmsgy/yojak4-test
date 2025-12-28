@@ -214,6 +214,9 @@ function approve_pending_contractor(string $signupId, string $actor): ?array
         'yojId' => $yojId,
         'mobile' => $pending['mobile'],
         'passwordHash' => $pending['passwordHash'],
+        'mustResetPassword' => false,
+        'lastPasswordResetAt' => null,
+        'passwordResetBy' => null,
         'status' => 'approved',
         'name' => $pending['name'] ?? '',
         'firmName' => '',
@@ -287,7 +290,21 @@ function load_contractor(string $yojId): ?array
         return null;
     }
     $data = readJson($path);
-    return $data ?: null;
+    if (!$data) {
+        return null;
+    }
+
+    if (!array_key_exists('mustResetPassword', $data)) {
+        $data['mustResetPassword'] = false;
+    }
+    if (!array_key_exists('lastPasswordResetAt', $data)) {
+        $data['lastPasswordResetAt'] = null;
+    }
+    if (!array_key_exists('passwordResetBy', $data)) {
+        $data['passwordResetBy'] = null;
+    }
+
+    return $data;
 }
 
 function find_contractor_by_mobile(string $mobile): ?array
@@ -305,6 +322,15 @@ function save_contractor(array $contractor): void
 {
     if (empty($contractor['yojId'])) {
         throw new InvalidArgumentException('Missing contractor id.');
+    }
+    if (!array_key_exists('mustResetPassword', $contractor)) {
+        $contractor['mustResetPassword'] = false;
+    }
+    if (!array_key_exists('lastPasswordResetAt', $contractor)) {
+        $contractor['lastPasswordResetAt'] = null;
+    }
+    if (!array_key_exists('passwordResetBy', $contractor)) {
+        $contractor['passwordResetBy'] = null;
     }
     $path = contractors_approved_path($contractor['yojId']) . '/contractor.json';
     writeJsonAtomic($path, $contractor);
@@ -360,6 +386,23 @@ function allowed_vault_mimes(): array
     ];
 }
 
+function update_contractor_password(string $yojId, string $newPassword, string $resetBy = 'self'): bool
+{
+    $contractor = load_contractor($yojId);
+    if (!$contractor) {
+        return false;
+    }
+
+    $contractor['passwordHash'] = password_hash($newPassword, PASSWORD_DEFAULT);
+    $contractor['mustResetPassword'] = false;
+    $contractor['lastPasswordResetAt'] = now_kolkata()->format(DateTime::ATOM);
+    $contractor['passwordResetBy'] = $resetBy;
+    save_contractor($contractor);
+    $_SESSION['user']['mustResetPassword'] = false;
+
+    return true;
+}
+
 function format_bytes(int $bytes): string
 {
     if ($bytes >= 1048576) {
@@ -384,4 +427,3 @@ function ensure_vault_file_dir(string $yojId, string $fileId): string
     }
     return $dir;
 }
-
