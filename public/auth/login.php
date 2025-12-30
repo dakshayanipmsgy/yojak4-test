@@ -41,7 +41,7 @@ safe_page(function () {
                             redirect('/auth/force_reset.php');
                         }
                         set_flash('success', t('login_success'));
-                        redirect('/superadmin/dashboard.php');
+                        redirect('/home.php');
                     }
                     $authenticated = true;
                 }
@@ -58,7 +58,7 @@ safe_page(function () {
                             'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
                         ]);
                         set_flash('success', t('login_success'));
-                        redirect('/staff/dashboard.php');
+                        redirect('/home.php');
                     }
                 }
 
@@ -81,10 +81,10 @@ safe_page(function () {
                 if (!empty($user['mustResetPassword'])) {
                     redirect('/auth/force_reset.php');
                 }
-                redirect('/superadmin/dashboard.php');
+                redirect('/home.php');
             }
             if (($user['type'] ?? '') === 'employee') {
-                redirect('/staff/dashboard.php');
+                redirect('/home.php');
             }
         }
     }

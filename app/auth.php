@@ -210,6 +210,38 @@ function login_user(array $user): void
     $_SESSION['auth'] = $auth;
 }
 
+function resolve_user_dashboard(?array $user): ?string
+{
+    if (!$user) {
+        return null;
+    }
+
+    $type = $user['type'] ?? '';
+    switch ($type) {
+        case 'superadmin':
+            return '/superadmin/dashboard.php';
+        case 'employee':
+            return '/staff/dashboard.php';
+        case 'department':
+            return '/department/dashboard.php';
+        case 'contractor':
+            return '/contractor/dashboard.php';
+        default:
+            return null;
+    }
+}
+
+function log_home_redirect(?string $userType, ?string $target, string $result): void
+{
+    logEvent(DATA_PATH . '/logs/auth.log', [
+        'at' => now_kolkata()->format(DateTime::ATOM),
+        'event' => 'HOME_REDIRECT',
+        'userType' => $userType ?? 'unknown',
+        'target' => $target,
+        'result' => $result,
+    ]);
+}
+
 function logout_user(): void
 {
     $_SESSION = [];
