@@ -23,6 +23,7 @@ require_once __DIR__ . '/tender_discovery.php';
 require_once __DIR__ . '/support.php';
 require_once __DIR__ . '/assisted_extraction.php';
 require_once __DIR__ . '/contractor_templates.php';
+require_once __DIR__ . '/branding.php';
 
 set_default_timezone();
 start_app_session();
@@ -30,6 +31,7 @@ ensure_data_structure();
 ensure_departments_root();
 ensure_contractors_root();
 ensure_staff_environment();
+ensure_branding_environment();
 rotate_language_from_request();
 initialize_php_error_logging();
 install_runtime_error_handlers();

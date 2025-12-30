@@ -21,6 +21,7 @@ function render_layout(string $title, callable $content): void
     $appName = get_app_config()['appName'] ?? 'YOJAK';
     $lang = get_language();
     $user = current_user();
+    $brandingLogoPath = (($user['type'] ?? '') === 'superadmin') ? branding_display_logo_path() : null;
     $flashes = consume_flashes();
     ?>
     <!DOCTYPE html>
@@ -107,6 +108,25 @@ function render_layout(string $title, callable $content): void
                 border-color: var(--primary);
                 color: #fff;
                 box-shadow: 0 4px 12px rgba(31,111,235,0.3);
+            }
+            .brand-logo-image {
+                width: auto;
+                height: auto;
+                min-height: 36px;
+                padding: 6px 10px;
+                border-radius: 10px;
+                border: 1px solid #30363d;
+                background: #0d1117;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            }
+            .brand-logo-image img {
+                display: block;
+                max-height: 28px;
+                max-width: 120px;
+                object-fit: contain;
             }
             .container {
                 max-width: 1100px;
@@ -224,8 +244,15 @@ function render_layout(string $title, callable $content): void
         <header>
             <div class="nav">
                 <div class="brand">
-                    <div class="brand-logo">YJ</div>
-                    <div><?= sanitize($appName); ?></div>
+                    <?php if ($brandingLogoPath): ?>
+                        <div class="brand-logo-image">
+                            <img src="<?= sanitize($brandingLogoPath); ?>" alt="<?= sanitize($appName . ' logo'); ?>">
+                        </div>
+                        <div><?= sanitize($appName); ?></div>
+                    <?php else: ?>
+                        <div class="brand-logo">YJ</div>
+                        <div><?= sanitize($appName); ?></div>
+                    <?php endif; ?>
                 </div>
                 <div class="nav-links">
                     <a href="/site/index.php"><?= sanitize(t('nav_home')); ?></a>
