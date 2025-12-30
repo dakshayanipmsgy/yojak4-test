@@ -23,13 +23,14 @@ safe_page(function () {
             $mappings[$map['checklistItemId']] = $map;
         }
     }
+    $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
 
     $progress = pack_progress_percent($pack);
     $stats = pack_stats($pack);
     $title = get_app_config()['appName'] . ' | ' . ($pack['title'] ?? 'Tender Pack');
     $signedToken = pack_signed_token($pack['packId'], $yojId);
 
-    render_layout($title, function () use ($pack, $progress, $stats, $signedToken, $contractor, $suggestions, $mappings) {
+    render_layout($title, function () use ($pack, $progress, $stats, $signedToken, $contractor, $suggestions, $mappings, $annexureTemplates) {
         ?>
         <div class="card" style="display:grid; gap:10px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
@@ -188,6 +189,72 @@ safe_page(function () {
             </div>
             <div class="card" style="display:grid; gap:12px;">
                 <div>
+                    <h3 style="margin:0;"><?= sanitize('Annexures & Formats'); ?></h3>
+                    <p class="muted" style="margin:0;">Generate printable annexure templates from NIB list. Financial annexures stay restricted.</p>
+                </div>
+                <div class="flash" style="display:grid;gap:6px;background:#0f1625;border:1px solid #1f6feb;">
+                    <strong><?= sanitize('Steps'); ?></strong>
+                    <ol style="margin:0 0 0 18px; padding:0; color:var(--text); line-height:1.5;">
+                        <li><?= sanitize('Review checklist'); ?></li>
+                        <li><?= sanitize('Generate annexure formats'); ?></li>
+                        <li><?= sanitize('Fill missing profile fields if blanks appear'); ?></li>
+                        <li><?= sanitize('Print checklist + annexures or full pack'); ?></li>
+                        <li><?= sanitize('Export ZIP if needed'); ?></li>
+                    </ol>
+                </div>
+                <div class="buttons" style="gap:8px; flex-wrap:wrap;">
+                    <form method="post" action="/contractor/pack_generate_annexures.php" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                        <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
+                        <button class="btn" type="submit"><?= sanitize('Generate Annexure Formats'); ?></button>
+                        <div class="muted" style="font-size:12px;"><?= sanitize('Auto-prefills firm, GST, PAN, tender details.'); ?></div>
+                    </form>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <span class="pill"><?= sanitize(count($pack['annexureList'] ?? []) . ' annexures detected'); ?></span>
+                    <span class="pill"><?= sanitize(count($annexureTemplates) . ' templates generated'); ?></span>
+                    <?php if (!empty($pack['restrictedAnnexures'])): ?>
+                        <span class="pill" style="border-color:#f85149;color:#ffb3b8;"><?= sanitize('Restricted financial annexures present'); ?></span>
+                    <?php endif; ?>
+                </div>
+                <div style="display:grid;gap:6px;">
+                    <?php $list = $pack['annexureList'] ?? ($pack['annexures'] ?? []); ?>
+                    <?php if ($list): ?>
+                        <?php foreach (array_slice($list, 0, 10) as $annex): ?>
+                            <?php $label = is_array($annex) ? ($annex['title'] ?? ($annex['name'] ?? 'Annexure')) : (string)$annex; ?>
+                            <div style="border:1px solid #30363d;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                                <div>
+                                    <strong><?= sanitize($label); ?></strong>
+                                    <?php if (pack_is_restricted_annexure_label($label)): ?>
+                                        <div class="muted" style="color:#ffb3b8;"><?= sanitize('Restricted'); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <span class="pill"><?= sanitize('Annexure'); ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php if (count($list) > 10): ?>
+                            <div class="muted"><?= sanitize('+' . (count($list) - 10) . ' more annexures'); ?></div>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <p class="muted" style="margin:0;"><?= sanitize('No annexures detected yet.'); ?></p>
+                    <?php endif; ?>
+                </div>
+                <?php if ($annexureTemplates): ?>
+                    <div>
+                        <h4 style="margin:0 0 6px 0;"><?= sanitize('Generated templates'); ?></h4>
+                        <div style="display:grid;gap:6px;">
+                            <?php foreach (array_slice($annexureTemplates, 0, 5) as $tpl): ?>
+                                <div class="pill"><?= sanitize(($tpl['annexureCode'] ?? 'Annexure') . ' • ' . ($tpl['title'] ?? 'Template')); ?></div>
+                            <?php endforeach; ?>
+                            <?php if (count($annexureTemplates) > 5): ?>
+                                <div class="muted"><?= sanitize('+' . (count($annexureTemplates) - 5) . ' more templates'); ?></div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div class="card" style="display:grid; gap:12px;">
+                <div>
                     <h3 style="margin:0;"><?= sanitize('Print / Export'); ?></h3>
                     <p class="muted" style="margin:0;">Print clean layouts or export ZIPs. No bid values are printed.</p>
                 </div>
@@ -224,7 +291,9 @@ safe_page(function () {
                 <div class="buttons" style="gap:8px;">
                     <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=index" target="_blank" rel="noopener"><?= sanitize('Print Index'); ?></a>
                     <a class="btn" href="/contractor/pack_export_zip.php?packId=<?= sanitize($pack['packId']); ?>&token=<?= sanitize($signedToken); ?>"><?= sanitize('Export ZIP'); ?></a>
+                    <a class="btn secondary" href="/contractor/print_settings.php"><?= sanitize('Print header/footer settings'); ?></a>
                 </div>
+                <p class="muted" style="margin:0;font-size:12px;"><?= sanitize('Header/footer space is always reserved; logo is auto-resized to 35mm x 20mm.'); ?></p>
             </div>
             <div class="card" style="display:grid; gap:12px;">
                 <div>
