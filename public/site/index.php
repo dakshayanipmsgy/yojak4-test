@@ -4,6 +4,16 @@ require_once __DIR__ . '/../../app/bootstrap.php';
 
 safe_page(function () {
     $user = current_user();
+    $target = resolve_user_dashboard($user);
+    if ($target) {
+        log_home_redirect($user['type'] ?? 'unknown', $target, 'redirect_from_public');
+        redirect($target);
+    }
+    if ($user && !$target) {
+        log_home_redirect($user['type'] ?? 'unknown', null, 'unknown_type');
+        logout_user();
+        redirect('/site/index.php');
+    }
     $title = get_app_config()['appName'] . ' | ' . t('welcome_title');
     $lang = get_language();
     $text = [

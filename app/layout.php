@@ -255,7 +255,7 @@ function render_layout(string $title, callable $content): void
                     <?php endif; ?>
                 </div>
                 <div class="nav-links">
-                    <a href="/site/index.php"><?= sanitize(t('nav_home')); ?></a>
+                    <a href="/home.php"><?= sanitize(t('nav_home')); ?></a>
                     <?php if ($user && ($user['type'] ?? '') === 'superadmin'): ?>
                         <a href="/superadmin/dashboard.php"><?= sanitize(t('nav_dashboard')); ?></a>
                         <a href="/superadmin/departments.php"><?= sanitize('Departments'); ?></a>

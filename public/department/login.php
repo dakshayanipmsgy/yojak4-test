@@ -104,7 +104,7 @@ safe_page(function () {
                             redirect('/auth/force_reset.php');
                         }
                         set_flash('success', t('login_success'));
-                        redirect('/department/dashboard.php');
+                        redirect('/home.php');
                     } else {
                         record_rate_limit_attempt($rateKey, false);
                         $result = 'fail';
@@ -136,7 +136,7 @@ safe_page(function () {
             if (!empty($user['mustResetPassword'])) {
                 redirect('/auth/force_reset.php');
             }
-            redirect('/department/dashboard.php');
+            redirect('/home.php');
         }
     }
 

@@ -37,7 +37,7 @@ safe_page(function () {
                     if (!empty($contractor['mustResetPassword'])) {
                         redirect('/auth/force_reset.php');
                     }
-                    redirect('/contractor/dashboard.php');
+                    redirect('/home.php');
                 } else {
                     record_rate_limit_attempt($rateKey, false);
                     $exists = find_contractor_by_mobile($mobile);
@@ -52,7 +52,7 @@ safe_page(function () {
     } else {
         $user = current_user();
         if ($user && ($user['type'] ?? '') === 'contractor') {
-            redirect('/contractor/dashboard.php');
+            redirect('/home.php');
         }
     }
 
