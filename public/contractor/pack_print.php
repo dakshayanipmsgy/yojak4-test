@@ -23,7 +23,8 @@ safe_page(function () {
         'includeRestricted' => ($_GET['restricted'] ?? '1') !== '0',
         'pendingOnly' => ($_GET['pendingOnly'] ?? '') === '1',
     ];
-    $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles);
+    $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
+    $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles, $annexureTemplates);
     logEvent(PACK_PRINT_LOG, [
         'event' => 'PACK_PRINT',
         'yojId' => $yojId,

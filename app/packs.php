@@ -81,6 +81,110 @@ function pack_generated_dir(string $yojId, string $packId, string $context = 'te
     return packs_upload_root($yojId, $context) . '/' . $packId . '/generated';
 }
 
+function pack_annexures_dir(string $yojId, string $packId, string $context = 'tender'): string
+{
+    return pack_dir($yojId, $packId, $context) . '/annexures';
+}
+
+function pack_annexure_index_path(string $yojId, string $packId, string $context = 'tender'): string
+{
+    return pack_annexures_dir($yojId, $packId, $context) . '/index.json';
+}
+
+function pack_annexure_path(string $yojId, string $packId, string $annexId, string $context = 'tender'): string
+{
+    return pack_annexures_dir($yojId, $packId, $context) . '/' . $annexId . '.json';
+}
+
+function ensure_pack_annexure_env(string $yojId, string $packId, string $context = 'tender'): void
+{
+    $dir = pack_annexures_dir($yojId, $packId, $context);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+    $indexPath = pack_annexure_index_path($yojId, $packId, $context);
+    if (!file_exists($indexPath)) {
+        writeJsonAtomic($indexPath, []);
+    }
+}
+
+function load_pack_annexure_index(string $yojId, string $packId, string $context = 'tender'): array
+{
+    ensure_pack_annexure_env($yojId, $packId, $context);
+    $index = readJson(pack_annexure_index_path($yojId, $packId, $context));
+    return is_array($index) ? array_values($index) : [];
+}
+
+function save_pack_annexure_index(string $yojId, string $packId, array $records, string $context = 'tender'): void
+{
+    ensure_pack_annexure_env($yojId, $packId, $context);
+    writeJsonAtomic(pack_annexure_index_path($yojId, $packId, $context), array_values($records));
+}
+
+function load_pack_annexures(string $yojId, string $packId, string $context = 'tender'): array
+{
+    $annexures = [];
+    foreach (load_pack_annexure_index($yojId, $packId, $context) as $entry) {
+        $annexId = $entry['annexId'] ?? '';
+        if ($annexId === '') {
+            continue;
+        }
+        $path = pack_annexure_path($yojId, $packId, $annexId, $context);
+        $data = readJson($path);
+        if (!$data) {
+            continue;
+        }
+        $annexures[] = array_merge($entry, $data);
+    }
+    return $annexures;
+}
+
+function contractor_print_settings_path(string $yojId): string
+{
+    return contractors_approved_path($yojId) . '/print_settings.json';
+}
+
+function default_print_settings(): array
+{
+    return [
+        'headerEnabled' => false,
+        'headerText' => '',
+        'footerEnabled' => false,
+        'footerText' => '',
+        'logoEnabled' => false,
+        'logoPathPublic' => null,
+        'logoAlign' => 'left',
+        'updatedAt' => now_kolkata()->format(DateTime::ATOM),
+    ];
+}
+
+function load_contractor_print_settings(string $yojId): array
+{
+    $path = contractor_print_settings_path($yojId);
+    if (!file_exists($path)) {
+        return default_print_settings();
+    }
+    $data = readJson($path);
+    $defaults = default_print_settings();
+    foreach ($defaults as $key => $value) {
+        if (!array_key_exists($key, $data)) {
+            $data[$key] = $value;
+        }
+    }
+    if (!in_array($data['logoAlign'] ?? 'left', ['left', 'center', 'right'], true)) {
+        $data['logoAlign'] = 'left';
+    }
+    return $data;
+}
+
+function save_contractor_print_settings(string $yojId, array $settings): void
+{
+    $defaults = default_print_settings();
+    $merged = array_merge($defaults, $settings);
+    $merged['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
+    writeJsonAtomic(contractor_print_settings_path($yojId), $merged);
+}
+
 function pack_infer_category(string $title): string
 {
     $title = strtolower($title);
@@ -197,11 +301,17 @@ function pack_apply_schema_defaults(array $pack): array
     if (!isset($pack['annexures']) || !is_array($pack['annexures'])) {
         $pack['annexures'] = [];
     }
+    if (!isset($pack['annexureList']) || !is_array($pack['annexureList'])) {
+        $pack['annexureList'] = [];
+    }
     if (!isset($pack['formats']) || !is_array($pack['formats'])) {
         $pack['formats'] = [];
     }
     if (!isset($pack['restrictedAnnexures']) || !is_array($pack['restrictedAnnexures'])) {
         $pack['restrictedAnnexures'] = [];
+    }
+    if (!isset($pack['generatedAnnexures']) || !is_array($pack['generatedAnnexures'])) {
+        $pack['generatedAnnexures'] = [];
     }
     if (!isset($pack['generatedTemplates']) || !is_array($pack['generatedTemplates'])) {
         $pack['generatedTemplates'] = [];
@@ -487,6 +597,233 @@ function pack_apply_default_templates(array $pack, array $tender, array $contrac
     return $pack;
 }
 
+function contractor_prefill_value(array $contractor, string $key, int $minLength = 8): string
+{
+    $value = trim((string)($contractor[$key] ?? ''));
+    return $value === '' ? str_repeat('_', $minLength) : htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+function pack_annexure_template_library(): array
+{
+    $now = now_kolkata()->format(DateTime::ATOM);
+    return [
+        'cover_letter_fee' => [
+            'type' => 'cover_letter',
+            'title' => 'Covering Letter for Tender Fee Submission',
+            'body' => "To,\n{{department_name}}\nSubject: Submission of tender documents for {{tender_title}} ({{tender_number}})\n\nRespected Sir/Madam,\n\nWe, {{contractor_firm_name}}, are submitting our bid for the above-mentioned tender. Tender fee and supporting documents are enclosed.\n\nThank you,\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{department_name}}','{{tender_title}}','{{tender_number}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'createdAt' => $now,
+        ],
+        'cover_letter_emd' => [
+            'type' => 'cover_letter',
+            'title' => 'Covering Letter for EMD Submission',
+            'body' => "To,\n{{department_name}}\nSubject: Submission of EMD for {{tender_title}} ({{tender_number}})\n\nDear Sir/Madam,\n\nPlease find enclosed the Earnest Money Deposit for the above tender. All documents are authentic to the best of our knowledge.\n\nSincerely,\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{department_name}}','{{tender_title}}','{{tender_number}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'createdAt' => $now,
+        ],
+        'information_sheet' => [
+            'type' => 'info_sheet',
+            'title' => 'Bidder Information Sheet',
+            'body' => "Name of Bidder/Firm: {{contractor_firm_name}}\nType of Firm: {{contractor_firm_type}}\nAddress: {{contractor_address}}\nGST: {{contractor_gst}} | PAN: {{contractor_pan}}\nAuthorized Signatory: {{authorized_signatory}} ({{designation}})\nEmail: {{contractor_email}} | Mobile: {{contractor_mobile}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{contractor_firm_type}}','{{contractor_address}}','{{contractor_gst}}','{{contractor_pan}}','{{authorized_signatory}}','{{designation}}','{{contractor_email}}','{{contractor_mobile}}'],
+            'createdAt' => $now,
+        ],
+        'declaration_general' => [
+            'type' => 'declaration',
+            'title' => 'Declaration by Bidder',
+            'body' => "We hereby declare that the information submitted for {{tender_title}} is true and correct. We accept all tender terms and conditions.\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{tender_title}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'createdAt' => $now,
+        ],
+        'power_of_attorney' => [
+            'type' => 'poa',
+            'title' => 'Power of Attorney',
+            'body' => "We, {{contractor_firm_name}}, authorize {{authorized_signatory}} ({{designation}}) to act on our behalf for all matters related to {{tender_title}} ({{tender_number}}).\n\nSignature\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{authorized_signatory}}','{{designation}}','{{tender_title}}','{{tender_number}}','{{date}}','{{place}}'],
+            'createdAt' => $now,
+        ],
+        'turnover_certificate' => [
+            'type' => 'turnover_certificate',
+            'title' => 'Annual Turnover Certificate',
+            'body' => "This is to certify that {{contractor_firm_name}} has achieved the following turnovers (audited):\nFY ____ : ₹ __________\nFY ____ : ₹ __________\nFY ____ : ₹ __________\n\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{date}}','{{place}}'],
+            'createdAt' => $now,
+        ],
+        'net_worth_certificate' => [
+            'type' => 'net_worth_certificate',
+            'title' => 'Net Worth Certificate',
+            'body' => "Certified that the Net Worth of {{contractor_firm_name}} as on ____ is ₹ __________ (in words: __________).\n\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{date}}','{{place}}'],
+            'createdAt' => $now,
+        ],
+        'msme_undertaking' => [
+            'type' => 'declaration',
+            'title' => 'MSME Undertaking (Jharkhand Preference)',
+            'body' => "We, {{contractor_firm_name}}, claim MSME preference as per Jharkhand procurement policy, subject to submission of valid certificates.\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'createdAt' => $now,
+        ],
+    ];
+}
+
+function pack_match_annexure_template(string $label): ?array
+{
+    $labelLower = mb_strtolower($label);
+    $library = pack_annexure_template_library();
+    $map = [
+        'cover_letter_fee' => ['covering letter', 'cover letter', 'tender fee', 'bid fee'],
+        'cover_letter_emd' => ['emd', 'earnest money'],
+        'information_sheet' => ['information sheet', 'bidder information', 'particulars of bidder'],
+        'declaration_general' => ['declaration', 'undertaking'],
+        'power_of_attorney' => ['power of attorney', 'poa', 'authorization'],
+        'turnover_certificate' => ['turnover', 'annual turnover'],
+        'net_worth_certificate' => ['net worth'],
+        'msme_undertaking' => ['msme', 'micro', 'small', 'medium'],
+    ];
+    foreach ($map as $key => $needles) {
+        foreach ($needles as $needle) {
+            if (str_contains($labelLower, $needle) && isset($library[$key])) {
+                return $library[$key];
+            }
+        }
+    }
+    return null;
+}
+
+function pack_annexure_generate_id(string $yojId, string $packId, string $context = 'tender'): string
+{
+    ensure_pack_annexure_env($yojId, $packId, $context);
+    do {
+        $suffix = strtoupper(substr(bin2hex(random_bytes(4)), 0, 6));
+        $candidate = 'ANNX-' . $suffix;
+    } while (file_exists(pack_annexure_path($yojId, $packId, $candidate, $context)));
+
+    return $candidate;
+}
+
+function pack_is_restricted_annexure_label(string $label): bool
+{
+    $lower = mb_strtolower($label);
+    return assisted_is_restricted_financial_label($lower) || str_contains($lower, 'financial bid') || str_contains($lower, 'price bid');
+}
+
+function pack_generate_annexures(array $pack, array $contractor, string $context = 'tender'): array
+{
+    $yojId = $pack['yojId'];
+    $packId = $pack['packId'];
+    ensure_pack_annexure_env($yojId, $packId, $context);
+
+    $existingIndex = load_pack_annexure_index($yojId, $packId, $context);
+    $existingCodes = [];
+    foreach ($existingIndex as $entry) {
+        $existingCodes[$entry['annexureCode'] ?? ''] = true;
+    }
+
+    $templates = [];
+    $restricted = $pack['restrictedAnnexures'] ?? [];
+    $sourceList = $pack['annexureList'] ?? [];
+    if (!$sourceList && !empty($pack['annexures'])) {
+        $sourceList = $pack['annexures'];
+    }
+    foreach ($sourceList as $raw) {
+        $label = is_array($raw) ? ($raw['title'] ?? ($raw['name'] ?? 'Annexure')) : (string)$raw;
+        if ($label === '') {
+            continue;
+        }
+        if (pack_is_restricted_annexure_label($label)) {
+            if (!in_array($label, $restricted, true)) {
+                $restricted[] = $label;
+            }
+            continue;
+        }
+        $matched = pack_match_annexure_template($label) ?? [
+            'type' => 'other',
+            'title' => $label,
+            'body' => "This annexure format is not auto-generated. Please prepare manually and attach.\n\nTitle: {{annexure_code}} — {{annexure_title}}\nContractor: {{contractor_firm_name}}",
+            'placeholders' => ['{{annexure_code}}','{{annexure_title}}','{{contractor_firm_name}}'],
+            'createdAt' => now_kolkata()->format(DateTime::ATOM),
+        ];
+        $annexureCode = 'Annexure-' . (count($templates) + count($existingIndex) + 1);
+        if (!empty($raw['code'])) {
+            $annexureCode = trim((string)$raw['code']);
+        } elseif (preg_match('/annexure\s*-?\s*([0-9a-z]+)/i', $label, $matches)) {
+            $annexureCode = 'Annexure-' . strtoupper($matches[1]);
+        }
+        if (isset($existingCodes[$annexureCode])) {
+            continue;
+        }
+        $annexId = pack_annexure_generate_id($yojId, $packId, $context);
+        $templates[] = [
+            'annexId' => $annexId,
+            'annexureCode' => $annexureCode,
+            'title' => $matched['title'] ?? $label,
+            'type' => $matched['type'] ?? 'other',
+            'bodyTemplate' => $matched['body'] ?? '',
+            'placeholders' => $matched['placeholders'] ?? [],
+            'createdAt' => $matched['createdAt'] ?? now_kolkata()->format(DateTime::ATOM),
+        ];
+    }
+
+    $index = $existingIndex;
+    foreach ($templates as $tpl) {
+        $index[] = [
+            'annexId' => $tpl['annexId'],
+            'annexureCode' => $tpl['annexureCode'],
+            'title' => $tpl['title'],
+            'type' => $tpl['type'],
+            'createdAt' => $tpl['createdAt'],
+        ];
+        writeJsonAtomic(pack_annexure_path($yojId, $packId, $tpl['annexId'], $context), $tpl);
+    }
+    save_pack_annexure_index($yojId, $packId, $index, $context);
+
+    $pack['annexureList'] = array_values($sourceList);
+    $pack['restrictedAnnexures'] = array_values(array_unique($restricted));
+    $pack['generatedAnnexures'] = array_values(array_unique(array_merge($pack['generatedAnnexures'] ?? [], array_map(fn($tpl) => $tpl['annexId'], $templates))));
+    return $pack;
+}
+
+function pack_annexure_placeholder_context(array $pack, array $contractor): array
+{
+    $prefill = static function ($value, int $minLength = 8): string {
+        $trim = trim((string)$value);
+        return $trim === '' ? str_repeat('_', $minLength) : $trim;
+    };
+
+    $placeDefault = $contractor['placeDefault'] ?? '';
+    if ($placeDefault === '') {
+        $placeDefault = $contractor['district'] ?? '';
+    }
+
+    return [
+        '{{contractor_firm_name}}' => $prefill($contractor['firmName'] ?? ($contractor['name'] ?? '')),
+        '{{contractor_firm_type}}' => $prefill($contractor['firmType'] ?? '', 5),
+        '{{contractor_address}}' => $prefill(contractor_profile_address($contractor)),
+        '{{contractor_gst}}' => $prefill($contractor['gstNumber'] ?? '', 5),
+        '{{contractor_pan}}' => $prefill($contractor['panNumber'] ?? '', 5),
+        '{{authorized_signatory}}' => $prefill($contractor['authorizedSignatoryName'] ?? ($contractor['name'] ?? ''), 5),
+        '{{designation}}' => $prefill($contractor['authorizedSignatoryDesignation'] ?? '', 5),
+        '{{tender_title}}' => $prefill($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender'), 6),
+        '{{tender_number}}' => $prefill($pack['tenderNumber'] ?? '', 6),
+        '{{department_name}}' => $prefill($pack['deptName'] ?? ($pack['sourceTender']['deptName'] ?? ''), 6),
+        '{{place}}' => $prefill($placeDefault, 6),
+        '{{date}}' => now_kolkata()->format('d M Y'),
+        '{{contractor_email}}' => $prefill($contractor['email'] ?? '', 6),
+        '{{contractor_mobile}}' => $prefill($contractor['mobile'] ?? '', 6),
+        '{{annexure_title}}' => '',
+        '{{annexure_code}}' => '',
+    ];
+}
+
+function pack_fill_annexure_body(array $template, array $context): string
+{
+    $body = (string)($template['bodyTemplate'] ?? '');
+    foreach ($context as $key => $value) {
+        $body = str_replace($key, $value, $body);
+    }
+    return $body;
+}
+
 function pack_stats(array $pack): array
 {
     $items = $pack['items'] ?? [];
@@ -639,13 +976,16 @@ function verify_pack_token(string $packId, string $yojId, string $token): bool
     return hash_equals($expected, $token);
 }
 
-function pack_print_html(array $pack, array $contractor, string $docType = 'index', array $options = [], array $vaultFiles = []): string
+function pack_print_html(array $pack, array $contractor, string $docType = 'index', array $options = [], array $vaultFiles = [], array $annexureTemplates = []): string
 {
     $pack = pack_apply_schema_defaults($pack);
     $contractor = normalize_contractor_profile($contractor);
     $allowedDocs = ['index', 'checklist', 'annexures', 'templates', 'full'];
     if (!in_array($docType, $allowedDocs, true)) {
         $docType = 'index';
+    }
+    if (!$annexureTemplates && !empty($pack['packId']) && !empty($pack['yojId'])) {
+        $annexureTemplates = load_pack_annexures($pack['yojId'], $pack['packId'], detect_pack_context($pack['packId']));
     }
     $options = array_merge([
         'includeSnippets' => true,
@@ -747,7 +1087,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         return $html;
     };
 
-    $render_annexures = static function () use ($pack, $options): string {
+    $render_annexures = static function () use ($pack, $options, $annexureTemplates, $contractor): string {
         $annexures = $pack['annexures'] ?? [];
         $formats = $pack['formats'] ?? [];
         $restricted = $pack['restrictedAnnexures'] ?? [];
@@ -777,6 +1117,28 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
                 $html .= '</ul>';
             }
         }
+
+        $annexureContext = pack_annexure_placeholder_context($pack, $contractor);
+        if ($annexureTemplates) {
+            $html .= '<div class="subsection"><h3>Generated Annexure Templates</h3>';
+            foreach ($annexureTemplates as $idx => $tpl) {
+                $context = $annexureContext;
+                $context['{{annexure_title}}'] = $tpl['title'] ?? '';
+                $context['{{annexure_code}}'] = $tpl['annexureCode'] ?? '';
+                $body = pack_fill_annexure_body($tpl, $context);
+                $html .= '<div class="template-block' . ($idx > 0 ? ' page-break' : '') . '">';
+                $html .= '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">';
+                $html .= '<div><div class="muted">' . htmlspecialchars($tpl['annexureCode'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</div><h3 style="margin:4px 0 6px 0;">' . htmlspecialchars($tpl['title'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</h3></div>';
+                $html .= '<span class="pill">' . htmlspecialchars(ucwords(str_replace('_', ' ', $tpl['type'] ?? 'other')), ENT_QUOTES, 'UTF-8') . '</span>';
+                $html .= '</div>';
+                $html .= '<pre>' . htmlspecialchars($body, ENT_QUOTES, 'UTF-8') . '</pre>';
+                $html .= '</div>';
+            }
+            $html .= '</div>';
+        } else {
+            $html .= '<p class="muted">No annexure formats generated yet.</p>';
+        }
+
         if ($options['includeRestricted'] && $restricted) {
             $html .= '<div class="warning"><strong>Restricted Annexures</strong><p>Financial/Price annexures referenced — YOJAK does not handle bid rates.</p><ul>';
             foreach ($restricted as $rest) {
@@ -891,8 +1253,11 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .plain li{margin:4px 0;}
     .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid #30363d;font-size:12px;background:#111820;}
     .page-break{page-break-before:always;}
-    footer{margin-top:20px;font-size:12px;color:#8b949e;text-align:center;}
+    footer{margin-top:20px;font-size:12px;color:#8b949e;text-align:center;min-height:20mm;}
     footer .page-number::after{content:"1";}
+    .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid #30363d;padding-bottom:10px;}
+    .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
+    .print-header .blank{height:20mm;}
     @media print{
         body{background:#fff;color:#000;}
         .page{box-shadow:none;border:1px solid #ddd;}
@@ -901,13 +1266,32 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     }
     </style>';
 
-    $header = '<div class="header" style="margin-bottom:12px;border-bottom:1px solid #30363d;padding-bottom:10px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
+    $printSettings = load_contractor_print_settings($pack['yojId']);
+    $logoHtml = '';
+    if (!empty($printSettings['logoEnabled']) && !empty($printSettings['logoPathPublic'])) {
+        $align = $printSettings['logoAlign'] ?? 'left';
+        $logoHtml = '<div style="flex:0 0 auto;text-align:' . htmlspecialchars($align, ENT_QUOTES, 'UTF-8') . ';"><img class="logo" src="' . htmlspecialchars($printSettings['logoPathPublic'], ENT_QUOTES, 'UTF-8') . '" alt="Logo"></div>';
+    }
+    $headerText = '';
+    if (!empty($printSettings['headerEnabled']) && trim((string)$printSettings['headerText']) !== '') {
+        $headerText = '<div style="flex:1;white-space:pre-wrap;">' . nl2br(htmlspecialchars($printSettings['headerText'], ENT_QUOTES, 'UTF-8')) . '</div>';
+    } else {
+        $headerText = '<div class="blank" style="flex:1;"></div>';
+    }
+    $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
+        . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
         . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['title'] ?? 'Tender Pack', ENT_QUOTES, 'UTF-8') . '</h1>'
         . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></div>'
         . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div></div>'
         . '</div>';
 
-    $footer = '<footer>Printed via YOJAK • Page <span class="page-number"></span></footer>';
+    $footerText = '';
+    if (!empty($printSettings['footerEnabled']) && trim((string)$printSettings['footerText']) !== '') {
+        $footerText = '<div style="white-space:pre-wrap;">' . nl2br(htmlspecialchars($printSettings['footerText'], ENT_QUOTES, 'UTF-8')) . '</div>';
+    } else {
+        $footerText = '<div style="min-height:10mm;"></div>';
+    }
+    $footer = '<footer>' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
         . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'
@@ -916,10 +1300,10 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     return $html;
 }
 
-function pack_index_html(array $pack, ?array $contractor = null, array $options = [], array $vaultFiles = []): string
+function pack_index_html(array $pack, ?array $contractor = null, array $options = [], array $vaultFiles = [], array $annexureTemplates = []): string
 {
     if ($contractor === null && !empty($pack['yojId'])) {
         $contractor = load_contractor($pack['yojId']);
     }
-    return pack_print_html($pack, $contractor ?? [], 'index', $options, $vaultFiles);
+    return pack_print_html($pack, $contractor ?? [], 'index', $options, $vaultFiles, $annexureTemplates);
 }
