@@ -55,6 +55,7 @@ safe_page(function () {
         'annexureList' => $tender['annexures'] ?? [],
         'formats' => $tender['formats'] ?? [],
         'restrictedAnnexures' => $tender['restrictedAnnexures'] ?? [],
+        'suggestedTemplates' => $tender['suggestedTemplates'] ?? ($tender['assisted']['assistantDraft']['templates'] ?? []),
         'dates' => [
             'submission' => $tender['extracted']['submissionDeadline'] ?? '',
             'opening' => $tender['extracted']['openingDate'] ?? '',
