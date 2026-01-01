@@ -445,26 +445,41 @@ function offline_tender_ai_prompt(array $tender, bool $lenient = false): array
         . 'Ensure all keys exist. Dates must be ISO8601 strings.';
 
     $expected = [
-        'publishDate' => 'date string or null',
-        'submissionDeadline' => 'datetime string or null',
-        'openingDate' => 'datetime string or null',
-        'fees' => [
-            'tenderFee' => 'string',
-            'emd' => 'string',
-            'other' => 'string',
+        'tender' => [
+            'documentType' => 'NIT|NIB|Tender|Unknown',
+            'tenderTitle' => 'string|null (extracted title)',
+            'tenderNumber' => 'string|null (NIT index/ref)',
+            'issuingAuthority' => 'string|null',
+            'departmentName' => 'string|null',
+            'location' => 'string|null',
+            'submissionDeadline' => 'datetime string|null',
+            'openingDate' => 'datetime string|null',
+            'completionMonths' => 'number|null',
+            'validityDays' => 'number|null (bid validity)',
         ],
-        'completionMonths' => 'number or null',
-        'bidValidityDays' => 'number or null',
-        'eligibilityDocs' => ['array of strings'],
-        'annexures' => ['array of strings'],
-        'formats' => [['name' => 'string', 'notes' => 'string']],
-        'checklist' => [['title' => 'string', 'description' => 'string', 'required' => true, 'status' => 'pending']],
+        'lists' => [
+            'eligibilityDocs' => ['array of strings (mandatory documents)'],
+            'annexures' => ['array of strings (all annexures mentioned)'],
+            'formats' => [['name' => 'string', 'notes' => 'string']],
+            'restricted' => ['array of strings (financial/price bid annexures which should NOT be generated)'],
+        ],
+        'checklist' => [
+            ['title' => 'string', 'category' => 'Eligibility|Fees|Forms|Technical|Submission|Declarations|Other', 'required' => true, 'notes' => 'string', 'source' => 'ai']
+        ],
+        'templates' => [
+            ['code' => 'Annexure-1', 'name' => 'Cover Letter', 'type' => 'cover_letter|declaration|poa|turnover|net_worth|info_sheet|undertaking|other', 'placeholders' => [], 'body' => 'template text with handlebars {{...}}']
+        ],
+        'snippets' => ['string (context snippets)'],
     ];
 
-    $userPrompt = "Extract tender deadlines, fees, completion months, bid validity days, eligibility documents, annexures, and formats."
+    $userPrompt = "Extract key tender fields, checklist items, and annexure lists from the provided text."
         . " Return strict JSON matching this schema: " . json_encode($expected) . "."
-        . " Keep bid values/rates out."
-        . " Use Asia/Kolkata context for date assumptions."
+        . " RULES:\n"
+        . " 1. Block: Do NOT extract rates/prices/BOQ data. If a financial annexure exists, list it in 'lists.restricted' and do NOT create a template for it.\n"
+        . " 2. Fees: Extract Tender Fee and EMD amounts into checklist items (category: Fees).\n"
+        . " 3. Templates: For each required annexure/format, generate a generic text template with placeholders (e.g. {{contractor_firm_name}}, {{tender_title}}).\n"
+        . " 4. Timezone: Use Asia/Kolkata context for dates.\n"
+        . " 5. Validity: validityDays = Bid Validity (not completion).\n"
         . " Do not wrap the JSON in markdown."
         . ($lenient ? " You may include short notes, but include one standalone JSON object we can parse." : " Respond with only the JSON object.")
         . " Source text:\n" . offline_tender_extract_text($tender['sourceFiles'] ?? []);

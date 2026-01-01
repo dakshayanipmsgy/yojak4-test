@@ -16,6 +16,22 @@ safe_page(function () {
             </div>
             <form method="post" action="/contractor/print_settings_save.php" style="display:grid;gap:12px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                
+                <div style="background:#0f1520;border:1px solid #30363d;border-radius:10px;padding:12px;margin-bottom:8px;">
+                    <strong style="display:block;margin-bottom:8px;"><?= sanitize('Print Mode'); ?></strong>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="radio" name="printMode" value="yojak" id="mode-yojak">
+                            <span><?= sanitize('Use YOJAK Letterhead'); ?></span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="radio" name="printMode" value="preprinted" id="mode-preprinted">
+                            <span><?= sanitize('Use Pre-Printed Letterhead'); ?></span>
+                        </label>
+                    </div>
+                    <p class="muted" style="margin:6px 0 0;font-size:13px;" id="mode-desc">Select a mode to auto-configure settings.</p>
+                </div>
+
                 <label class="field">
                     <span><?= sanitize('Header text (max 300 chars)'); ?></span>
                     <textarea name="headerText" rows="3" maxlength="300"><?= sanitize($settings['headerText'] ?? ''); ?></textarea>
@@ -73,6 +89,50 @@ safe_page(function () {
                 <button class="btn" type="submit"><?= sanitize('Upload & Resize'); ?></button>
             </form>
         </div>
+        <script>
+        (function() {
+            const modeYojak = document.getElementById('mode-yojak');
+            const modePre = document.getElementById('mode-preprinted');
+            const headerCheck = document.querySelector('input[name="headerEnabled"]');
+            const footerCheck = document.querySelector('input[name="footerEnabled"]');
+            const logoCheck = document.querySelector('input[name="logoEnabled"]');
+            const desc = document.getElementById('mode-desc');
+
+            function updateMode() {
+                if (headerCheck.checked || footerCheck.checked) {
+                    modeYojak.checked = true;
+                    desc.textContent = 'Custom header/footer text will be printed. Logo optional.';
+                } else {
+                    modePre.checked = true;
+                    desc.textContent = 'Header/Footer space is reserved (blank) for your pre-printed stationery.';
+                }
+            }
+
+            // Init state
+            updateMode();
+
+            modeYojak.addEventListener('change', function() {
+                if (this.checked) {
+                    headerCheck.checked = true;
+                    footerCheck.checked = true;
+                    // logoCheck.checked = true; // Optional, maybe don't force logo
+                    desc.textContent = 'Enabled header/footer text areas.';
+                }
+            });
+
+            modePre.addEventListener('change', function() {
+                if (this.checked) {
+                    headerCheck.checked = false;
+                    footerCheck.checked = false;
+                    logoCheck.checked = false;
+                    desc.textContent = 'Disabled header/footer text. Blank space reserved.';
+                }
+            });
+            
+            // If user manually toggles, update radio to match
+            [headerCheck, footerCheck].forEach(el => el.addEventListener('change', updateMode));
+        })();
+        </script>
         <?php
     });
 });

@@ -37,21 +37,33 @@ safe_page(function () {
         $pdfRef = $request['tenderPdfRef'] ?? null;
         $requiredKeys = ASSISTED_REQUIRED_FIELDS;
         $sampleJson = json_encode([
-            'submissionDeadline' => '2024-12-31T15:00:00+05:30',
-            'openingDate' => '2025-01-02T11:00:00+05:30',
-            'completionMonths' => 12,
-            'bidValidityDays' => 90,
-            'eligibilityDocs' => ['Certificate of incorporation', 'GST certificate'],
-            'annexures' => ['Annexure A', 'Annexure B'],
-            'formats' => [
-                ['name' => 'Submission cover sheet', 'notes' => 'Fill in agency name only'],
-                ['name' => 'Technical format', 'notes' => 'PDF'],
+            'tender' => [
+                'documentType' => 'NIB',
+                'tenderTitle' => 'Construction of Community Hall at Ranchi',
+                'submissionDeadline' => '2025-01-15T15:00:00+05:30',
+                'openingDate' => '2025-01-16T15:30:00+05:30',
+                'completionMonths' => 6,
+                'validityDays' => 120,
+            ],
+            'lists' => [
+                'eligibilityDocs' => ['GST Registration', 'PAN Card', 'Character Certificate'],
+                'annexures' => ['Annexure-I', 'Annexure-II'],
+                'formats' => [['name' => 'Affidavit', 'notes' => 'Non-judicial stamp paper']],
+                'restricted' => ['Financial Bid Format (Part-B)'],
             ],
             'checklist' => [
-                ['title' => 'Upload license copy', 'description' => 'Latest valid license', 'required' => true],
-                ['title' => 'PAN card', 'description' => '', 'required' => true],
-                ['title' => 'Experience certificates', 'description' => 'Last 3 years', 'required' => true],
+                ['title' => 'Tender Fee', 'description' => 'Rs. 5000 via DD', 'required' => true, 'category' => 'Fees'],
+                ['title' => 'EMD', 'description' => 'Rs. 50000', 'required' => true, 'category' => 'Fees'],
             ],
+            'templates' => [
+                [
+                    'code' => 'Annexure-I',
+                    'name' => 'General Undertaking',
+                    'type' => 'declaration',
+                    'body' => "I, {{contractor_firm_name}}, hereby declare...",
+                    'placeholders' => ['{{contractor_firm_name}}']
+                ]
+            ]
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         ?>
         <div class="card" style="display:grid;gap:10px;">
@@ -100,11 +112,25 @@ safe_page(function () {
             </div>
         </div>
 
+        <?php if ($tender): ?>
+            <?php
+            // Generate the prompt for the staff member
+            [$systemPrompt, $userPrompt] = offline_tender_ai_prompt($tender, false);
+            $fullPrompt = "System: " . $systemPrompt . "\n\nUser: " . $userPrompt;
+            ?>
+            <div class="card" style="display:grid;gap:10px;">
+                <h3 style="margin:0;">External AI Prompt</h3>
+                <p class="muted" style="margin:0;">Copy this detailed prompt and paste it into ChatGPT (o1/4o) or Gemini Advanced. It contains the schema instructions and the raw text from the source PDF.</p>
+                <textarea id="prompt-area" rows="6" readonly style="resize:vertical;background:#0d1117;color:#8b949e;border:1px solid #30363d;border-radius:10px;padding:8px;font-family:monospace;font-size:12px;"><?= sanitize($fullPrompt); ?></textarea>
+                <button type="button" class="btn secondary" onclick="navigator.clipboard.writeText(document.getElementById('prompt-area').value).then(()=>alert('Prompt copied!'));">Copy Prompt to Clipboard</button>
+            </div>
+        <?php endif; ?>
+
         <div class="card" style="display:grid;gap:10px;">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
                 <div>
                     <h3 style="margin:0;">Assistant Draft</h3>
-                    <p class="muted" style="margin:4px 0 0;">Paste structured JSON matching the assisted extraction schema. BOQ/bid rates are blocked; tender fee/EMD/security amounts and metadata like bidValidityDays are allowed.</p>
+                    <p class="muted" style="margin:4px 0 0;">Paste the JSON response from the external AI here. The system will validate and structure it.</p>
                 </div>
                 <div class="pill">Actor: <?= sanitize(assisted_actor_label($actor)); ?></div>
             </div>
@@ -159,7 +185,7 @@ safe_page(function () {
                     <span class="muted">Statuses: save = in progress; deliver = delivered + notify contractor.</span>
                 </div>
             </form>
-            <div class="muted" style="font-size:13px;">Sample payload covers all required keys and allows bidValidityDays without treating it as forbidden.</div>
+            <div class="muted" style="font-size:13px;">Use the 'Copy Prompt' button above to get the correct schema instructions for the AI.</div>
             <div>
                 <h4 style="margin:0 0 6px 0;">Audit Trail</h4>
                 <div style="display:grid;gap:6px;">

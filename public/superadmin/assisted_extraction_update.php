@@ -109,23 +109,36 @@ safe_page(function () {
     $request['assignedTo'] = $actor['id'] ?? ($request['assignedTo'] ?? null);
 
     if ($action === 'deliver') {
-        $request['status'] = 'delivered';
-        $request['deliveredAt'] = now_kolkata()->format(DateTime::ATOM);
+        // Save draft state first (including audit) so we don't lose the 'delivered' log if deliver_payload re-reads
         assisted_append_audit($request, assisted_actor_label($actor), 'delivered', null);
-        assisted_deliver_notification($request);
-        logEvent(ASSISTED_EXTRACTION_LOG, [
-            'at' => now_kolkata()->format(DateTime::ATOM),
-            'event' => 'ASSISTED_DELIVER',
-            'ok' => true,
-            'reqId' => $reqId,
-            'yojId' => $request['yojId'] ?? '',
-            'offtdId' => $request['offtdId'] ?? '',
-            'actor' => assisted_actor_label($actor),
-        ]);
-        set_flash('success', 'Checklist delivered to contractor.');
+        // We also want to save the assistantDraft text into the request before delivery so it is finalized
+        $request['assistantDraft'] = $normalized; // This is redundant but safe
+        assisted_save_request($request);
+
+        // Now perform the actual delivery (creates file in contractor dir and updates tender json)
+        try {
+            assisted_deliver_payload($reqId, $request['yojId'], $request['offtdId'], $normalized, assisted_actor_label($actor));
+             // Notification logic (extracted or ensure assisted_deliver_payload does it? currently verified it does NOT do notification, so we keep it here if it exists)
+            if (function_exists('assisted_deliver_notification')) {
+                assisted_deliver_notification($request);
+            }
+            logEvent(ASSISTED_EXTRACTION_LOG, [
+                'at' => now_kolkata()->format(DateTime::ATOM),
+                'event' => 'ASSISTED_DELIVER',
+                'ok' => true,
+                'reqId' => $reqId,
+                'yojId' => $request['yojId'] ?? '',
+                'offtdId' => $request['offtdId'] ?? '',
+                'actor' => assisted_actor_label($actor),
+            ]);
+            set_flash('success', 'Checklist delivered to contractor.');
+        } catch (Exception $e) {
+             set_flash('error', 'Delivery failed: ' . $e->getMessage());
+        }
     } else {
         $request['status'] = 'in_progress';
         assisted_append_audit($request, assisted_actor_label($actor), 'draft_saved', null);
+        assisted_save_request($request);
         logEvent(ASSISTED_EXTRACTION_LOG, [
             'at' => now_kolkata()->format(DateTime::ATOM),
             'event' => 'draft_saved',
@@ -138,6 +151,5 @@ safe_page(function () {
         set_flash('success', 'Draft saved.');
     }
 
-    assisted_save_request($request);
     redirect('/superadmin/assisted_extraction_view.php?reqId=' . urlencode($reqId));
 });

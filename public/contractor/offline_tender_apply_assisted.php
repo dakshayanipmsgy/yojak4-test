@@ -80,14 +80,20 @@ safe_page(function () {
     }
 
     $tender['extracted'] = array_merge(offline_tender_defaults(), $tender['extracted'] ?? []);
-    $tender['extracted']['submissionDeadline'] = $normalized['submissionDeadline'];
-    $tender['extracted']['openingDate'] = $normalized['openingDate'];
-    $tender['extracted']['completionMonths'] = $normalized['completionMonths'];
-    $tender['extracted']['bidValidityDays'] = $normalized['bidValidityDays'];
-    $tender['extracted']['eligibilityDocs'] = $normalized['eligibilityDocs'];
-    $tender['extracted']['annexures'] = $normalized['annexures'];
-    $tender['extracted']['restrictedAnnexures'] = $normalized['restrictedAnnexures'];
-    $tender['extracted']['formats'] = $normalized['formats'];
+    
+    // Handle V2 Structure
+    $tData = $normalized['tender'] ?? [];
+    $lData = $normalized['lists'] ?? [];
+    
+    $tender['extracted']['submissionDeadline'] = $tData['submissionDeadline'] ?? ($normalized['submissionDeadline'] ?? null);
+    $tender['extracted']['openingDate'] = $tData['openingDate'] ?? ($normalized['openingDate'] ?? null);
+    $tender['extracted']['completionMonths'] = $tData['completionMonths'] ?? ($normalized['completionMonths'] ?? null);
+    $tender['extracted']['bidValidityDays'] = $tData['validityDays'] ?? ($normalized['bidValidityDays'] ?? null);
+    
+    $tender['extracted']['eligibilityDocs'] = $lData['eligibilityDocs'] ?? ($normalized['eligibilityDocs'] ?? []);
+    $tender['extracted']['annexures'] = $lData['annexures'] ?? ($normalized['annexures'] ?? []);
+    $tender['extracted']['restrictedAnnexures'] = $lData['restricted'] ?? ($normalized['restrictedAnnexures'] ?? []);
+    $tender['extracted']['formats'] = $lData['formats'] ?? ($normalized['formats'] ?? []);
 
     $tender['checklist'] = [];
     foreach ($normalized['checklist'] as $item) {

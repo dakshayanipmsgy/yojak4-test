@@ -52,6 +52,13 @@ safe_page(function () {
         'updatedAt' => $now,
         'status' => 'Pending',
         'items' => pack_items_from_checklist($tender['checklist'] ?? []),
+        'annexureList' => $tender['annexures'] ?? [],
+        'formats' => $tender['formats'] ?? [],
+        'restrictedAnnexures' => $tender['restrictedAnnexures'] ?? [],
+        'dates' => [
+            'submission' => $tender['extracted']['submissionDeadline'] ?? '',
+            'opening' => $tender['extracted']['openingDate'] ?? '',
+        ],
         'generatedDocs' => [],
         'defaultTemplatesApplied' => false,
     ];
