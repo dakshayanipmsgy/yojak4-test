@@ -736,38 +736,13 @@ function pack_generate_annexures(array $pack, array $contractor, string $context
             }
             continue;
         }
-
-        // Try matched suggested templates first
-        $suggestion = null;
-        foreach ($pack['suggestedTemplates'] ?? [] as $st) {
-             // Match by code or loose name match
-             if ((string)($st['name'] ?? '') === $label || (string)($st['code'] ?? '') === $label) {
-                 $suggestion = $st; 
-                 break;
-             }
-             if (str_contains(mb_strtolower($label), mb_strtolower($st['name'] ?? '---'))) {
-                 $suggestion = $st; // Close enough?
-                 break;
-             }
-        }
-
-        if ($suggestion) {
-            $matched = [
-                'type' => $suggestion['type'] ?? 'other',
-                'title' => $suggestion['name'] ?? $label,
-                'body' => $suggestion['body'] ?? '',
-                'placeholders' => $suggestion['placeholders'] ?? [],
-                'createdAt' => now_kolkata()->format(DateTime::ATOM),
-            ];
-        } else {
-            $matched = pack_match_annexure_template($label) ?? [
-                'type' => 'other',
-                'title' => $label,
-                'body' => "This annexure format is not auto-generated. Please prepare manually and attach.\n\nTitle: {{annexure_code}} — {{annexure_title}}\nContractor: {{contractor_firm_name}}",
-                'placeholders' => ['{{annexure_code}}','{{annexure_title}}','{{contractor_firm_name}}'],
-                'createdAt' => now_kolkata()->format(DateTime::ATOM),
-            ];
-        }
+        $matched = pack_match_annexure_template($label) ?? [
+            'type' => 'other',
+            'title' => $label,
+            'body' => "This annexure format is not auto-generated. Please prepare manually and attach.\n\nTitle: {{annexure_code}} — {{annexure_title}}\nContractor: {{contractor_firm_name}}",
+            'placeholders' => ['{{annexure_code}}','{{annexure_title}}','{{contractor_firm_name}}'],
+            'createdAt' => now_kolkata()->format(DateTime::ATOM),
+        ];
         $annexureCode = 'Annexure-' . (count($templates) + count($existingIndex) + 1);
         if (!empty($raw['code'])) {
             $annexureCode = trim((string)$raw['code']);
@@ -1292,40 +1267,17 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     </style>';
 
     $printSettings = load_contractor_print_settings($pack['yojId']);
-    $lhMode = $options['letterheadMode'] ?? 'yojak'; // yojak | preprinted
-    
     $logoHtml = '';
-    $headerText = '';
-    $footerText = '';
-
-    if ($lhMode === 'preprinted') {
-        // Force blank space, ignore settings content
-        $logoHtml = ''; // No logo on pre-printed
-        $headerText = '<div class="blank" style="height:35mm;"></div>'; 
-        // We override this to ensure top margin is reserved.
-        
-        // Footer: blank space
-        $footerText = '<div style="min-height:20mm;"></div>';
-    } else {
-        // YOJAK / Standard Mode
-        if (!empty($printSettings['logoEnabled']) && !empty($printSettings['logoPathPublic'])) {
-            $align = $printSettings['logoAlign'] ?? 'left';
-            $logoHtml = '<div style="flex:0 0 auto;text-align:' . htmlspecialchars($align, ENT_QUOTES, 'UTF-8') . ';"><img class="logo" src="' . htmlspecialchars($printSettings['logoPathPublic'], ENT_QUOTES, 'UTF-8') . '" alt="Logo"></div>';
-        }
-
-        if (!empty($printSettings['headerEnabled']) && trim((string)$printSettings['headerText']) !== '') {
-            $headerText = '<div style="flex:1;white-space:pre-wrap;">' . nl2br(htmlspecialchars($printSettings['headerText'], ENT_QUOTES, 'UTF-8')) . '</div>';
-        } else {
-            $headerText = '<div class="blank" style="flex:1;"></div>';
-        }
-        
-        if (!empty($printSettings['footerEnabled']) && trim((string)$printSettings['footerText']) !== '') {
-            $footerText = '<div style="white-space:pre-wrap;">' . nl2br(htmlspecialchars($printSettings['footerText'], ENT_QUOTES, 'UTF-8')) . '</div>';
-        } else {
-            $footerText = '<div style="min-height:10mm;"></div>';
-        }
+    if (!empty($printSettings['logoEnabled']) && !empty($printSettings['logoPathPublic'])) {
+        $align = $printSettings['logoAlign'] ?? 'left';
+        $logoHtml = '<div style="flex:0 0 auto;text-align:' . htmlspecialchars($align, ENT_QUOTES, 'UTF-8') . ';"><img class="logo" src="' . htmlspecialchars($printSettings['logoPathPublic'], ENT_QUOTES, 'UTF-8') . '" alt="Logo"></div>';
     }
-
+    $headerText = '';
+    if (!empty($printSettings['headerEnabled']) && trim((string)$printSettings['headerText']) !== '') {
+        $headerText = '<div style="flex:1;white-space:pre-wrap;">' . nl2br(htmlspecialchars($printSettings['headerText'], ENT_QUOTES, 'UTF-8')) . '</div>';
+    } else {
+        $headerText = '<div class="blank" style="flex:1;"></div>';
+    }
     $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
         . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
         . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['title'] ?? 'Tender Pack', ENT_QUOTES, 'UTF-8') . '</h1>'
@@ -1333,6 +1285,12 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div></div>'
         . '</div>';
 
+    $footerText = '';
+    if (!empty($printSettings['footerEnabled']) && trim((string)$printSettings['footerText']) !== '') {
+        $footerText = '<div style="white-space:pre-wrap;">' . nl2br(htmlspecialchars($printSettings['footerText'], ENT_QUOTES, 'UTF-8')) . '</div>';
+    } else {
+        $footerText = '<div style="min-height:10mm;"></div>';
+    }
     $footer = '<footer>' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '

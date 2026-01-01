@@ -457,7 +457,7 @@ function assisted_normalize_payload(array $payload): array
         $normalized['tender']['submissionDeadline'] = assisted_clean_string($srcTender['submissionDeadline'] ?? null);
         $normalized['tender']['openingDate'] = assisted_clean_string($srcTender['openingDate'] ?? null);
         $normalized['tender']['completionMonths'] = assisted_clean_numeric($srcTender['completionMonths'] ?? null);
-        $normalized['tender']['validityDays'] = assisted_clean_numeric($srcTender['validityDays'] ?? $srcTender['bidValidityDays'] ?? null);
+        $normalized['tender']['validityDays'] = assisted_clean_numeric($srcTender['validityDays'] ?? null);
         
         $annexures = assisted_normalize_string_list($srcLists['annexures'] ?? []);
         $formats = assisted_normalize_formats($srcLists['formats'] ?? []);
@@ -481,7 +481,7 @@ function assisted_normalize_payload(array $payload): array
         $normalized['tender']['submissionDeadline'] = assisted_clean_string($mapped['submissionDeadline'] ?? null);
         $normalized['tender']['openingDate'] = assisted_clean_string($mapped['openingDate'] ?? null);
         $normalized['tender']['completionMonths'] = assisted_clean_numeric($mapped['completionMonths'] ?? null);
-        $normalized['tender']['validityDays'] = assisted_clean_numeric($mapped['validityDays'] ?? $mapped['bidValidityDays'] ?? null);
+        $normalized['tender']['validityDays'] = assisted_clean_numeric($mapped['bidValidityDays'] ?? null);
         
         $normalized['lists']['eligibilityDocs'] = assisted_normalize_string_list($mapped['eligibilityDocs'] ?? []);
         
@@ -516,10 +516,8 @@ function assisted_normalize_checklist(array $payload): array
             }
             $normalized[] = [
                 'title' => $title,
-                'category' => assisted_clean_string($item['category'] ?? 'Other'),
+                'description' => assisted_clean_string($item['description'] ?? ''),
                 'required' => (bool)($item['required'] ?? true),
-                'notes' => assisted_clean_string($item['notes'] ?? $item['description'] ?? ''),
-                'source' => assisted_clean_string($item['source'] ?? $item['sourceQuote'] ?? ''),
             ];
             if (count($normalized) >= 300) {
                 break;
@@ -598,20 +596,13 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
         // Check key for Blocked tokens
         foreach ($blockContextTokens as $token) {
             if (str_contains($keyLower, $token)) {
-                // BUT if key is just "restricted_annexures" or "financial_formats", we shouldn't block key presence
-                // The validator logic specifically says "Must block... restricted...".
-                // However, our normalizer moves restricted items to 'restricted' list.
-                // If this is inside 'lists.restricted', we should skip blocking.
-                if (str_contains($currentPath, 'restricted')) {
-                    continue;
-                }
-                
                 $findings[] = [
                     'path' => $currentPath,
                     'reasonCode' => 'BLOCK_KEY',
                     'snippet' => $keyString,
                     'blocked' => true,
                 ];
+                // Don't break, keep checking value but we already know this node is bad
             }
         }
         
@@ -674,11 +665,6 @@ function assisted_evaluate_string_forbidden(string $value, string $path, bool $s
     
     // If context is NOT safe, and we see currency with numbers -> Block.
     if ($hasCurrency) {
-        // Double check against allow markers in the value itself
-        if (assisted_contains_allow_marker($value)) {
-            return null;
-        }
-
          return [
             'path' => $path,
             'reasonCode' => 'BLOCK_CURRENCY_NO_CONTEXT',

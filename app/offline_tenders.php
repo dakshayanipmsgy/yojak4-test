@@ -464,34 +464,22 @@ function offline_tender_ai_prompt(array $tender, bool $lenient = false): array
             'restricted' => ['array of strings (financial/price bid annexures which should NOT be generated)'],
         ],
         'checklist' => [
-            [
-                'title' => 'string',
-                'category' => 'Eligibility|Fees|Forms|Technical|Submission|Declarations|Other',
-                'required' => true,
-                'notes' => 'string',
-                'source' => 'ai'
-            ]
+            ['title' => 'string', 'category' => 'Eligibility|Fees|Forms|Technical|Submission|Declarations|Other', 'required' => true, 'notes' => 'string', 'source' => 'ai']
         ],
         'templates' => [
-            [
-                'code' => 'Annexure-X',
-                'name' => 'Cover Letter',
-                'type' => 'cover_letter|declaration|poa|turnover|net_worth|info_sheet|undertaking|other',
-                'placeholders' => ['{{firmName}}', '{{tenderTitle}}'],
-                'body' => 'template text with placeholders'
-            ]
+            ['code' => 'Annexure-1', 'name' => 'Cover Letter', 'type' => 'cover_letter|declaration|poa|turnover|net_worth|info_sheet|undertaking|other', 'placeholders' => [], 'body' => 'template text with handlebars {{...}}']
         ],
         'snippets' => ['string (context snippets)'],
     ];
 
-    $userPrompt = "Extract key tender fields, checklist items, annexure lists, and generate templates from the provided text."
+    $userPrompt = "Extract key tender fields, checklist items, and annexure lists from the provided text."
         . " Return strict JSON matching this schema: " . json_encode($expected) . "."
-        . " CRITICAL RULES:\n"
-        . " 1. FINANCIAL BLOCK: Do NOT extract rates/prices/BOQ data. If a financial annexure/format exists (Price Bid, BOQ, Schedule), list it in 'lists.restricted' and do NOT create a template/checklist item for it.\n"
-        . " 2. FEES ALLOWED: Extract Tender Fee and EMD amounts into checklist items (category: Fees). These are NOT bid rates; they are allowed.\n"
-        . " 3. TEMPLATES: For each required annexure/format (except restricted), generate a usable plaintext template with placeholders (e.g. {{firmName}}, {{address}}, {{tenderTitle}}).\n"
-        . " 4. TIMEZONE: Use Asia/Kolkata context for dates.\n"
-        . " 5. VALIDITY: validityDays = Bid Validity (not completion).\n"
+        . " RULES:\n"
+        . " 1. Block: Do NOT extract rates/prices/BOQ data. If a financial annexure exists, list it in 'lists.restricted' and do NOT create a template for it.\n"
+        . " 2. Fees: Extract Tender Fee and EMD amounts into checklist items (category: Fees).\n"
+        . " 3. Templates: For each required annexure/format, generate a generic text template with placeholders (e.g. {{contractor_firm_name}}, {{tender_title}}).\n"
+        . " 4. Timezone: Use Asia/Kolkata context for dates.\n"
+        . " 5. Validity: validityDays = Bid Validity (not completion).\n"
         . " Do not wrap the JSON in markdown."
         . ($lenient ? " You may include short notes, but include one standalone JSON object we can parse." : " Respond with only the JSON object.")
         . " Source text:\n" . offline_tender_extract_text($tender['sourceFiles'] ?? []);

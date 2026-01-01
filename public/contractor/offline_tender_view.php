@@ -435,56 +435,7 @@ safe_page(function () {
                     </div>
                 </details>
             </div>
-            <?php if ($existingPack): ?>
-            <div class="card" style="margin-top:12px;display:grid;gap:10px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <h3 style="margin:0;"><?= sanitize('Print Center'); ?></h3>
-                    <div class="pill"><?= sanitize('Pack: ' . $existingPack['packId']); ?></div>
-                </div>
-                
-                <div style="display:grid;gap:8px;padding:12px;background:#0f1622;border:1px solid #30363d;border-radius:10px;">
-                    <strong style="color:#8b949e;text-transform:uppercase;font-size:12px;letter-spacing:0.04em;"><?= sanitize('Letterhead Settings'); ?></strong>
-                    <div style="display:flex;gap:16px;flex-wrap:wrap;">
-                        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
-                            <input type="radio" name="lh_mode_select" value="yojak" checked onchange="updatePrintLinks(this.value)">
-                            <span>
-                                <strong><?= sanitize('Use YOJAK Letterhead'); ?></strong>
-                                <span class="muted" style="display:block;font-size:12px;"><?= sanitize('Print header/footer & logo'); ?></span>
-                            </span>
-                        </label>
-                        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
-                            <input type="radio" name="lh_mode_select" value="preprinted" onchange="updatePrintLinks(this.value)">
-                            <span>
-                                <strong><?= sanitize('Pre-Printed Letterhead'); ?></strong>
-                                <span class="muted" style="display:block;font-size:12px;"><?= sanitize('Leave blank space (Header/Footer)'); ?></span>
-                            </span>
-                        </label>
-                    </div>
-                </div>
-
-                <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <a id="lnk-print-list" class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($existingPack['packId']); ?>&doc=checklist&letterheadMode=yojak" target="_blank">
-                        <?= sanitize('Print Checklist'); ?>
-                    </a>
-                    <a id="lnk-print-annx" class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($existingPack['packId']); ?>&doc=annexures&letterheadMode=yojak" target="_blank">
-                        <?= sanitize('Print Annexures'); ?>
-                    </a>
-                    <a id="lnk-print-full" class="btn" href="/contractor/pack_print.php?packId=<?= sanitize($existingPack['packId']); ?>&doc=full&letterheadMode=yojak" target="_blank">
-                        <?= sanitize('Print Full Pack'); ?>
-                    </a>
-                </div>
-                <script>
-                    function updatePrintLinks(mode) {
-                        const baselink = '/contractor/pack_print.php?packId=<?= sanitize($existingPack['packId']); ?>';
-                        document.getElementById('lnk-print-list').href = baselink + '&doc=checklist&letterheadMode=' + mode;
-                        document.getElementById('lnk-print-annx').href = baselink + '&doc=annexures&letterheadMode=' + mode;
-                        document.getElementById('lnk-print-full').href = baselink + '&doc=full&letterheadMode=' + mode;
-                    }
-                </script>
-            </div>
-        <?php endif; ?>
-
-        <div class="card" style="display:grid; gap:10px; margin-top:12px;">
+            <div class="card" style="display:grid; gap:10px;">
                 <h3 style="margin:0;"><?= sanitize('Checklist'); ?></h3>
                 <form method="post" action="/contractor/offline_tender_update.php" style="display:grid; gap:10px;">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">

@@ -22,7 +22,6 @@ safe_page(function () {
         'includeSnippets' => ($_GET['snippets'] ?? '1') !== '0',
         'includeRestricted' => ($_GET['restricted'] ?? '1') !== '0',
         'pendingOnly' => ($_GET['pendingOnly'] ?? '') === '1',
-        'letterheadMode' => $_GET['letterheadMode'] ?? 'yojak',
     ];
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
     $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles, $annexureTemplates);
