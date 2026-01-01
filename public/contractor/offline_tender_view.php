@@ -38,10 +38,6 @@ safe_page(function () {
     $offtdId = trim($_GET['id'] ?? '');
     $tender = $offtdId !== '' ? load_offline_tender($yojId, $offtdId) : null;
     $existingPack = $offtdId !== '' ? find_pack_by_source($yojId, 'OFFTD', $offtdId) : null;
-    $existingPackData = null;
-    if ($existingPack && !empty($existingPack['packId'])) {
-        $existingPackData = load_pack($yojId, $existingPack['packId']);
-    }
     $assistedRequest = $offtdId !== '' ? assisted_active_request_for_tender($yojId, $offtdId) : null;
 
     if (!$tender || ($tender['yojId'] ?? '') !== $yojId) {
@@ -51,7 +47,7 @@ safe_page(function () {
 
     $title = get_app_config()['appName'] . ' | ' . ($tender['title'] ?? 'Offline Tender');
 
-    render_layout($title, function () use ($tender, $existingPack, $existingPackData, $assistedRequest) {
+    render_layout($title, function () use ($tender, $existingPack, $assistedRequest) {
         $extracted = $tender['extracted'] ?? offline_tender_defaults();
         $checklist = $tender['checklist'] ?? [];
         $aiDefaults = [
@@ -247,17 +243,6 @@ safe_page(function () {
         $assistedStatus = $assistedRequest['status'] ?? 'none';
         $assistedDelivered = $assistedStatus === 'delivered';
         $assistedDraft = $assistedRequest['assistantDraft'] ?? [];
-        $assistedRestricted = [];
-        if (!empty($assistedDraft['lists']['restricted']) && is_array($assistedDraft['lists']['restricted'])) {
-            $assistedRestricted = $assistedDraft['lists']['restricted'];
-        } elseif (!empty($assistedDraft['restrictedAnnexures']) && is_array($assistedDraft['restrictedAnnexures'])) {
-            $assistedRestricted = $assistedDraft['restrictedAnnexures'];
-        }
-        $assistedAnnexures = $assistedDraft['lists']['annexures'] ?? ($assistedDraft['annexures'] ?? []);
-        $assistedFormats = $assistedDraft['lists']['formats'] ?? ($assistedDraft['formats'] ?? []);
-        $packId = $existingPack['packId'] ?? '';
-        $annexuresReady = $existingPackData && (!empty($existingPackData['annexures']) || !empty($existingPackData['generatedAnnexures']) || !empty($existingPackData['formats']));
-        $packPrintBase = $packId ? '/contractor/pack_print.php?packId=' . urlencode($packId) : '';
         ?>
         <div class="card" style="margin-top:12px;display:grid;gap:10px;">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
@@ -268,65 +253,6 @@ safe_page(function () {
                 <span class="pill" style="<?= $assistedDelivered ? 'border-color:#2ea043;color:#8ce99a;' : 'border-color:#f59f00;color:#fcd34d;'; ?>">
                     <?= sanitize('Status: ' . ($assistedStatus === 'none' ? 'Not requested' : ucwords(str_replace('_',' ', $assistedStatus)))); ?>
                 </span>
-            </div>
-            <?php
-                $flowSteps = [
-                    [
-                        'title' => 'Assisted extraction delivered',
-                        'done' => $assistedDelivered,
-                        'note' => $assistedDelivered ? 'Delivered to your account' : 'Request help to unlock guided pack prep',
-                        'link' => null,
-                    ],
-                    [
-                        'title' => 'Generate annexures & formats',
-                        'done' => $annexuresReady,
-                        'note' => $packId ? 'Open tender pack to auto-generate formats' : 'Create pack to generate annexures',
-                        'link' => $packId ? '/contractor/pack_view.php?packId=' . urlencode($packId) : null,
-                    ],
-                    [
-                        'title' => 'Review & fill blanks',
-                        'done' => (bool)$packId,
-                        'note' => $packId ? 'Fill contractor details and blank fields in pack items' : 'Pack needed to continue',
-                        'link' => $packId ? '/contractor/pack_view.php?packId=' . urlencode($packId) : null,
-                    ],
-                    [
-                        'title' => 'Print checklist',
-                        'done' => false,
-                        'note' => $packId ? 'Download/print checklist for submission' : 'Pack needed to print',
-                        'link' => $packPrintBase ? $packPrintBase . '&doc=checklist' : null,
-                    ],
-                    [
-                        'title' => 'Print annexures',
-                        'done' => false,
-                        'note' => $packId ? 'Includes assisted templates and generated formats' : 'Pack needed to print',
-                        'link' => $packPrintBase ? $packPrintBase . '&doc=annexures' : null,
-                    ],
-                    [
-                        'title' => 'Print full pack',
-                        'done' => false,
-                        'note' => $packId ? 'One click full pack PDF with header/footer spacing' : 'Pack needed to print',
-                        'link' => $packPrintBase ? $packPrintBase . '&doc=full' : null,
-                    ],
-                ];
-            ?>
-            <div style="display:grid;gap:8px;">
-                <h4 style="margin:0;"><?= sanitize('Guided flow'); ?></h4>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
-                    <?php foreach ($flowSteps as $step): ?>
-                        <div class="pill" style="display:grid;gap:4px;border-color:<?= $step['done'] ? '#2ea043' : '#f59f00'; ?>;color:<?= $step['done'] ? '#8ce99a' : '#fcd34d'; ?>;background:<?= $step['done'] ? '#0f2218' : '#1f170a'; ?>;">
-                            <strong><?= sanitize($step['title']); ?></strong>
-                            <span class="muted"><?= sanitize($step['note']); ?></span>
-                            <?php if (!empty($step['link'])): ?>
-                                <a class="btn secondary" href="<?= sanitize($step['link']); ?>" style="margin-top:4px;"><?= sanitize('Open'); ?></a>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-                <?php if (!empty($assistedRestricted) || (!empty($existingPackData['restrictedAnnexures']))): ?>
-                    <div class="pill" style="border-color:#f59f00;color:#fcd34d;background:#1a1208;">
-                        <?= sanitize('Restricted financial annexures exist (not handled for rates).'); ?>
-                    </div>
-                <?php endif; ?>
             </div>
             <?php if (!$assistedRequest): ?>
                 <form method="post" action="/contractor/offline_tender_request_help.php" style="display:grid;gap:8px;">
@@ -368,16 +294,12 @@ safe_page(function () {
                                     <div style="border:1px solid #30363d;border-radius:10px;padding:10px;">
                                         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
                                             <strong><?= sanitize($item['title'] ?? ''); ?></strong>
-                                            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                                                <span class="pill"><?= sanitize($item['category'] ?? 'Other'); ?></span>
-                                                <span class="pill" style="<?= !empty($item['required']) ? 'border-color:#2ea043;color:#8ce99a;' : ''; ?>">
-                                                    <?= !empty($item['required']) ? sanitize('Required') : sanitize('Optional'); ?>
-                                                </span>
-                                            </div>
+                                            <span class="pill" style="<?= !empty($item['required']) ? 'border-color:#2ea043;color:#8ce99a;' : ''; ?>">
+                                                <?= !empty($item['required']) ? sanitize('Required') : sanitize('Optional'); ?>
+                                            </span>
                                         </div>
-                                        <?php $notes = $item['notes'] ?? ($item['description'] ?? ''); ?>
-                                        <?php if (!empty($notes)): ?>
-                                            <p class="muted" style="margin:6px 0 0;"><?= sanitize($notes); ?></p>
+                                        <?php if (!empty($item['description'])): ?>
+                                            <p class="muted" style="margin:6px 0 0;"><?= sanitize($item['description']); ?></p>
                                         <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
@@ -385,26 +307,8 @@ safe_page(function () {
                         <?php else: ?>
                             <p class="muted" style="margin:0;"><?= sanitize('No checklist entries found in the delivered draft.'); ?></p>
                         <?php endif; ?>
-                        <?php if (!empty($assistedAnnexures) || !empty($assistedFormats)): ?>
-                            <div style="border:1px solid #27344a;border-radius:10px;padding:10px;background:#0f1826;display:grid;gap:6px;">
-                                <h4 style="margin:0;"><?= sanitize('Annexures & Formats'); ?></h4>
-                                <?php if (!empty($assistedAnnexures)): ?>
-                                    <div class="muted" style="display:grid;gap:4px;">
-                                        <?php foreach ($assistedAnnexures as $annex): ?>
-                                            <span class="pill"><?= sanitize(is_array($annex) ? ($annex['name'] ?? ($annex['title'] ?? 'Annexure')) : (string)$annex); ?></span>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                                <?php if (!empty($assistedFormats)): ?>
-                                    <div class="muted" style="display:grid;gap:4px;">
-                                        <?php foreach ($assistedFormats as $fmt): ?>
-                                            <span class="pill secondary"><?= sanitize(is_array($fmt) ? ($fmt['name'] ?? ($fmt['title'] ?? 'Format')) : (string)$fmt); ?></span>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        <?php endif; ?>
-                        <?php if (!empty($assistedRestricted) && is_array($assistedRestricted)): ?>
+                        <?php $restrictedAnnexures = $assistedDraft['restrictedAnnexures'] ?? []; ?>
+                        <?php if (!empty($restrictedAnnexures) && is_array($restrictedAnnexures)): ?>
                             <div style="border:1px solid #3a2a18;border-radius:10px;padding:10px;background:#1a1208;display:grid;gap:6px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
                                     <h4 style="margin:0;display:flex;align-items:center;gap:6px;"><?= sanitize('Restricted (Not supported in YOJAK)'); ?></h4>
@@ -412,7 +316,7 @@ safe_page(function () {
                                 </div>
                                 <p class="muted" style="margin:0;"><?= sanitize('This tender references financial/pricing documents. YOJAK will not ask you to enter rates.'); ?></p>
                                 <ul style="margin:0;padding-left:18px;display:grid;gap:4px;">
-                                    <?php foreach ($assistedRestricted as $annex): ?>
+                                    <?php foreach ($restrictedAnnexures as $annex): ?>
                                         <li style="color:#fcd34d;"><?= sanitize($annex); ?></li>
                                     <?php endforeach; ?>
                                 </ul>
