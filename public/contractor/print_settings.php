@@ -12,10 +12,21 @@ safe_page(function () {
         <div class="card" style="display:grid;gap:14px;max-width:760px;margin:0 auto;">
             <div>
                 <h2 style="margin:0 0 6px 0;"><?= sanitize('Print Header / Footer'); ?></h2>
-                <p class="muted" style="margin:0;"><?= sanitize('Configure reusable header, footer and logo for contractor printouts. Reserved space is always kept so your letterhead fits.'); ?></p>
+                <p class="muted" style="margin:0;"><?= sanitize('Pick your letterhead mode, header/footer text, and optional logo. YOJAK will always reserve top and bottom space so nothing touches your letterhead margins.'); ?></p>
             </div>
             <form method="post" action="/contractor/print_settings_save.php" style="display:grid;gap:12px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                <div class="field">
+                    <span><?= sanitize('Letterhead preference'); ?></span>
+                    <label class="pill" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+                        <input type="radio" name="letterheadMode" value="yojak" <?= ($settings['letterheadMode'] ?? 'yojak') === 'yojak' ? 'checked' : ''; ?>>
+                        <?= sanitize('Use YOJAK header/footer (shows your saved header, footer, and logo)'); ?>
+                    </label>
+                    <label class="pill" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+                        <input type="radio" name="letterheadMode" value="company_preprinted" <?= ($settings['letterheadMode'] ?? 'yojak') === 'company_preprinted' ? 'checked' : ''; ?>>
+                        <?= sanitize('Use company pre-printed letterhead (keeps blank top/bottom margins, hides header/footer/logo)'); ?>
+                    </label>
+                </div>
                 <label class="field">
                     <span><?= sanitize('Header text (max 300 chars)'); ?></span>
                     <textarea name="headerText" rows="3" maxlength="300"><?= sanitize($settings['headerText'] ?? ''); ?></textarea>

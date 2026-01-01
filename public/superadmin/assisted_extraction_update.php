@@ -109,6 +109,14 @@ safe_page(function () {
     $request['assignedTo'] = $actor['id'] ?? ($request['assignedTo'] ?? null);
 
     if ($action === 'deliver') {
+        $yojId = $request['yojId'] ?? '';
+        $offtdId = $request['offtdId'] ?? '';
+        if ($yojId !== '' && $offtdId !== '') {
+            ensure_offline_tender_env($yojId);
+            $meta = assisted_persist_payload($yojId, $offtdId, $reqId, $normalized, $actor);
+            assisted_link_payload_to_entities($yojId, $offtdId, $meta);
+            $request['deliveredPayloadPath'] = $meta['payloadPath'] ?? null;
+        }
         $request['status'] = 'delivered';
         $request['deliveredAt'] = now_kolkata()->format(DateTime::ATOM);
         assisted_append_audit($request, assisted_actor_label($actor), 'delivered', null);
@@ -121,6 +129,7 @@ safe_page(function () {
             'yojId' => $request['yojId'] ?? '',
             'offtdId' => $request['offtdId'] ?? '',
             'actor' => assisted_actor_label($actor),
+            'restrictedCount' => count($normalized['lists']['restricted'] ?? []),
         ]);
         set_flash('success', 'Checklist delivered to contractor.');
     } else {

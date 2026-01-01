@@ -35,24 +35,41 @@ safe_page(function () {
     render_layout($title, function () use ($request, $draftInput, $tender, $actor, $validation) {
         $status = $request['status'] ?? 'requested';
         $pdfRef = $request['tenderPdfRef'] ?? null;
-        $requiredKeys = ASSISTED_REQUIRED_FIELDS;
-        $sampleJson = json_encode([
+        $requiredKeys = ASSISTED_SCHEMA_TOP_KEYS;
+        $samplePayload = assisted_schema_defaults();
+        $samplePayload['tender'] = [
+            'documentType' => 'NIT',
+            'tenderTitle' => 'Road widening work',
+            'tenderNumber' => 'NIT-45/2024-25',
+            'issuingAuthority' => 'Executive Engineer',
+            'departmentName' => 'Road Construction Department',
+            'location' => 'Ranchi',
             'submissionDeadline' => '2024-12-31T15:00:00+05:30',
             'openingDate' => '2025-01-02T11:00:00+05:30',
             'completionMonths' => 12,
-            'bidValidityDays' => 90,
-            'eligibilityDocs' => ['Certificate of incorporation', 'GST certificate'],
-            'annexures' => ['Annexure A', 'Annexure B'],
-            'formats' => [
-                ['name' => 'Submission cover sheet', 'notes' => 'Fill in agency name only'],
-                ['name' => 'Technical format', 'notes' => 'PDF'],
+            'validityDays' => 90,
+        ];
+        $samplePayload['lists'] = [
+            'eligibilityDocs' => ['GST certificate', 'PAN', 'Work completion certificates'],
+            'annexures' => ['Annexure I – Declaration', 'Power of Attorney'],
+            'formats' => ['Technical format', 'Experience format'],
+            'restricted' => ['Financial Bid / BOQ'],
+        ];
+        $samplePayload['checklist'] = [
+            ['title' => 'Upload GST certificate', 'category' => 'Eligibility', 'required' => true, 'notes' => 'Valid and readable', 'source' => 'tender_pdf'],
+        ];
+        $samplePayload['templates'] = [
+            [
+                'code' => 'Annexure-1',
+                'name' => 'Cover Letter',
+                'type' => 'cover_letter',
+                'placeholders' => ['firmName', 'tenderTitle', 'tenderNumber', 'departmentName', 'signatory', 'designation', 'date', 'place'],
+                'body' => "To,\n{{departmentName}}\nSubject: Submission of {{tenderTitle}} ({{tenderNumber}})\n\nRespected Sir/Madam,\nWe, {{firmName}}, are submitting our documents for the above tender.\n\nAuthorized Signatory\n{{signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
             ],
-            'checklist' => [
-                ['title' => 'Upload license copy', 'description' => 'Latest valid license', 'required' => true],
-                ['title' => 'PAN card', 'description' => '', 'required' => true],
-                ['title' => 'Experience certificates', 'description' => 'Last 3 years', 'required' => true],
-            ],
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ];
+        $samplePayload['snippets'] = ['Tender fee Rs. 5,000', 'Portal: https://tenders.example.in/123'];
+        $sampleJson = json_encode($samplePayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        $externalPrompt = assisted_external_prompt($tender ?? []);
         ?>
         <div class="card" style="display:grid;gap:10px;">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
@@ -104,7 +121,7 @@ safe_page(function () {
             <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
                 <div>
                     <h3 style="margin:0;">Assistant Draft</h3>
-                    <p class="muted" style="margin:4px 0 0;">Paste structured JSON matching the assisted extraction schema. BOQ/bid rates are blocked; tender fee/EMD/security amounts and metadata like bidValidityDays are allowed.</p>
+                    <p class="muted" style="margin:4px 0 0;">Paste structured JSON with top-level keys tender, lists, checklist, templates, and snippets. Price bid/BOQ lines are redirected to restricted; tender fee/EMD/security deposits are allowed.</p>
                 </div>
                 <div class="pill">Actor: <?= sanitize(assisted_actor_label($actor)); ?></div>
             </div>
@@ -159,7 +176,15 @@ safe_page(function () {
                     <span class="muted">Statuses: save = in progress; deliver = delivered + notify contractor.</span>
                 </div>
             </form>
-            <div class="muted" style="font-size:13px;">Sample payload covers all required keys and allows bidValidityDays without treating it as forbidden.</div>
+            <div class="muted" style="font-size:13px;">Sample payload covers all schema keys and uses validityDays instead of bidValidityDays.</div>
+            <div style="border:1px dashed #30363d;border-radius:12px;padding:10px;background:#0f1622;display:grid;gap:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <h4 style="margin:0;">Final external AI prompt</h4>
+                    <button class="btn secondary" type="button" id="copy-assist-prompt">Copy prompt</button>
+                </div>
+                <p class="muted" style="margin:0;">Use this prompt with ChatGPT/Gemini to keep the schema stable, allow fees/EMD, and push price-bid annexures into lists.restricted.</p>
+                <textarea readonly rows="8" id="assist-prompt-text" style="width:100%;resize:vertical;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"><?= sanitize($externalPrompt); ?></textarea>
+            </div>
             <div>
                 <h4 style="margin:0 0 6px 0;">Audit Trail</h4>
                 <div style="display:grid;gap:6px;">
@@ -191,6 +216,18 @@ safe_page(function () {
                         textarea.focus();
                     }
                 });
+                const copyBtn = document.getElementById('copy-assist-prompt');
+                if (copyBtn) {
+                    copyBtn.addEventListener('click', function () {
+                        const text = document.getElementById('assist-prompt-text');
+                        if (text) {
+                            navigator.clipboard?.writeText(text.value).then(() => {
+                                copyBtn.textContent = 'Copied';
+                                setTimeout(() => copyBtn.textContent = 'Copy prompt', 1800);
+                            });
+                        }
+                    });
+                }
             })();
         </script>
         <?php
