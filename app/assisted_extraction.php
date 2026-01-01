@@ -1019,9 +1019,8 @@ function assisted_redact_snippet(string $value): string
 
 function assisted_sanitize_json_input(string $input): string
 {
-    $sanitized = preg_replace('/^\xEF\xBB\xBF/', '', $input);
-    $sanitized = preg_replace('/[\x{2028}\x{2029}]/u', "\n", (string)$sanitized);
-    return (string)$sanitized;
+    $result = sanitize_ai_json_input($input);
+    return $result['sanitized'] ?? (string)$input;
 }
 
 function assisted_payload_path(string $yojId, string $offtdId): string
@@ -1194,5 +1193,6 @@ function assisted_external_prompt(array $tender = []): string
         . json_encode($schema, JSON_UNESCAPED_SLASHES)
         . '. Rules: timezone Asia/Kolkata; leave values null if unknown; include all top-level keys even when empty; '
         . 'never include quoted rates/BOQ/price schedules. If any annexure/format mentions Price Bid/Financial Bid/BOQ/SOR, move the label into lists.restricted and keep annexures clean. '
-        . 'Tender fee/EMD/deposit amounts are allowed; do not ask for bidder’s quoted rates. No markdown, no prose.';
+        . 'Tender fee/EMD/deposit amounts are allowed; do not ask for bidder’s quoted rates. No markdown, no prose. '
+        . 'Snippets array must be single-line strings (escape newlines as \\n). Do not use smart quotes.';
 }

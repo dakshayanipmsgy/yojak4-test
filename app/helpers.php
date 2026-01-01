@@ -240,6 +240,225 @@ function logEvent(string $file, array $context): void
     }
 }
 
+function sanitize_ai_json_input(string $raw, bool $fixSnippetNewlines = true): array
+{
+    $fixes = [];
+    $sanitized = (string)$raw;
+
+    $bomStripped = preg_replace('/^\xEF\xBB\xBF/', '', $sanitized);
+    if ($bomStripped !== null && $bomStripped !== $sanitized) {
+        $sanitized = $bomStripped;
+    }
+
+    $unicodeNormalized = preg_replace('/[\x{2028}\x{2029}]/u', "\n", $sanitized);
+    if ($unicodeNormalized !== null && $unicodeNormalized !== $sanitized) {
+        $sanitized = $unicodeNormalized;
+        $fixes[] = 'U2028';
+    }
+
+    $nbspNormalized = str_replace("\xC2\xA0", ' ', $sanitized);
+    if ($nbspNormalized !== $sanitized) {
+        $sanitized = $nbspNormalized;
+        $fixes[] = 'NBSP';
+    }
+
+    $smartNormalized = preg_replace('/(?<![\\p{L}\\p{N}])[\\x{201C}\\x{201D}](?![\\p{L}\\p{N}])/u', '"', $sanitized);
+    $smartNormalized = preg_replace('/(?<![\\p{L}\\p{N}])[\\x{2018}\\x{2019}](?![\\p{L}\\p{N}])/u', '\'', (string)$smartNormalized);
+    if ($smartNormalized !== $sanitized) {
+        $sanitized = $smartNormalized;
+        $fixes[] = 'SMART_QUOTES';
+    }
+
+    $commaResult = sanitize_ai_strip_trailing_commas($sanitized);
+    if ($commaResult['changed']) {
+        $sanitized = $commaResult['sanitized'];
+        $fixes[] = 'TRAILING_COMMA';
+    }
+
+    if ($fixSnippetNewlines) {
+        $snippetResult = sanitize_ai_fix_snippet_strings($sanitized);
+        if ($snippetResult['changed']) {
+            $sanitized = $snippetResult['sanitized'];
+            $fixes[] = 'SNIPPET_NEWLINES';
+        }
+    } else {
+        $snippetResult = ['preview' => null];
+    }
+
+    return [
+        'sanitized' => $sanitized,
+        'changed' => $sanitized !== $raw,
+        'fixes' => array_values(array_unique($fixes)),
+        'hash' => hash('sha256', $sanitized),
+        'snippetPreview' => $snippetResult['preview'] ?? null,
+    ];
+}
+
+function sanitize_ai_strip_trailing_commas(string $json): array
+{
+    $len = strlen($json);
+    $out = '';
+    $inString = false;
+    $escape = false;
+    $changed = false;
+
+    for ($i = 0; $i < $len; $i++) {
+        $char = $json[$i];
+
+        if ($inString) {
+            $out .= $char;
+            if ($escape) {
+                $escape = false;
+                continue;
+            }
+            if ($char === '\\') {
+                $escape = true;
+                continue;
+            }
+            if ($char === '"') {
+                $inString = false;
+            }
+            continue;
+        }
+
+        if ($char === '"') {
+            $inString = true;
+            $out .= $char;
+            continue;
+        }
+
+        if ($char === ',') {
+            $j = $i + 1;
+            while ($j < $len && ctype_space($json[$j])) {
+                $j++;
+            }
+            if ($j < $len && ($json[$j] === ']' || $json[$j] === '}')) {
+                $changed = true;
+                continue;
+            }
+        }
+
+        $out .= $char;
+    }
+
+    return ['sanitized' => $out, 'changed' => $changed];
+}
+
+function sanitize_ai_fix_snippet_strings(string $json): array
+{
+    $result = [
+        'sanitized' => $json,
+        'changed' => false,
+        'preview' => null,
+    ];
+
+    $snippetsPos = stripos($json, '"snippets"');
+    if ($snippetsPos === false) {
+        return $result;
+    }
+
+    $colonPos = strpos($json, ':', $snippetsPos);
+    if ($colonPos === false) {
+        return $result;
+    }
+
+    $len = strlen($json);
+    $arrayStart = null;
+    for ($i = $colonPos + 1; $i < $len; $i++) {
+        $char = $json[$i];
+        if (ctype_space($char)) {
+            continue;
+        }
+        if ($char === '[') {
+            $arrayStart = $i;
+        }
+        break;
+    }
+
+    if ($arrayStart === null) {
+        return $result;
+    }
+
+    $inString = false;
+    $escape = false;
+    $depth = 0;
+    $arrayEnd = null;
+    for ($i = $arrayStart; $i < $len; $i++) {
+        $char = $json[$i];
+        if ($inString) {
+            if ($escape) {
+                $escape = false;
+            } elseif ($char === '\\') {
+                $escape = true;
+            } elseif ($char === '"') {
+                $inString = false;
+            }
+            continue;
+        }
+        if ($char === '"') {
+            $inString = true;
+            continue;
+        }
+        if ($char === '[') {
+            $depth++;
+            continue;
+        }
+        if ($char === ']') {
+            $depth--;
+            if ($depth === 0) {
+                $arrayEnd = $i;
+                break;
+            }
+        }
+    }
+
+    if ($arrayEnd === null) {
+        return $result;
+    }
+
+    $segment = substr($json, $arrayStart, $arrayEnd - $arrayStart + 1);
+    $changed = false;
+    $preview = null;
+
+    $segmentSanitized = preg_replace_callback('/"(?:\\\\.|[^"\\\\])*"/s', static function ($matches) use (&$changed, &$preview) {
+        $literal = $matches[0];
+        $content = substr($literal, 1, -1);
+        $hasNewline = preg_match("/[\r\n]/", $content) === 1;
+        $needsTrim = preg_match('/^\s|\s$/u', $content) === 1;
+        if (!$hasNewline && !$needsTrim) {
+            return $literal;
+        }
+
+        $normalized = str_replace(["\r\n", "\r", "\n"], "\n", $content);
+        $normalized = trim($normalized);
+        $normalized = str_replace("\n", "\\n", $normalized);
+
+        $encoded = json_encode($normalized, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($encoded === false) {
+            return $literal;
+        }
+
+        $changed = true;
+        if ($preview === null) {
+            $preview = mb_substr($normalized, 0, 160);
+        }
+
+        return $encoded;
+    }, $segment);
+
+    if ($segmentSanitized === null) {
+        return $result;
+    }
+
+    if ($changed) {
+        $result['sanitized'] = substr($json, 0, $arrayStart) . $segmentSanitized . substr($json, $arrayEnd + 1);
+        $result['changed'] = true;
+        $result['preview'] = $preview;
+    }
+
+    return $result;
+}
+
 function now_kolkata(): DateTimeImmutable
 {
     return new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'));
