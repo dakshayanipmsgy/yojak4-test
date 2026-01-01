@@ -15,15 +15,13 @@ safe_page(function () {
         $titleInput = trim($_POST['title'] ?? '');
         $files = $_FILES['documents'] ?? null;
 
-        if ($files && isset($files['name']) && is_array($files['name']) && empty($files['name'][0])) {
-            // Empty file input standard behavior
-            $files = null;
+        if (!$files || !isset($files['name']) || !is_array($files['name'])) {
+            $errors[] = 'Please upload at least one PDF.';
         }
 
         $maxTotal = 25 * 1024 * 1024;
         $totalSize = 0;
         $uploads = [];
-        $stored = [];
 
         if (!$errors && $files) {
             $count = count($files['name']);
@@ -50,7 +48,9 @@ safe_page(function () {
                 ];
             }
 
-            // if ($totalSize <= 0) { ... } // Allowed 0 size now
+            if ($totalSize <= 0) {
+                $errors[] = 'Please upload at least one PDF.';
+            }
             if ($totalSize > $maxTotal) {
                 $errors[] = 'Total upload size exceeds 25MB.';
             }
@@ -63,6 +63,7 @@ safe_page(function () {
                 mkdir($uploadDir, 0775, true);
             }
 
+            $stored = [];
             foreach ($uploads as $file) {
                 $targetName = uniqid('src_', true) . '.pdf';
                 $destination = rtrim($uploadDir, '/') . '/' . $targetName;
@@ -79,12 +80,8 @@ safe_page(function () {
             }
         }
 
-        if (!$errors) {
-            // Generate ID if not generated (i.e. no uploads)
-            if (!isset($offtdId)) {
-                $offtdId = generate_offtd_id($yojId);
-            }
-            $title = $titleInput !== '' ? $titleInput : ((!empty($stored) && isset($stored[0]['name'])) ? $stored[0]['name'] : 'Offline Tender');
+        if (!$errors && $stored) {
+            $title = $titleInput !== '' ? $titleInput : ($stored[0]['name'] ?? 'Offline Tender');
             $now = now_kolkata()->format(DateTime::ATOM);
             $tender = [
                 'yojId' => $yojId,
@@ -134,7 +131,7 @@ safe_page(function () {
                 </div>
                 <div class="field">
                     <label for="documents"><?= sanitize('Upload PDFs'); ?></label>
-                    <input id="documents" name="documents[]" type="file" accept=".pdf" multiple>
+                    <input id="documents" name="documents[]" type="file" accept=".pdf" multiple required>
                     <small class="muted"><?= sanitize('PDF only, up to 25MB total.'); ?></small>
                 </div>
                 <div class="buttons" style="margin-top:6px;">

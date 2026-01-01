@@ -1,12 +1,11 @@
 {
     "type": "superadmin",
     "username": "superadmin",
-    "passwordHash": "$2y$12$Qevx3XBQDgXh3FaET8FTQuMVj04P388nh50myxU31HMG3MPTtkO76",
-    "mustResetPassword": false,
+    "passwordHash": "$2y$12$Kvlv1KkanSOj9atW8.CfGeWWhmNOk6U/UOsX3HaHa6j9W.mbHZctu",
+    "mustResetPassword": true,
     "createdAt": "2025-12-25T01:14:07+05:30",
-    "updatedAt": "2026-01-02T01:30:39+05:30",
-    "lastLoginAt": "2026-01-02T01:30:39+05:30",
+    "updatedAt": "2025-12-25T01:14:07+05:30",
+    "lastLoginAt": null,
     "failedLoginCount": 0,
-    "status": "active",
-    "lastPasswordResetAt": "2026-01-02T01:29:06+05:30"
+    "status": "active"
 }
