@@ -56,7 +56,6 @@ function assisted_schema_defaults(): array
         'checklist' => [],
         'templates' => [],
         'snippets' => [],
-        'notes' => [],
     ];
 }
 
@@ -406,9 +405,6 @@ function assisted_normalize_payload(array $payload): array
 
     $normalized['templates'] = assisted_normalize_templates(assisted_pick_first($payload, [['templates']], []));
     $normalized['snippets'] = assisted_normalize_snippets(assisted_pick_first($payload, [['snippets']], []));
-    $normalized['notes'] = assisted_normalize_notes(assisted_pick_first($payload, [['notes']], []));
-
-    $normalized = assisted_rewrite_financial_submission_intents($normalized);
 
     return $normalized;
 }
@@ -740,29 +736,6 @@ function assisted_normalize_snippets($value): array
     return $snippets;
 }
 
-function assisted_normalize_notes($value): array
-{
-    $notes = [];
-    if (is_array($value)) {
-        foreach ($value as $entry) {
-            $text = assisted_clean_string(is_array($entry) ? ($entry['text'] ?? ($entry['note'] ?? '')) : (string)$entry);
-            if ($text === '') {
-                continue;
-            }
-            $notes[] = $text;
-            if (count($notes) >= 50) {
-                break;
-            }
-        }
-    } elseif (is_string($value)) {
-        $text = assisted_clean_string($value);
-        if ($text !== '') {
-            $notes[] = $text;
-        }
-    }
-    return $notes;
-}
-
 function assisted_split_restricted_annexures(array $annexures, array $formats): array
 {
     $restricted = [];
@@ -796,55 +769,6 @@ function assisted_split_restricted_annexures(array $annexures, array $formats): 
     }
 
     return [$safeAnnexures, $safeFormats, $restricted];
-}
-
-function assisted_rewrite_financial_submission_intents(array $payload): array
-{
-    $removedChecklistCount = 0;
-    $movedSnippetsCount = 0;
-    $restricted = $payload['lists']['restricted'] ?? [];
-    $notes = $payload['notes'] ?? [];
-    $checklist = $payload['checklist'] ?? [];
-    $snippets = $payload['snippets'] ?? [];
-    $safeRestrictedLabel = 'Financial BOQ/Price Bid referenced in tender (not handled in YOJAK; do outside platform).';
-    $safetyNote = 'This tender includes financial/BOQ submission. YOJAK will not collect rates; complete financial submission outside YOJAK.';
-
-    $filteredChecklist = [];
-    foreach ($checklist as $item) {
-        if (!assisted_is_financial_submission_intent($item)) {
-            $filteredChecklist[] = $item;
-            continue;
-        }
-        $removedChecklistCount++;
-    }
-
-    $filteredSnippets = [];
-    foreach ($snippets as $snippet) {
-        if (!assisted_is_restricted_boq_snippet($snippet)) {
-            $filteredSnippets[] = $snippet;
-            continue;
-        }
-        $movedSnippetsCount++;
-    }
-
-    if ($removedChecklistCount > 0 || $movedSnippetsCount > 0) {
-        $restricted[] = $safeRestrictedLabel;
-        $notes[] = $safetyNote;
-        $restricted = array_values(array_unique(array_filter(array_map('assisted_clean_string', $restricted))));
-        $notes = array_values(array_unique(array_filter(array_map('assisted_clean_string', $notes))));
-        logEvent(ASSISTED_EXTRACTION_LOG, [
-            'event' => 'ASSISTED_REWRITE_RESTRICTED',
-            'removedChecklistCount' => $removedChecklistCount,
-            'movedSnippetsCount' => $movedSnippetsCount,
-        ]);
-    }
-
-    $payload['lists']['restricted'] = $restricted;
-    $payload['notes'] = $notes;
-    $payload['checklist'] = $filteredChecklist;
-    $payload['snippets'] = $filteredSnippets;
-
-    return $payload;
 }
 
 function assisted_detect_forbidden_pricing(array $payload, string $path = 'root', array $context = []): array
@@ -885,8 +809,6 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
             $stringFinding = assisted_evaluate_string_forbidden($value, $currentPath, $pathHasAllowContext, [
                 'allowCurrency' => !empty($context['allowCurrency']),
                 'isAnnexure' => $isAnnexurePath,
-                'isSnippet' => in_array('snippets', $pathSegments, true) || !empty($context['isSnippet']),
-                'templateType' => $context['templateType'] ?? null,
             ]);
             if ($stringFinding) {
                 $findings[] = $stringFinding;
@@ -899,13 +821,6 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
             if ($pathHasAllowContext) {
                 $nextContext['allowCurrency'] = true;
             }
-            if (assisted_path_is_template_entry($pathSegments) && assisted_template_allows_currency($value)) {
-                $nextContext['allowCurrency'] = true;
-                $nextContext['templateType'] = $value['type'] ?? null;
-            }
-            if (in_array('snippets', $pathSegments, true)) {
-                $nextContext['isSnippet'] = true;
-            }
             $findings = array_merge($findings, assisted_detect_forbidden_pricing($value, $currentPath, $nextContext));
         }
     }
@@ -916,23 +831,10 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
 function assisted_evaluate_string_forbidden(string $value, string $path, bool $pathHasAllowContext, array $context = []): ?array
 {
     $lower = mb_strtolower($value);
-    if (assisted_has_safe_negation_context($lower)) {
-        return [
-            'path' => $path,
-            'reasonCode' => 'SAFE_NEGATION_CONTEXT',
-            'snippet' => assisted_redact_snippet($value),
-            'blocked' => false,
-        ];
-    }
-
     $hasBlock = assisted_contains_block_marker($lower);
     $hasCurrency = assisted_contains_currency_marker($lower);
     $hasAllowContext = $pathHasAllowContext || assisted_contains_allow_marker($lower) || !empty($context['allowCurrency']);
-    if (!empty($context['templateType']) && assisted_template_allows_currency(['type' => $context['templateType'] ?? '', 'body' => $value, 'name' => ''])) {
-        $hasAllowContext = true;
-    }
     $isAnnexure = !empty($context['isAnnexure']);
-    $isSnippet = !empty($context['isSnippet']);
     $isRestrictedLabel = assisted_is_restricted_financial_label($lower);
 
     if ($isRestrictedLabel && $isAnnexure) {
@@ -955,15 +857,6 @@ function assisted_evaluate_string_forbidden(string $value, string $path, bool $p
 
     if (!$hasCurrency) {
         return null;
-    }
-
-    if ($hasAllowContext || ($isSnippet && !assisted_contains_pricing_keyword($lower))) {
-        return [
-            'path' => $path,
-            'reasonCode' => $hasAllowContext ? 'CURRENCY_ALLOWED_FEE_CONTEXT' : 'CURRENCY_ALLOWED_SNIPPET',
-            'snippet' => assisted_redact_snippet($value),
-            'blocked' => false,
-        ];
     }
 
     if ($hasAllowContext) {
@@ -1012,12 +905,6 @@ function assisted_contains_allow_marker(string $value): bool
         '/performance\s+security/i',
         '/security\s+amount/i',
         '/security\s+fee/i',
-        '/turnover/i',
-        '/net\s+worth/i',
-        '/chartered\s+accountant/i',
-        '/\budin\b/i',
-        '/financial\s+year/i',
-        '/audited/i',
     ];
 
     foreach ($patterns as $pattern) {
@@ -1062,77 +949,6 @@ function assisted_contains_block_marker(string $value): bool
     return false;
 }
 
-function assisted_contains_pricing_keyword(string $value): bool
-{
-    $keywords = [
-        'boq',
-        'bill of quantity',
-        'financial bid',
-        'price bid',
-        'price',
-        'rate',
-        'quoted',
-        'schedule of rates',
-        'sor',
-        'unit rate',
-        'rate quoted',
-    ];
-
-    foreach ($keywords as $keyword) {
-        if (str_contains($value, $keyword)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function assisted_has_safe_negation_context(string $value): bool
-{
-    $negations = [
-        'do not',
-        'shall not',
-        'must not',
-        'will not',
-        'not be',
-        'prohibited',
-        'forbidden',
-        'lead to rejection',
-        'rejection',
-        'disqualification',
-        'not allowed',
-        'avoid',
-        'without',
-        'shall lead',
-    ];
-
-    if (!assisted_contains_pricing_keyword($value)) {
-        return false;
-    }
-
-    foreach ($negations as $negation) {
-        if (str_contains($value, $negation)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function assisted_template_allows_currency(array $template): bool
-{
-    $type = strtolower(assisted_clean_string($template['type'] ?? ''));
-    $allowedTypes = ['turnover', 'net_worth', 'fees', 'security'];
-    if (in_array($type, $allowedTypes, true)) {
-        return true;
-    }
-
-    $text = mb_strtolower(assisted_clean_string(($template['name'] ?? '') . ' ' . ($template['body'] ?? '')));
-    if ($text === '') {
-        return false;
-    }
-
-    return assisted_contains_allow_marker($text);
-}
-
 function assisted_is_restricted_financial_label(string $lower): bool
 {
     $patterns = [
@@ -1163,11 +979,6 @@ function assisted_is_annexure_like_path(array $segments): bool
         || in_array('restricted', $segments, true);
 }
 
-function assisted_path_is_template_entry(array $segments): bool
-{
-    return in_array('templates', $segments, true);
-}
-
 function assisted_path_is_checklist_item(array $segments): bool
 {
     return in_array('checklist', $segments, true);
@@ -1185,33 +996,6 @@ function assisted_checklist_item_allows_currency(array $item): bool
         }
     }
     return false;
-}
-
-function assisted_is_financial_submission_intent(array $item): bool
-{
-    $text = mb_strtolower(assisted_clean_string(
-        ($item['title'] ?? '') . ' ' . ($item['notes'] ?? ($item['description'] ?? '')) . ' ' . ($item['source'] ?? '') . ' ' . ($item['sourceSnippet'] ?? '')
-    ));
-    if ($text === '') {
-        return false;
-    }
-
-    $hasBoq = str_contains($text, 'boq') || str_contains($text, 'bill of quantity') || str_contains($text, 'financial bid') || str_contains($text, 'price bid');
-    $hasUpload = str_contains($text, 'upload') || str_contains($text, 'submit');
-    $hasQuoted = str_contains($text, 'duly quoted') || str_contains($text, 'quoted') || str_contains($text, 'digitally signed boq') || str_contains($text, '.xls');
-
-    return ($hasUpload && $hasBoq) || ($hasBoq && $hasQuoted) || str_contains($text, 'price schedule') || str_contains($text, 'rate sheet');
-}
-
-function assisted_is_restricted_boq_snippet(string $snippet): bool
-{
-    $text = mb_strtolower(assisted_clean_string($snippet));
-    if ($text === '') {
-        return false;
-    }
-    $hasBoq = str_contains($text, 'boq') || str_contains($text, 'bill of quantity');
-    $hasQuoted = str_contains($text, 'duly quoted') || str_contains($text, 'quoted') || str_contains($text, 'digitally signed') || str_contains($text, '.xls');
-    return $hasBoq && ($hasQuoted || str_contains($text, 'submit') || str_contains($text, 'upload'));
 }
 
 function assisted_path_has_allowed_segment(array $segments, array $allowed): bool

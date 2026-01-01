@@ -324,7 +324,7 @@ safe_page(function () {
                 </div>
                 <?php if (!empty($assistedRestricted) || (!empty($existingPackData['restrictedAnnexures']))): ?>
                     <div class="pill" style="border-color:#f59f00;color:#fcd34d;background:#1a1208;">
-                        <?= sanitize('Restricted financial annexures exist (not handled for rates). YOJAK will not collect bid values.'); ?>
+                        <?= sanitize('Restricted financial annexures exist (not handled for rates).'); ?>
                     </div>
                 <?php endif; ?>
             </div>
@@ -407,10 +407,10 @@ safe_page(function () {
                         <?php if (!empty($assistedRestricted) && is_array($assistedRestricted)): ?>
                             <div style="border:1px solid #3a2a18;border-radius:10px;padding:10px;background:#1a1208;display:grid;gap:6px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-                                    <h4 style="margin:0;display:flex;align-items:center;gap:6px;"><?= sanitize('Restricted (Not handled in YOJAK)'); ?></h4>
+                                    <h4 style="margin:0;display:flex;align-items:center;gap:6px;"><?= sanitize('Restricted (Not supported in YOJAK)'); ?></h4>
                                     <span class="pill" style="border-color:#f59f00;color:#fcd34d;"><?= sanitize('Financial/pricing annexure'); ?></span>
                                 </div>
-                                <p class="muted" style="margin:0;"><?= sanitize('YOJAK will not collect rates or bid values. Complete financial bid outside and upload final signed PDF to your own records if needed.'); ?></p>
+                                <p class="muted" style="margin:0;"><?= sanitize('This tender references financial/pricing documents. YOJAK will not ask you to enter rates.'); ?></p>
                                 <ul style="margin:0;padding-left:18px;display:grid;gap:4px;">
                                     <?php foreach ($assistedRestricted as $annex): ?>
                                         <li style="color:#fcd34d;"><?= sanitize($annex); ?></li>
