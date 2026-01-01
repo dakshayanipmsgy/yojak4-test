@@ -154,6 +154,7 @@ function default_print_settings(): array
         'logoEnabled' => false,
         'logoPathPublic' => null,
         'logoAlign' => 'left',
+        'letterheadMode' => 'yojak',
         'updatedAt' => now_kolkata()->format(DateTime::ATOM),
     ];
 }
@@ -174,6 +175,9 @@ function load_contractor_print_settings(string $yojId): array
     if (!in_array($data['logoAlign'] ?? 'left', ['left', 'center', 'right'], true)) {
         $data['logoAlign'] = 'left';
     }
+    if (!in_array($data['letterheadMode'] ?? 'yojak', ['yojak', 'company_preprinted'], true)) {
+        $data['letterheadMode'] = 'yojak';
+    }
     return $data;
 }
 
@@ -181,6 +185,9 @@ function save_contractor_print_settings(string $yojId, array $settings): void
 {
     $defaults = default_print_settings();
     $merged = array_merge($defaults, $settings);
+    if (!in_array($merged['letterheadMode'] ?? 'yojak', ['yojak', 'company_preprinted'], true)) {
+        $merged['letterheadMode'] = 'yojak';
+    }
     $merged['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
     writeJsonAtomic(contractor_print_settings_path($yojId), $merged);
 }
@@ -315,6 +322,15 @@ function pack_apply_schema_defaults(array $pack): array
     }
     if (!isset($pack['generatedTemplates']) || !is_array($pack['generatedTemplates'])) {
         $pack['generatedTemplates'] = [];
+    }
+    if (!isset($pack['assistedTemplates']) || !is_array($pack['assistedTemplates'])) {
+        $pack['assistedTemplates'] = [];
+    }
+    if (!isset($pack['assistedSnippets']) || !is_array($pack['assistedSnippets'])) {
+        $pack['assistedSnippets'] = [];
+    }
+    if (!isset($pack['assisted']) || !is_array($pack['assisted'])) {
+        $pack['assisted'] = [];
     }
     if (!isset($pack['vaultMappings']) || !is_array($pack['vaultMappings'])) {
         $pack['vaultMappings'] = [];
@@ -824,6 +840,63 @@ function pack_fill_annexure_body(array $template, array $context): string
     return $body;
 }
 
+function assisted_template_placeholder_context(array $pack, array $contractor): array
+{
+    $prefill = static function ($value, int $minLength = 8): string {
+        $trim = trim((string)$value);
+        return $trim === '' ? str_repeat('_', $minLength) : $trim;
+    };
+
+    $placeDefault = $contractor['placeDefault'] ?? ($contractor['district'] ?? '');
+    $submission = $pack['dates']['submission'] ?? '';
+
+    return [
+        'firmName' => $prefill($contractor['firmName'] ?? ($contractor['name'] ?? ''), 6),
+        'address' => $prefill(contractor_profile_address($contractor), 8),
+        'GST' => $prefill($contractor['gstNumber'] ?? '', 5),
+        'PAN' => $prefill($contractor['panNumber'] ?? '', 5),
+        'signatory' => $prefill($contractor['authorizedSignatoryName'] ?? ($contractor['name'] ?? ''), 5),
+        'designation' => $prefill($contractor['authorizedSignatoryDesignation'] ?? '', 5),
+        'phone' => $prefill($contractor['mobile'] ?? '', 6),
+        'email' => $prefill($contractor['email'] ?? '', 6),
+        'tenderTitle' => $prefill($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender'), 6),
+        'tenderNumber' => $prefill($pack['tenderNumber'] ?? '', 6),
+        'departmentName' => $prefill($pack['deptName'] ?? ($pack['sourceTender']['deptName'] ?? ''), 6),
+        'submissionDeadline' => $prefill($submission, 6),
+        'place' => $prefill($placeDefault, 6),
+        'date' => now_kolkata()->format('d M Y'),
+    ];
+}
+
+function assisted_render_template_body(array $template, array $context): string
+{
+    $body = (string)($template['body'] ?? '');
+    $map = [];
+    foreach ($context as $key => $value) {
+        $map['{{' . $key . '}}'] = $value;
+        $map['[[' . $key . ']]'] = $value;
+        $map['{{' . strtolower($key) . '}}'] = $value;
+    }
+    foreach ($template['placeholders'] ?? [] as $placeholder) {
+        $key = is_array($placeholder) ? ($placeholder['key'] ?? '') : (string)$placeholder;
+        $prefill = is_array($placeholder) && array_key_exists('prefill', $placeholder) ? (bool)$placeholder['prefill'] : true;
+        $cleanKey = trim(trim($key, '{}'));
+        if ($cleanKey === '') {
+            continue;
+        }
+        $replacement = $prefill && isset($context[$cleanKey]) ? $context[$cleanKey] : '__________';
+        foreach (['{{' . $cleanKey . '}}', '[[' . $cleanKey . ']]', '{{' . strtolower($cleanKey) . '}}'] as $token) {
+            $map[$token] = $replacement;
+        }
+    }
+
+    foreach ($map as $token => $value) {
+        $body = str_replace($token, $value, $body);
+    }
+
+    return $body;
+}
+
 function pack_stats(array $pack): array
 {
     $items = $pack['items'] ?? [];
@@ -987,6 +1060,14 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     if (!$annexureTemplates && !empty($pack['packId']) && !empty($pack['yojId'])) {
         $annexureTemplates = load_pack_annexures($pack['yojId'], $pack['packId'], detect_pack_context($pack['packId']));
     }
+    $assistedTemplates = $pack['assistedTemplates'] ?? [];
+    if (!$assistedTemplates && isset($pack['assisted']['payload']['templates']) && is_array($pack['assisted']['payload']['templates'])) {
+        $assistedTemplates = $pack['assisted']['payload']['templates'];
+    }
+    $assistedSnippets = $pack['assistedSnippets'] ?? [];
+    if (!$assistedSnippets && isset($pack['assisted']['payload']['snippets']) && is_array($pack['assisted']['payload']['snippets'])) {
+        $assistedSnippets = $pack['assisted']['payload']['snippets'];
+    }
     $options = array_merge([
         'includeSnippets' => true,
         'includeRestricted' => true,
@@ -1087,7 +1168,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         return $html;
     };
 
-    $render_annexures = static function () use ($pack, $options, $annexureTemplates, $contractor): string {
+    $render_annexures = static function () use ($pack, $options, $annexureTemplates, $contractor, $assistedTemplates, $assistedSnippets): string {
         $annexures = $pack['annexures'] ?? [];
         $formats = $pack['formats'] ?? [];
         $restricted = $pack['restrictedAnnexures'] ?? [];
@@ -1118,6 +1199,22 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             }
         }
 
+        $assistedContext = assisted_template_placeholder_context($pack, $contractor);
+        if ($assistedTemplates) {
+            $html .= '<div class="subsection"><h3>Assisted Templates</h3>';
+            foreach ($assistedTemplates as $idx => $tpl) {
+                $body = assisted_render_template_body($tpl, $assistedContext);
+                $html .= '<div class="template-block' . ($idx > 0 ? ' page-break' : '') . '">';
+                $html .= '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">';
+                $html .= '<div><div class="muted">' . htmlspecialchars($tpl['code'] ?? ($tpl['annexureCode'] ?? 'Annexure'), ENT_QUOTES, 'UTF-8') . '</div><h3 style="margin:4px 0 6px 0;">' . htmlspecialchars($tpl['name'] ?? ($tpl['title'] ?? 'Annexure'), ENT_QUOTES, 'UTF-8') . '</h3></div>';
+                $html .= '<span class="pill">' . htmlspecialchars(ucwords(str_replace('_', ' ', $tpl['type'] ?? 'other')), ENT_QUOTES, 'UTF-8') . '</span>';
+                $html .= '</div>';
+                $html .= '<pre>' . htmlspecialchars($body, ENT_QUOTES, 'UTF-8') . '</pre>';
+                $html .= '</div>';
+            }
+            $html .= '</div>';
+        }
+
         $annexureContext = pack_annexure_placeholder_context($pack, $contractor);
         if ($annexureTemplates) {
             $html .= '<div class="subsection"><h3>Generated Annexure Templates</h3>';
@@ -1137,6 +1234,14 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             $html .= '</div>';
         } else {
             $html .= '<p class="muted">No annexure formats generated yet.</p>';
+        }
+
+        if ($options['includeSnippets'] && $assistedSnippets) {
+            $html .= '<div class="subsection"><h3>Notes & Snippets</h3><ul class="plain">';
+            foreach ($assistedSnippets as $snippet) {
+                $html .= '<li class="muted">' . htmlspecialchars($snippet, ENT_QUOTES, 'UTF-8') . '</li>';
+            }
+            $html .= '</ul></div>';
         }
 
         if ($options['includeRestricted'] && $restricted) {
@@ -1256,8 +1361,10 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     footer{margin-top:20px;font-size:12px;color:#8b949e;text-align:center;min-height:20mm;}
     footer .page-number::after{content:"1";}
     .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid #30363d;padding-bottom:10px;}
-    .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
+    .print-header.blank-letterhead{border-color:transparent;}
+    .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;width:auto;height:auto;}
     .print-header .blank{height:20mm;}
+    footer.blank-footer{border-top:1px solid transparent;}
     @media print{
         body{background:#fff;color:#000;}
         .page{box-shadow:none;border:1px solid #ddd;}
@@ -1267,18 +1374,21 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     </style>';
 
     $printSettings = load_contractor_print_settings($pack['yojId']);
+    $letterheadMode = $printSettings['letterheadMode'] ?? 'yojak';
+    $useBlankLetterhead = $letterheadMode === 'company_preprinted';
     $logoHtml = '';
-    if (!empty($printSettings['logoEnabled']) && !empty($printSettings['logoPathPublic'])) {
+    if (!$useBlankLetterhead && !empty($printSettings['logoEnabled']) && !empty($printSettings['logoPathPublic'])) {
         $align = $printSettings['logoAlign'] ?? 'left';
         $logoHtml = '<div style="flex:0 0 auto;text-align:' . htmlspecialchars($align, ENT_QUOTES, 'UTF-8') . ';"><img class="logo" src="' . htmlspecialchars($printSettings['logoPathPublic'], ENT_QUOTES, 'UTF-8') . '" alt="Logo"></div>';
     }
     $headerText = '';
-    if (!empty($printSettings['headerEnabled']) && trim((string)$printSettings['headerText']) !== '') {
+    if (!$useBlankLetterhead && !empty($printSettings['headerEnabled']) && trim((string)$printSettings['headerText']) !== '') {
         $headerText = '<div style="flex:1;white-space:pre-wrap;">' . nl2br(htmlspecialchars($printSettings['headerText'], ENT_QUOTES, 'UTF-8')) . '</div>';
     } else {
         $headerText = '<div class="blank" style="flex:1;"></div>';
     }
-    $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
+    $headerClass = 'print-header' . ($useBlankLetterhead ? ' blank-letterhead' : '');
+    $header = '<div class="' . $headerClass . '" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
         . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
         . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['title'] ?? 'Tender Pack', ENT_QUOTES, 'UTF-8') . '</h1>'
         . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></div>'
@@ -1286,12 +1396,14 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '</div>';
 
     $footerText = '';
-    if (!empty($printSettings['footerEnabled']) && trim((string)$printSettings['footerText']) !== '') {
+    if (!$useBlankLetterhead && !empty($printSettings['footerEnabled']) && trim((string)$printSettings['footerText']) !== '') {
         $footerText = '<div style="white-space:pre-wrap;">' . nl2br(htmlspecialchars($printSettings['footerText'], ENT_QUOTES, 'UTF-8')) . '</div>';
     } else {
         $footerText = '<div style="min-height:10mm;"></div>';
     }
-    $footer = '<footer>' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
+    $footerClass = $useBlankLetterhead ? 'blank-footer' : '';
+    $footerNote = $useBlankLetterhead ? '' : '<div>Printed via YOJAK • Page <span class="page-number"></span></div>';
+    $footer = '<footer class="' . $footerClass . '">' . $footerText . $footerNote . '</footer>';
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
         . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'

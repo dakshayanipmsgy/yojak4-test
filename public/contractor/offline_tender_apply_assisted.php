@@ -80,22 +80,36 @@ safe_page(function () {
     }
 
     $tender['extracted'] = array_merge(offline_tender_defaults(), $tender['extracted'] ?? []);
-    $tender['extracted']['submissionDeadline'] = $normalized['submissionDeadline'];
-    $tender['extracted']['openingDate'] = $normalized['openingDate'];
-    $tender['extracted']['completionMonths'] = $normalized['completionMonths'];
-    $tender['extracted']['bidValidityDays'] = $normalized['bidValidityDays'];
-    $tender['extracted']['eligibilityDocs'] = $normalized['eligibilityDocs'];
-    $tender['extracted']['annexures'] = $normalized['annexures'];
-    $tender['extracted']['restrictedAnnexures'] = $normalized['restrictedAnnexures'];
-    $tender['extracted']['formats'] = $normalized['formats'];
+    $tenderDetails = $normalized['tender'] ?? [];
+    $listDetails = $normalized['lists'] ?? [];
+
+    $tender['title'] = $tenderDetails['tenderTitle'] ?: ($tender['title'] ?? null);
+    $tender['tenderNumber'] = $tenderDetails['tenderNumber'] ?? ($tender['tenderNumber'] ?? null);
+    $tender['departmentName'] = $tenderDetails['departmentName'] ?? ($tender['departmentName'] ?? null);
+    $tender['location'] = $tenderDetails['location'] ?? ($tender['location'] ?? null);
+
+    $tender['extracted']['submissionDeadline'] = $tenderDetails['submissionDeadline'] ?? null;
+    $tender['extracted']['openingDate'] = $tenderDetails['openingDate'] ?? null;
+    $tender['extracted']['completionMonths'] = $tenderDetails['completionMonths'] ?? null;
+    $tender['extracted']['validityDays'] = $tenderDetails['validityDays'] ?? null;
+    $tender['extracted']['bidValidityDays'] = $tenderDetails['validityDays'] ?? null;
+    $tender['extracted']['eligibilityDocs'] = $listDetails['eligibilityDocs'] ?? [];
+    $tender['extracted']['annexures'] = $listDetails['annexures'] ?? [];
+    $tender['extracted']['restrictedAnnexures'] = $listDetails['restricted'] ?? [];
+    $tender['extracted']['formats'] = $listDetails['formats'] ?? [];
+    $tender['assistedSnippets'] = $normalized['snippets'] ?? [];
+    $tender['assistedTemplates'] = $normalized['templates'] ?? [];
 
     $tender['checklist'] = [];
     foreach ($normalized['checklist'] as $item) {
         $tender['checklist'][] = offline_tender_checklist_item(
             $item['title'] ?? '',
-            $item['description'] ?? '',
+            $item['notes'] ?? ($item['description'] ?? ''),
             (bool)($item['required'] ?? true),
-            'assisted'
+            'assisted',
+            $item['category'] ?? 'Other',
+            $item['sourceSnippet'] ?? '',
+            $item['notes'] ?? ($item['description'] ?? '')
         );
     }
 
@@ -117,10 +131,52 @@ safe_page(function () {
         'deliveredAt' => $request['deliveredAt'] ?? null,
         'assignedTo' => $request['assignedTo'] ?? null,
         'appliedAt' => now_kolkata()->format(DateTime::ATOM),
+        'payloadPath' => $request['deliveredPayloadPath'] ?? ($tender['assisted']['payloadPath'] ?? null),
     ];
     $tender['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
 
     save_offline_tender($tender);
+    ensure_packs_env($yojId);
+    $existingPack = find_pack_by_source($yojId, 'OFFTD', $offtdId);
+    if ($existingPack && !empty($existingPack['packId'])) {
+        $pack = load_pack($yojId, $existingPack['packId']);
+        if ($pack) {
+            if (empty($pack['annexures'])) {
+                $pack['annexures'] = $listDetails['annexures'] ?? [];
+            }
+            if (empty($pack['formats'])) {
+                $pack['formats'] = $listDetails['formats'] ?? [];
+            }
+            $pack['restrictedAnnexures'] = array_values(array_unique(array_merge($pack['restrictedAnnexures'] ?? [], $listDetails['restricted'] ?? [])));
+            if (!empty($tenderDetails['tenderTitle'])) {
+                $pack['tenderTitle'] = $tenderDetails['tenderTitle'];
+            }
+            if (!empty($tenderDetails['tenderNumber'])) {
+                $pack['tenderNumber'] = $tenderDetails['tenderNumber'];
+            }
+            if (!empty($tenderDetails['departmentName'])) {
+                $pack['deptName'] = $tenderDetails['departmentName'];
+            }
+            if (!empty($tenderDetails['submissionDeadline'])) {
+                $pack['dates']['submission'] = $tenderDetails['submissionDeadline'];
+            }
+            if (!empty($tenderDetails['openingDate'])) {
+                $pack['dates']['opening'] = $tenderDetails['openingDate'];
+            }
+            $pack['assisted'] = [
+                'reqId' => $reqId,
+                'appliedAt' => now_kolkata()->format(DateTime::ATOM),
+                'deliveredAt' => $request['deliveredAt'] ?? null,
+                'payloadPath' => $request['deliveredPayloadPath'] ?? ($tender['assisted']['payloadPath'] ?? null),
+            ];
+            $pack['assistedTemplates'] = $normalized['templates'] ?? [];
+            $pack['assistedSnippets'] = $normalized['snippets'] ?? [];
+            if (empty($pack['items']) || count($pack['items']) <= 2) {
+                $pack['items'] = pack_items_from_checklist($tender['checklist']);
+            }
+            save_pack($pack);
+        }
+    }
 
     assisted_append_audit($request, $yojId, 'applied_to_tender', null);
     assisted_save_request($request);
@@ -132,6 +188,7 @@ safe_page(function () {
         'reqId' => $reqId,
         'yojId' => $yojId,
         'offtdId' => $offtdId,
+        'restrictedCount' => count($listDetails['restricted'] ?? []),
     ]);
 
     set_flash('success', 'Assisted checklist applied to your tender. You can still edit details below.');
