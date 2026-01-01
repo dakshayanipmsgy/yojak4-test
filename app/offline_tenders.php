@@ -205,7 +205,6 @@ function offline_tender_defaults(): array
         ],
         'completionMonths' => null,
         'bidValidityDays' => null,
-        'validityDays' => null,
         'eligibilityDocs' => [],
         'annexures' => [],
         'restrictedAnnexures' => [],
@@ -214,7 +213,7 @@ function offline_tender_defaults(): array
     ];
 }
 
-function offline_tender_checklist_item(string $title, string $description = '', bool $required = true, string $source = 'ai', string $category = 'Other', string $sourceSnippet = '', string $notes = ''): array
+function offline_tender_checklist_item(string $title, string $description = '', bool $required = true, string $source = 'ai'): array
 {
     return [
         'itemId' => 'CHK-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10)),
@@ -223,9 +222,6 @@ function offline_tender_checklist_item(string $title, string $description = '', 
         'required' => $required,
         'status' => 'pending',
         'source' => $source,
-        'category' => $category,
-        'notes' => $notes,
-        'sourceSnippet' => $sourceSnippet,
     ];
 }
 

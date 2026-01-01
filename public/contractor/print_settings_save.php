@@ -17,15 +17,6 @@ safe_page(function () {
     $footerEnabled = !empty($_POST['footerEnabled']);
     $logoEnabled = !empty($_POST['logoEnabled']);
     $logoAlign = trim((string)($_POST['logoAlign'] ?? 'left'));
-    $letterheadMode = trim((string)($_POST['letterheadMode'] ?? 'yojak'));
-    if (!in_array($letterheadMode, ['yojak', 'company_preprinted'], true)) {
-        $letterheadMode = 'yojak';
-    }
-    if ($letterheadMode === 'company_preprinted') {
-        $headerEnabled = false;
-        $footerEnabled = false;
-        $logoEnabled = false;
-    }
     if (!in_array($logoAlign, ['left', 'center', 'right'], true)) {
         $logoAlign = 'left';
     }
@@ -43,7 +34,6 @@ safe_page(function () {
     $settings['footerEnabled'] = $footerEnabled;
     $settings['logoEnabled'] = $logoEnabled && !empty($settings['logoPathPublic']);
     $settings['logoAlign'] = $logoAlign;
-    $settings['letterheadMode'] = $letterheadMode;
     save_contractor_print_settings($yojId, $settings);
 
     logEvent(PACK_PRINT_LOG, [
