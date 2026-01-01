@@ -10,8 +10,9 @@ safe_page(function () {
     require_csrf();
     $actor = assisted_staff_actor();
     $reqId = trim($_POST['reqId'] ?? '');
-    $action = $_POST['action'] ?? 'save';
+    $action = $_POST['action'] ?? 'validate';
     $input = (string)($_POST['assistantDraft'] ?? '');
+    $autoFixSnippets = isset($_POST['auto_fix_snippets']);
 
     $request = $reqId !== '' ? assisted_load_request($reqId) : null;
     if (!$request) {
@@ -19,7 +20,19 @@ safe_page(function () {
         return;
     }
 
-    $sanitizedInput = assisted_sanitize_json_input($input);
+    $sanitizeResult = sanitize_ai_json_input($input, $autoFixSnippets);
+
+    logEvent(ASSISTED_EXTRACTION_LOG, [
+        'at' => now_kolkata()->format(DateTime::ATOM),
+        'event' => 'ASSISTED_JSON_SANITIZE',
+        'actor' => assisted_actor_label($actor),
+        'reqId' => $reqId,
+        'changed' => $sanitizeResult['changed'],
+        'fixes' => $sanitizeResult['fixes'],
+        'hash' => $sanitizeResult['hash'],
+    ]);
+
+    $sanitizedInput = $sanitizeResult['sanitized'];
     $decoded = json_decode($sanitizedInput, true);
     if (!is_array($decoded)) {
         $_SESSION['assisted_draft_input'][$reqId] = $sanitizedInput;
@@ -28,7 +41,20 @@ safe_page(function () {
             'missingKeys' => [],
             'forbiddenFindings' => [],
             'jsonError' => json_last_error_msg(),
+            'sanitizedHash' => $sanitizeResult['hash'] ?? null,
+            'sanitizedPreview' => mb_substr($sanitizedInput, 0, 500),
+            'snippetPreview' => $sanitizeResult['snippetPreview'] ?? null,
         ];
+        $_SESSION['assisted_sanitized'][$reqId] = $sanitizedInput;
+        logEvent(ASSISTED_EXTRACTION_LOG, [
+            'at' => now_kolkata()->format(DateTime::ATOM),
+            'event' => 'ASSISTED_JSON_PARSE_FAIL',
+            'actor' => assisted_actor_label($actor),
+            'reqId' => $reqId,
+            'errorMsg' => json_last_error_msg(),
+            'hash' => $sanitizeResult['hash'] ?? hash('sha256', $sanitizedInput),
+            'sanitizedPreview' => mb_substr($sanitizedInput, 0, 500),
+        ]);
         logEvent(ASSISTED_EXTRACTION_LOG, [
             'at' => now_kolkata()->format(DateTime::ATOM),
             'event' => 'ASSISTED_PASTE_VALIDATE',
@@ -38,7 +64,7 @@ safe_page(function () {
             'jsonError' => json_last_error_msg(),
             'rawSnippet' => mb_substr($sanitizedInput, 0, 500),
         ]);
-        set_flash('error', 'Invalid JSON. Please paste valid JSON only.');
+        set_flash('error', 'Invalid JSON (possibly unescaped newline in snippets). Click Copy Sanitized Input to review.');
         redirect('/superadmin/assisted_extraction_view.php?reqId=' . urlencode($reqId));
         return;
     }
@@ -51,6 +77,7 @@ safe_page(function () {
     if ($errors) {
         $_SESSION['assisted_draft_input'][$reqId] = $sanitizedInput;
         $_SESSION['assisted_validation'][$reqId] = $validation;
+        $_SESSION['assisted_sanitized'][$reqId] = $sanitizedInput;
         $forbidden = $validation['forbiddenFindings'] ?? [];
         if (!empty($forbidden)) {
             $findingsToLog = [];
@@ -91,6 +118,16 @@ safe_page(function () {
         'missingKeys' => [],
         'forbiddenFindings' => [],
     ];
+    $_SESSION['assisted_sanitized'][$reqId] = $sanitizedInput;
+    $_SESSION['assisted_preview'][$reqId] = [
+        'tenderTitle' => $decoded['tender']['tenderTitle'] ?? null,
+        'tenderNumber' => $decoded['tender']['tenderNumber'] ?? null,
+        'checklistCount' => count($decoded['checklist'] ?? []),
+        'templateCount' => count($decoded['templates'] ?? []),
+        'snippetCount' => count($decoded['snippets'] ?? []),
+        'fixes' => $sanitizeResult['fixes'],
+        'hash' => $sanitizeResult['hash'],
+    ];
     logEvent(ASSISTED_EXTRACTION_LOG, [
         'at' => now_kolkata()->format(DateTime::ATOM),
         'event' => 'ASSISTED_PASTE_VALIDATE',
@@ -107,6 +144,13 @@ safe_page(function () {
     $request['assistantDraft'] = $normalized;
     assisted_assign_request($request, $actor);
     $request['assignedTo'] = $actor['id'] ?? ($request['assignedTo'] ?? null);
+
+    if ($action === 'validate') {
+        assisted_save_request($request);
+        set_flash('success', 'Validated. Preview available below.');
+        redirect('/superadmin/assisted_extraction_view.php?reqId=' . urlencode($reqId));
+        return;
+    }
 
     if ($action === 'deliver') {
         $yojId = $request['yojId'] ?? '';

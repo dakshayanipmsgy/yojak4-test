@@ -26,7 +26,9 @@ safe_page(function () {
 
     $draftInput = $_SESSION['assisted_draft_input'][$reqId] ?? null;
     $validation = $_SESSION['assisted_validation'][$reqId] ?? null;
-    unset($_SESSION['assisted_draft_input'][$reqId], $_SESSION['assisted_validation'][$reqId]);
+    $sanitizedCopy = $_SESSION['assisted_sanitized'][$reqId] ?? null;
+    $preview = $_SESSION['assisted_preview'][$reqId] ?? null;
+    unset($_SESSION['assisted_draft_input'][$reqId], $_SESSION['assisted_validation'][$reqId], $_SESSION['assisted_sanitized'][$reqId], $_SESSION['assisted_preview'][$reqId]);
     if ($draftInput === null) {
         $draftInput = json_encode($request['assistantDraft'] ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
@@ -140,6 +142,10 @@ safe_page(function () {
                     <h4 style="margin:0 0 8px 0;">Validation issues</h4>
                     <?php if (!empty($validation['jsonError'])): ?>
                         <p class="muted" style="margin:4px 0;">JSON error: <?= sanitize((string)$validation['jsonError']); ?></p>
+                        <p class="muted" style="margin:4px 0;">Tip: Unescaped newline inside snippets is common. Auto-fix converts raw newlines to \\n.</p>
+                        <?php if (!empty($validation['snippetPreview'])): ?>
+                            <p class="muted" style="margin:4px 0;">First affected snippet (trimmed): <code><?= sanitize($validation['snippetPreview']); ?></code></p>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <?php if (!empty($validation['errors'])): ?>
                         <ul style="margin:6px 0 0 16px;padding:0;color:#f77676;">
@@ -170,6 +176,11 @@ safe_page(function () {
                 <input type="hidden" name="reqId" value="<?= sanitize($request['reqId'] ?? ''); ?>">
                 <textarea name="assistantDraft" rows="18" style="width:100%;resize:vertical;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"><?= sanitize($draftInput); ?></textarea>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                    <label style="display:flex;align-items:center;gap:6px;">
+                        <input type="checkbox" name="auto_fix_snippets" value="1" checked>
+                        <span class="muted">Auto-fix snippet newlines</span>
+                    </label>
+                    <button class="btn secondary" type="submit" name="action" value="validate">Validate &amp; Preview</button>
                     <button class="btn secondary" type="submit" name="action" value="save">Save Draft</button>
                     <button class="btn" type="submit" name="action" value="deliver">Deliver to contractor</button>
                     <button type="button" class="btn secondary" id="assisted-sample-btn">Paste sample JSON</button>
@@ -177,6 +188,41 @@ safe_page(function () {
                 </div>
             </form>
             <div class="muted" style="font-size:13px;">Sample payload covers all schema keys and uses validityDays instead of bidValidityDays.</div>
+
+            <?php if ($sanitizedCopy): ?>
+                <div style="border:1px dashed #30363d;border-radius:12px;padding:10px;background:#0f1622;display:grid;gap:8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <h4 style="margin:0;">Auto-fix applied</h4>
+                        <button class="btn secondary" type="button" id="copy-sanitized">Copy sanitized input</button>
+                    </div>
+                    <p class="muted" style="margin:0;">YOJAK normalized Unicode, stripped trailing commas, and escaped snippet newlines before validation.</p>
+                    <?php if (!empty($validation['sanitizedHash']) || !empty($preview['hash'])): ?>
+                        <p class="muted" style="margin:0;">Hash: <?= sanitize($validation['sanitizedHash'] ?? ($preview['hash'] ?? '')); ?></p>
+                    <?php endif; ?>
+                    <?php if (!empty($validation['sanitizedPreview'])): ?>
+                        <pre style="background:#0d1117;color:#e6edf3;border-radius:10px;padding:10px;white-space:pre-wrap;max-height:220px;overflow:auto;"><?= sanitize($validation['sanitizedPreview']); ?></pre>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($preview): ?>
+                <div style="border:1px dashed #2ea043;border-radius:12px;padding:10px;background:#0f1622;display:grid;gap:6px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <h4 style="margin:0;">Preview</h4>
+                        <span class="pill success">Validated</span>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                        <span class="pill">Title: <?= sanitize($preview['tenderTitle'] ?? ''); ?></span>
+                        <span class="pill">Number: <?= sanitize($preview['tenderNumber'] ?? ''); ?></span>
+                        <span class="pill">Checklist: <?= sanitize((string)($preview['checklistCount'] ?? 0)); ?></span>
+                        <span class="pill">Templates: <?= sanitize((string)($preview['templateCount'] ?? 0)); ?></span>
+                        <span class="pill">Snippets: <?= sanitize((string)($preview['snippetCount'] ?? 0)); ?></span>
+                    </div>
+                    <?php if (!empty($preview['fixes'])): ?>
+                        <p class="muted" style="margin:0;">Auto-fixes: <?= sanitize(implode(', ', $preview['fixes'])); ?> • Hash <?= sanitize($preview['hash'] ?? ''); ?></p>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
             <div style="border:1px dashed #30363d;border-radius:12px;padding:10px;background:#0f1622;display:grid;gap:8px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
                     <h4 style="margin:0;">Final external AI prompt</h4>
@@ -226,6 +272,16 @@ safe_page(function () {
                                 setTimeout(() => copyBtn.textContent = 'Copy prompt', 1800);
                             });
                         }
+                    });
+                }
+                const copySanitized = document.getElementById('copy-sanitized');
+                if (copySanitized) {
+                    copySanitized.addEventListener('click', function () {
+                        const data = <?= json_encode($sanitizedCopy); ?>;
+                        navigator.clipboard?.writeText(data).then(() => {
+                            copySanitized.textContent = 'Copied';
+                            setTimeout(() => copySanitized.textContent = 'Copy sanitized input', 1800);
+                        });
                     });
                 }
             })();
