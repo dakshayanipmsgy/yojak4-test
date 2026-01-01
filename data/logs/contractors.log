@@ -1,0 +1,2 @@
+{"event":"contractor_signup_pending","mobile":"6789012345","signupId":"csg-20cca46f2264","timestamp":"2026-01-02T01:30:08+05:30"}
+{"event":"contractor_approved","signupId":"csg-20cca46f2264","yojId":"YOJ-7EBBB","actor":"superadmin","timestamp":"2026-01-02T01:30:43+05:30"}
