@@ -12,7 +12,7 @@ safe_page(function () {
         <div class="card" style="display:grid;gap:14px;max-width:760px;margin:0 auto;">
             <div>
                 <h2 style="margin:0 0 6px 0;"><?= sanitize('Print Header / Footer'); ?></h2>
-                <p class="muted" style="margin:0;"><?= sanitize('Configure reusable header, footer and logo for contractor printouts. Reserved space is always kept so your letterhead fits.'); ?></p>
+                <p class="muted" style="margin:0;"><?= sanitize('Configure reusable header, footer and logo for contractor printouts. Reserved space is always kept so your letterhead fits. Toggle the letterhead option while printing if you are using pre-printed paper.'); ?></p>
             </div>
             <form method="post" action="/contractor/print_settings_save.php" style="display:grid;gap:12px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">

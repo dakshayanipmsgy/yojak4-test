@@ -50,6 +50,9 @@ safe_page(function () {
     render_layout($title, function () use ($tender, $existingPack, $assistedRequest) {
         $extracted = $tender['extracted'] ?? offline_tender_defaults();
         $checklist = $tender['checklist'] ?? [];
+        $packContext = $existingPack ? detect_pack_context($existingPack['packId']) : 'tender';
+        $annexureTemplates = $existingPack ? load_pack_annexures($tender['yojId'], $existingPack['packId'], $packContext) : [];
+        $printSettings = load_contractor_print_settings($tender['yojId']);
         $aiDefaults = [
             'parsedOk' => false,
             'providerOk' => false,
@@ -327,6 +330,157 @@ safe_page(function () {
                     <p class="muted" style="margin:0;"><?= sanitize('Team is working on your request. You will see the checklist here once delivered.'); ?></p>
                 <?php endif; ?>
             <?php endif; ?>
+        </div>
+
+        <div class="card" style="margin-top:12px;display:grid;gap:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                <h3 style="margin:0;"><?= sanitize('What to do next'); ?></h3>
+                <span class="pill"><?= sanitize($assistedDelivered ? 'Checklist delivered' : 'Waiting for delivery'); ?></span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+                <div style="border:1px solid #30363d;border-radius:10px;padding:10px;background:#0f1622;">
+                    <strong><?= sanitize('1) Review checklist'); ?></strong>
+                    <p class="muted" style="margin:6px 0 0;"><?= sanitize('Mark each item as done or pending.'); ?></p>
+                </div>
+                <div style="border:1px solid #30363d;border-radius:10px;padding:10px;background:#0f1622;">
+                    <strong><?= sanitize('2) Generate/Review annexures'); ?></strong>
+                    <p class="muted" style="margin:6px 0 0;"><?= sanitize('Click annexure templates to preview filled details.'); ?></p>
+                </div>
+                <div style="border:1px solid #30363d;border-radius:10px;padding:10px;background:#0f1622;">
+                    <strong><?= sanitize('3) Print submission set'); ?></strong>
+                    <p class="muted" style="margin:6px 0 0;"><?= sanitize('Choose letterhead on/off, then print checklist/annexures/full pack.'); ?></p>
+                </div>
+            </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-top:12px;" id="assisted-checklist">
+            <div class="card" style="display:grid; gap:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <h3 style="margin:0;"><?= sanitize('Checklist (quick toggle)'); ?></h3>
+                    <span class="pill"><?= sanitize(count($checklist) . ' items'); ?></span>
+                </div>
+                <?php if ($checklist): ?>
+                    <div style="display:grid;gap:8px;">
+                        <?php foreach ($checklist as $item): ?>
+                            <div style="border:1px solid #30363d;border-radius:10px;padding:10px;display:grid;gap:6px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                                    <div>
+                                        <strong><?= sanitize($item['title'] ?? ''); ?></strong>
+                                        <?php if (!empty($item['description'])): ?>
+                                            <div class="muted" style="margin-top:4px;"><?= sanitize($item['description']); ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <span class="pill" style="<?= ($item['status'] ?? '') === 'done' ? 'border-color:#2ea043;color:#8ce99a;' : ''; ?>"><?= sanitize(ucfirst($item['status'] ?? 'pending')); ?></span>
+                                </div>
+                                <form method="post" action="/contractor/offline_tender_checklist_toggle.php" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                    <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                                    <input type="hidden" name="itemId" value="<?= sanitize($item['itemId'] ?? ''); ?>">
+                                    <button class="btn secondary" type="submit" name="status" value="pending"><?= sanitize('Mark Pending'); ?></button>
+                                    <button class="btn" type="submit" name="status" value="done"><?= sanitize('Mark Done'); ?></button>
+                                </form>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <p class="muted" style="margin:0;"><?= sanitize('No checklist items available yet. Apply assisted extraction or add manually.'); ?></p>
+                <?php endif; ?>
+            </div>
+
+            <div class="card" style="display:grid;gap:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <h3 style="margin:0;"><?= sanitize('Documents & Annexures'); ?></h3>
+                    <?php if ($existingPack): ?>
+                        <a class="pill" href="/contractor/pack_view.php?packId=<?= sanitize($existingPack['packId']); ?>"><?= sanitize('Open pack'); ?></a>
+                    <?php else: ?>
+                        <span class="pill"><?= sanitize('Pack pending'); ?></span>
+                    <?php endif; ?>
+                </div>
+                <?php if ($existingPack): ?>
+                    <div style="display:grid;gap:6px;">
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <span class="pill"><?= sanitize(count($tender['extracted']['annexures'] ?? []) . ' annexures'); ?></span>
+                            <span class="pill"><?= sanitize(count($annexureTemplates) . ' templates ready'); ?></span>
+                            <?php if (!empty($tender['extracted']['restrictedAnnexures'])): ?>
+                                <span class="pill" style="border-color:#f59f00;color:#fcd34d;"><?= sanitize('Restricted financial annexures present'); ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <form method="post" action="/contractor/pack_generate_annexures.php" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                            <input type="hidden" name="packId" value="<?= sanitize($existingPack['packId']); ?>">
+                            <button class="btn secondary" type="submit"><?= sanitize('Regenerate annexure templates'); ?></button>
+                            <span class="muted" style="font-size:12px;"><?= sanitize('Refreshes templates with the latest profile data.'); ?></span>
+                        </form>
+                        <?php if ($annexureTemplates): ?>
+                            <div style="display:grid;gap:6px;">
+                                <?php foreach (array_slice($annexureTemplates, 0, 6) as $tpl): ?>
+                                    <div style="border:1px solid #30363d;border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                                        <div>
+                                            <div class="muted"><?= sanitize($tpl['annexureCode'] ?? 'Annexure'); ?></div>
+                                            <strong><?= sanitize($tpl['title'] ?? 'Template'); ?></strong>
+                                        </div>
+                                        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                                            <a class="btn secondary" target="_blank" rel="noopener" href="/contractor/pack_print.php?packId=<?= sanitize($existingPack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>"><?= sanitize('View / Print'); ?></a>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                                <?php if (count($annexureTemplates) > 6): ?>
+                                    <div class="muted"><?= sanitize('+' . (count($annexureTemplates) - 6) . ' more templates in pack'); ?></div>
+                                <?php endif; ?>
+                            </div>
+                        <?php else: ?>
+                            <p class="muted" style="margin:0;"><?= sanitize('Annexures will be generated automatically after applying the assisted payload.'); ?></p>
+                        <?php endif; ?>
+                        <?php if (!empty($tender['extracted']['restrictedAnnexures'])): ?>
+                            <div class="flash" style="background:#1a1208;border:1px solid #3a2a18;">
+                                <strong><?= sanitize('Restricted'); ?></strong>
+                                <p class="muted" style="margin:6px 0 0;"><?= sanitize('Price/Financial bids are listed for awareness only and are not generated.'); ?></p>
+                                <ul style="margin:6px 0 0 16px;padding:0;color:#fcd34d;">
+                                    <?php foreach ($tender['extracted']['restrictedAnnexures'] as $rest): ?>
+                                        <li><?= sanitize($rest); ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php else: ?>
+                    <p class="muted" style="margin:0;"><?= sanitize('Apply the assisted extraction to auto-create your offline tender pack and annexure templates.'); ?></p>
+                <?php endif; ?>
+            </div>
+
+            <div class="card" style="display:grid;gap:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <h3 style="margin:0;"><?= sanitize('Print Center'); ?></h3>
+                    <a class="pill" href="/contractor/print_settings.php"><?= sanitize('Edit print settings'); ?></a>
+                </div>
+                <?php if ($existingPack): ?>
+                    <form method="get" action="/contractor/pack_print.php" style="display:grid;gap:8px;">
+                        <input type="hidden" name="packId" value="<?= sanitize($existingPack['packId']); ?>">
+                        <label class="field" style="margin:0;">
+                            <span class="muted" style="font-size:12px;"><?= sanitize('Use saved letterhead'); ?></span>
+                            <select name="letterhead">
+                                <option value="1"><?= sanitize('Yes'); ?></option>
+                                <option value="0"><?= sanitize('No — leave header/footer blank'); ?></option>
+                            </select>
+                        </label>
+                        <div class="buttons" style="gap:8px;flex-wrap:wrap;">
+                            <button class="btn secondary" type="submit" name="doc" value="checklist"><?= sanitize('Print checklist'); ?></button>
+                            <button class="btn secondary" type="submit" name="doc" value="annexures"><?= sanitize('Print annexures'); ?></button>
+                            <button class="btn secondary" type="submit" name="doc" value="templates"><?= sanitize('Print templates'); ?></button>
+                            <button class="btn" type="submit" name="doc" value="full"><?= sanitize('Print full pack'); ?></button>
+                        </div>
+                        <p class="muted" style="margin:0;font-size:12px;"><?= sanitize('Header/footer space is always reserved to keep alignment consistent.'); ?></p>
+                    </form>
+                    <div style="border:1px solid #30363d;border-radius:10px;padding:10px;">
+                        <strong><?= sanitize('Letterhead preview'); ?></strong>
+                        <p class="muted" style="margin:6px 0 0;"><?= sanitize(!empty($printSettings['logoPathPublic']) ? 'Logo uploaded and will be resized automatically.' : 'No logo uploaded yet.'); ?></p>
+                        <p class="muted" style="margin:0;"><?= sanitize(!empty($printSettings['headerEnabled']) ? 'Header text enabled.' : 'Header text disabled (space reserved).'); ?></p>
+                        <p class="muted" style="margin:0;"><?= sanitize(!empty($printSettings['footerEnabled']) ? 'Footer text enabled.' : 'Footer text disabled (space reserved).'); ?></p>
+                    </div>
+                <?php else: ?>
+                    <p class="muted" style="margin:0;"><?= sanitize('Print buttons will appear once the assisted extraction is applied and a pack is created.'); ?></p>
+                <?php endif; ?>
+            </div>
         </div>
 
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-top:12px;">

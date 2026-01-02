@@ -281,6 +281,13 @@ safe_page(function () {
                             <option value="1"><?= sanitize('Yes'); ?></option>
                         </select>
                     </label>
+                    <label class="field" style="margin:0;">
+                        <span class="muted" style="font-size:12px;"><?= sanitize('Use saved letterhead (logo/header/footer)'); ?></span>
+                        <select name="letterhead">
+                            <option value="1"><?= sanitize('Yes'); ?></option>
+                            <option value="0"><?= sanitize('No — reserve blank space'); ?></option>
+                        </select>
+                    </label>
                 </form>
                 <div class="buttons" style="gap:8px;">
                     <button class="btn secondary" type="submit" form="print-options" name="doc" value="checklist"><?= sanitize('Print Checklist'); ?></button>

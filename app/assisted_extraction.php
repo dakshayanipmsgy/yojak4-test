@@ -6,6 +6,123 @@ const ASSISTED_EXTRACTION_INDEX = ASSISTED_EXTRACTION_DIR . '/index.json';
 const ASSISTED_EXTRACTION_LOG = DATA_PATH . '/logs/assisted_extraction.log';
 const ASSISTED_REQUIRED_FIELDS = ['tender', 'lists', 'checklist'];
 
+function assisted_clean_string($value): ?string
+{
+    if (is_array($value)) {
+        return null;
+    }
+    $text = trim((string)$value);
+    if ($text === '') {
+        return null;
+    }
+    if (mb_strlen($text) > 1000) {
+        $text = mb_substr($text, 0, 1000);
+    }
+    return $text;
+}
+
+function assisted_clean_numeric($value): ?int
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+    if (is_numeric($value)) {
+        return (int)round((float)$value);
+    }
+    return null;
+}
+
+function assisted_normalize_string_list($value): array
+{
+    $items = [];
+    if (is_array($value)) {
+        $items = $value;
+    } elseif (is_string($value)) {
+        $items = preg_split('/\r?\n/', $value) ?: [];
+    }
+    $clean = [];
+    foreach ($items as $item) {
+        $text = assisted_clean_string($item);
+        if ($text === null) {
+            continue;
+        }
+        $key = mb_strtolower($text);
+        if (isset($clean[$key])) {
+            continue;
+        }
+        $clean[$key] = $text;
+        if (count($clean) >= 200) {
+            break;
+        }
+    }
+    return array_values($clean);
+}
+
+function assisted_normalize_formats($value): array
+{
+    $result = [];
+    if (is_array($value)) {
+        foreach ($value as $entry) {
+            if (is_string($entry)) {
+                $name = assisted_clean_string($entry);
+                if ($name === null) {
+                    continue;
+                }
+                $result[] = ['name' => $name, 'notes' => ''];
+            } elseif (is_array($entry)) {
+                $name = assisted_clean_string($entry['name'] ?? '');
+                $notes = assisted_clean_string($entry['notes'] ?? '') ?? '';
+                if ($name === null) {
+                    continue;
+                }
+                $result[] = ['name' => $name, 'notes' => $notes];
+            }
+            if (count($result) >= 200) {
+                break;
+            }
+        }
+    } elseif (is_string($value)) {
+        $lines = preg_split('/\r?\n/', $value) ?: [];
+        foreach ($lines as $line) {
+            $parts = array_map('trim', explode('|', $line, 2));
+            if ($parts[0] === '') {
+                continue;
+            }
+            $result[] = ['name' => $parts[0], 'notes' => $parts[1] ?? ''];
+            if (count($result) >= 200) {
+                break;
+            }
+        }
+    }
+    return $result;
+}
+
+function assisted_normalize_fees($value): array
+{
+    $fees = is_array($value) ? $value : [];
+    return [
+        'tenderFeeText' => assisted_clean_string($fees['tenderFeeText'] ?? ''),
+        'emdText' => assisted_clean_string($fees['emdText'] ?? ''),
+        'sdText' => assisted_clean_string($fees['sdText'] ?? ''),
+        'pgText' => assisted_clean_string($fees['pgText'] ?? ''),
+    ];
+}
+
+function assisted_map_payload_schema(array $payload): array
+{
+    return [
+        'submissionDeadline' => $payload['submissionDeadline'] ?? null,
+        'openingDate' => $payload['openingDate'] ?? null,
+        'completionMonths' => $payload['completionMonths'] ?? null,
+        'bidValidityDays' => $payload['bidValidityDays'] ?? null,
+        'eligibilityDocs' => $payload['eligibilityDocs'] ?? [],
+        'annexures' => $payload['annexures'] ?? [],
+        'formats' => $payload['formats'] ?? [],
+        'checklist' => $payload['checklist'] ?? [],
+        'fees' => $payload['fees'] ?? [],
+    ];
+}
+
 function assisted_schema_v2_structure(): array
 {
     return [
@@ -27,6 +144,7 @@ function assisted_schema_v2_structure(): array
             'formats' => 'array',
             'restricted' => 'array',
         ],
+        'fees' => 'object',
         'checklist' => 'array',
         'templates' => 'array',
         'snippets' => 'array',
@@ -337,6 +455,8 @@ function assisted_deliver_payload(string $reqId, string $yojId, string $offtdId,
         $request['status'] = 'delivered';
         $request['deliveredAt'] = now_kolkata()->format(DateTime::ATOM);
         $request['assistantDraft'] = $finalPayload; // Also save copy in request for history/debugging
+        $request['assistantDeliveredPayload'] = $finalPayload;
+        $request['restrictedAnnexures'] = $finalPayload['lists']['restricted'] ?? [];
         assisted_save_request($request);
     }
 }
@@ -438,6 +558,7 @@ function assisted_normalize_payload(array $payload): array
             'formats' => [],
             'restricted' => [],
         ],
+        'fees' => assisted_normalize_fees($payload['fees'] ?? []),
         'checklist' => [],
         'templates' => [],
         'snippets' => $payload['snippets'] ?? [],
@@ -470,6 +591,7 @@ function assisted_normalize_payload(array $payload): array
         $normalized['lists']['annexures'] = $safeAnnexures;
         $normalized['lists']['formats'] = $safeFormats;
         $normalized['lists']['restricted'] = array_values(array_unique(array_merge($restrictedExisting, $newRestricted)));
+        $normalized['fees'] = assisted_normalize_fees($payload['fees'] ?? ($payload['tender']['fees'] ?? []));
         
         $normalized['checklist'] = assisted_normalize_checklist($payload['checklist'] ?? []);
         $normalized['templates'] = $payload['templates'] ?? [];
@@ -493,6 +615,7 @@ function assisted_normalize_payload(array $payload): array
         $normalized['lists']['annexures'] = $safeAnnexures;
         $normalized['lists']['formats'] = $safeFormats;
         $normalized['lists']['restricted'] = $restricted;
+        $normalized['fees'] = assisted_normalize_fees($mapped['fees'] ?? []);
         
         $normalized['checklist'] = assisted_normalize_checklist($mapped);
     }

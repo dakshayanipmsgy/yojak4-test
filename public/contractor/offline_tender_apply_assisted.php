@@ -89,6 +89,23 @@ safe_page(function () {
     $tender['extracted']['openingDate'] = $tData['openingDate'] ?? ($normalized['openingDate'] ?? null);
     $tender['extracted']['completionMonths'] = $tData['completionMonths'] ?? ($normalized['completionMonths'] ?? null);
     $tender['extracted']['bidValidityDays'] = $tData['validityDays'] ?? ($normalized['bidValidityDays'] ?? null);
+    $fees = $normalized['fees'] ?? [];
+    $existingFees = $tender['extracted']['fees'] ?? ['tenderFee' => '', 'emd' => '', 'other' => ''];
+    $tender['extracted']['fees'] = [
+        'tenderFee' => $fees['tenderFeeText'] ?? $existingFees['tenderFee'] ?? '',
+        'emd' => $fees['emdText'] ?? $existingFees['emd'] ?? '',
+        'other' => $existingFees['other'] ?? '',
+    ];
+    $otherFees = [];
+    if (!empty($fees['sdText'])) {
+        $otherFees[] = 'SD: ' . $fees['sdText'];
+    }
+    if (!empty($fees['pgText'])) {
+        $otherFees[] = 'PG: ' . $fees['pgText'];
+    }
+    if ($otherFees) {
+        $tender['extracted']['fees']['other'] = trim(implode(' | ', array_filter([$tender['extracted']['fees']['other'] ?? '', implode(' | ', $otherFees)])));
+    }
     
     $tender['extracted']['eligibilityDocs'] = $lData['eligibilityDocs'] ?? ($normalized['eligibilityDocs'] ?? []);
     $tender['extracted']['annexures'] = $lData['annexures'] ?? ($normalized['annexures'] ?? []);
@@ -126,6 +143,12 @@ safe_page(function () {
     ];
     $tender['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
 
+    $contractor = load_contractor($yojId) ?? [];
+    $pack = pack_upsert_offline_tender($tender, $normalized, $contractor);
+    if ($pack) {
+        $tender['assistedExtraction']['packId'] = $pack['packId'] ?? null;
+    }
+
     save_offline_tender($tender);
 
     assisted_append_audit($request, $yojId, 'applied_to_tender', null);
@@ -138,8 +161,9 @@ safe_page(function () {
         'reqId' => $reqId,
         'yojId' => $yojId,
         'offtdId' => $offtdId,
+        'packId' => $pack['packId'] ?? null,
     ]);
 
-    set_flash('success', 'Assisted checklist applied to your tender. You can still edit details below.');
+    set_flash('success', 'Assisted checklist applied to your tender. Annexures and print pack are ready.');
     redirect('/contractor/offline_tender_view.php?id=' . urlencode($offtdId));
 });
