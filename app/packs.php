@@ -783,6 +783,80 @@ function pack_generate_annexures(array $pack, array $contractor, string $context
     return $pack;
 }
 
+function pack_upsert_offline_tender(array $tender, array $normalized, array $contractor): ?array
+{
+    $yojId = $tender['yojId'] ?? '';
+    $offtdId = $tender['id'] ?? '';
+    if ($yojId === '' || $offtdId === '') {
+        return null;
+    }
+    $context = 'tender';
+    ensure_packs_env($yojId, $context);
+    $existing = find_pack_by_source($yojId, 'OFFTD', $offtdId, $context);
+    $now = now_kolkata()->format(DateTime::ATOM);
+
+    if ($existing) {
+        $pack = $existing;
+    } else {
+        $packId = generate_pack_id($yojId, $context);
+        $pack = [
+            'packId' => $packId,
+            'yojId' => $yojId,
+            'title' => $tender['title'] ?? 'Tender Pack',
+            'sourceTender' => [
+                'type' => 'OFFTD',
+                'id' => $offtdId,
+                'source' => 'offline_assisted',
+            ],
+            'source' => 'offline_assisted',
+            'createdAt' => $now,
+            'status' => 'Pending',
+            'items' => [],
+            'generatedDocs' => [],
+            'defaultTemplatesApplied' => false,
+        ];
+    }
+
+    $pack['updatedAt'] = $now;
+    $pack['title'] = $tender['title'] ?? ($pack['title'] ?? 'Tender Pack');
+    $pack['tenderTitle'] = $pack['title'];
+    $pack['tenderNumber'] = $pack['tenderNumber'] ?? ($tender['tenderNumber'] ?? '');
+    $pack['sourceTender']['id'] = $offtdId;
+    $pack['sourceTender']['type'] = 'OFFTD';
+    $pack['dates']['submission'] = $tender['extracted']['submissionDeadline'] ?? ($pack['dates']['submission'] ?? '');
+    $pack['dates']['opening'] = $tender['extracted']['openingDate'] ?? ($pack['dates']['opening'] ?? '');
+    $pack['checklist'] = $tender['checklist'] ?? [];
+    $pack['items'] = pack_items_from_checklist($pack['checklist']);
+    $pack['annexureList'] = $tender['extracted']['annexures'] ?? [];
+    $pack['annexures'] = $pack['annexureList'];
+    $pack['formats'] = $tender['extracted']['formats'] ?? [];
+    $pack['restrictedAnnexures'] = array_values(array_unique(array_merge(
+        $pack['restrictedAnnexures'] ?? [],
+        $tender['extracted']['restrictedAnnexures'] ?? [],
+        $normalized['lists']['restricted'] ?? []
+    )));
+
+    if (empty($existing) && empty($pack['defaultTemplatesApplied'])) {
+        $pack = pack_apply_default_templates($pack, $tender, $contractor, $context);
+    }
+
+    $pack = pack_apply_schema_defaults($pack);
+    $pack = pack_generate_annexures($pack, $contractor, $context);
+    save_pack($pack, $context);
+
+    pack_log([
+        'event' => 'offline_assisted_sync',
+        'yojId' => $yojId,
+        'packId' => $pack['packId'],
+        'offtdId' => $offtdId,
+        'annexures' => count($pack['annexureList'] ?? []),
+        'templatesGenerated' => count($pack['generatedAnnexures'] ?? []),
+        'restrictedCount' => count($pack['restrictedAnnexures'] ?? []),
+    ]);
+
+    return $pack;
+}
+
 function pack_annexure_placeholder_context(array $pack, array $contractor): array
 {
     $prefill = static function ($value, int $minLength = 8): string {
@@ -991,7 +1065,15 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         'includeSnippets' => true,
         'includeRestricted' => true,
         'pendingOnly' => false,
+        'useLetterhead' => true,
+        'annexureId' => null,
     ], $options);
+    $singleAnnexureId = is_string($options['annexureId']) ? trim($options['annexureId']) : '';
+    if ($singleAnnexureId !== '') {
+        $annexureTemplates = array_values(array_filter($annexureTemplates, static function ($tpl) use ($singleAnnexureId) {
+            return (($tpl['annexId'] ?? '') === $singleAnnexureId) || (($tpl['annexureCode'] ?? '') === $singleAnnexureId);
+        }));
+    }
 
     $printedAt = now_kolkata()->format('d M Y, h:i A');
     $prefill = static function ($value, int $minLength = 8): string {
@@ -1267,6 +1349,12 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     </style>';
 
     $printSettings = load_contractor_print_settings($pack['yojId']);
+    $useLetterhead = (bool)($options['useLetterhead'] ?? true);
+    if (!$useLetterhead) {
+        $printSettings['headerEnabled'] = false;
+        $printSettings['footerEnabled'] = false;
+        $printSettings['logoEnabled'] = false;
+    }
     $logoHtml = '';
     if (!empty($printSettings['logoEnabled']) && !empty($printSettings['logoPathPublic'])) {
         $align = $printSettings['logoAlign'] ?? 'left';
@@ -1278,11 +1366,12 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     } else {
         $headerText = '<div class="blank" style="flex:1;"></div>';
     }
+    $headerNote = $useLetterhead ? 'Using saved letterhead' : 'Letterhead space reserved (pre-printed)';
     $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
         . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
         . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['title'] ?? 'Tender Pack', ENT_QUOTES, 'UTF-8') . '</h1>'
         . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></div>'
-        . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div></div>'
+        . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div><div class="muted" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div></div>'
         . '</div>';
 
     $footerText = '';

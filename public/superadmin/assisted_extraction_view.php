@@ -126,18 +126,21 @@ safe_page(function () {
             </div>
         <?php endif; ?>
 
-        <div class="card" style="display:grid;gap:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-                <div>
-                    <h3 style="margin:0;">Assistant Draft</h3>
-                    <p class="muted" style="margin:4px 0 0;">Paste the JSON response from the external AI here. The system will validate and structure it.</p>
+            <div class="card" style="display:grid;gap:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <div>
+                        <h3 style="margin:0;">Assistant Draft</h3>
+                        <p class="muted" style="margin:4px 0 0;">Paste the JSON response from the external AI here. The system will validate and structure it.</p>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <button type="button" class="btn secondary" onclick="const prev=document.getElementById('contractor-preview');if(prev){prev.open=true;prev.scrollIntoView({behavior:'smooth'});}"><?= sanitize('Preview: what contractor will see'); ?></button>
+                        <div class="pill">Actor: <?= sanitize(assisted_actor_label($actor)); ?></div>
+                    </div>
                 </div>
-                <div class="pill">Actor: <?= sanitize(assisted_actor_label($actor)); ?></div>
-            </div>
-            <div style="display:grid;gap:8px;padding:12px;border:1px dashed #30363d;border-radius:12px;background:#0f1622;">
-                <strong>Required keys</strong>
-                <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                    <?php foreach ($requiredKeys as $key): ?>
+                <div style="display:grid;gap:8px;padding:12px;border:1px dashed #30363d;border-radius:12px;background:#0f1622;">
+                    <strong>Required keys</strong>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <?php foreach ($requiredKeys as $key): ?>
                         <span class="pill"><?= sanitize($key); ?></span>
                     <?php endforeach; ?>
                 </div>
@@ -186,6 +189,66 @@ safe_page(function () {
                 </div>
             </form>
             <div class="muted" style="font-size:13px;">Use the 'Copy Prompt' button above to get the correct schema instructions for the AI.</div>
+            <?php $previewDraft = is_array($request['assistantDraft'] ?? null) ? $request['assistantDraft'] : []; ?>
+            <?php $previewChecklist = $previewDraft['checklist'] ?? []; ?>
+            <?php $previewLists = $previewDraft['lists'] ?? []; ?>
+            <details id="contractor-preview" style="border:1px solid #30363d;border-radius:12px;padding:12px;background:#0f1520;margin-top:6px;">
+                <summary style="cursor:pointer;font-weight:600;"><?= sanitize('Preview: what contractor will see'); ?></summary>
+                <div style="display:grid;gap:8px;margin-top:8px;">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <span class="pill"><?= sanitize(count($previewChecklist) . ' checklist items'); ?></span>
+                        <span class="pill"><?= sanitize(count($previewLists['annexures'] ?? []) . ' annexures'); ?></span>
+                        <span class="pill"><?= sanitize(count($previewLists['restricted'] ?? []) . ' restricted'); ?></span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">
+                        <div>
+                            <strong><?= sanitize('Key dates'); ?></strong>
+                            <p class="muted" style="margin:4px 0 0;"><?= sanitize('Submission: ' . ($previewDraft['tender']['submissionDeadline'] ?? '')); ?></p>
+                            <p class="muted" style="margin:4px 0 0;"><?= sanitize('Opening: ' . ($previewDraft['tender']['openingDate'] ?? '')); ?></p>
+                        </div>
+                        <div>
+                            <strong><?= sanitize('Fees (text allowed)'); ?></strong>
+                            <?php $feesPreview = $previewDraft['fees'] ?? []; ?>
+                            <p class="muted" style="margin:4px 0 0;"><?= sanitize('Tender fee: ' . ($feesPreview['tenderFeeText'] ?? '')); ?></p>
+                            <p class="muted" style="margin:4px 0 0;"><?= sanitize('EMD: ' . ($feesPreview['emdText'] ?? '')); ?></p>
+                        </div>
+                    </div>
+                    <?php if ($previewChecklist): ?>
+                        <div>
+                            <strong><?= sanitize('Sample checklist'); ?></strong>
+                            <ul style="margin:6px 0 0 16px;padding:0;">
+                                <?php foreach (array_slice($previewChecklist, 0, 5) as $item): ?>
+                                    <li><?= sanitize(($item['title'] ?? '') . (!empty($item['required']) ? ' (Required)' : ' (Optional)')); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                            <?php if (count($previewChecklist) > 5): ?>
+                                <p class="muted" style="margin:4px 0 0;"><?= sanitize('+' . (count($previewChecklist) - 5) . ' more'); ?></p>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($previewLists['annexures'])): ?>
+                        <div>
+                            <strong><?= sanitize('Annexures to generate'); ?></strong>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+                                <?php foreach (array_slice($previewLists['annexures'], 0, 6) as $ann): ?>
+                                    <span class="pill"><?= sanitize(is_array($ann) ? ($ann['title'] ?? ($ann['name'] ?? 'Annexure')) : (string)$ann); ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($previewLists['restricted'])): ?>
+                        <div class="flash" style="background:#211015;border:1px solid #3a2a18;">
+                            <strong><?= sanitize('Restricted annexures detected'); ?></strong>
+                            <p class="muted" style="margin:6px 0 0;"><?= sanitize('These will be listed but never generated for rate entry.'); ?></p>
+                            <ul style="margin:6px 0 0 16px;padding:0;color:#fcd34d;">
+                                <?php foreach ($previewLists['restricted'] as $rest): ?>
+                                    <li><?= sanitize(is_array($rest) ? ($rest['name'] ?? ($rest['title'] ?? 'Restricted')) : (string)$rest); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </details>
             <div>
                 <h4 style="margin:0 0 6px 0;">Audit Trail</h4>
                 <div style="display:grid;gap:6px;">
