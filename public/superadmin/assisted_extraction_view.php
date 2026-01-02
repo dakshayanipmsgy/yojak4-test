@@ -26,13 +26,14 @@ safe_page(function () {
 
     $draftInput = $_SESSION['assisted_draft_input'][$reqId] ?? null;
     $validation = $_SESSION['assisted_validation'][$reqId] ?? null;
+    $nonBlockingFindings = $validation['nonBlockingFindings'] ?? [];
     unset($_SESSION['assisted_draft_input'][$reqId], $_SESSION['assisted_validation'][$reqId]);
     if ($draftInput === null) {
         $draftInput = json_encode($request['assistantDraft'] ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 
     $title = get_app_config()['appName'] . ' | Assisted Request ' . $reqId;
-    render_layout($title, function () use ($request, $draftInput, $tender, $actor, $validation) {
+    render_layout($title, function () use ($request, $draftInput, $tender, $actor, $validation, $nonBlockingFindings) {
         $status = $request['status'] ?? 'requested';
         $pdfRef = $request['tenderPdfRef'] ?? null;
         $requiredKeys = ASSISTED_REQUIRED_FIELDS;
@@ -174,6 +175,17 @@ safe_page(function () {
                             </ul>
                         </div>
                     <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            <?php if ($validation && !empty($nonBlockingFindings)): ?>
+                <div class="card" style="background:#181204;border:1px solid #3a2d16;border-radius:12px;">
+                    <h4 style="margin:0 0 8px 0;color:#fcd34d;">Review needed (currency context)</h4>
+                    <p class="muted" style="margin:4px 0 8px;">Currency found but context unclear. These are warnings only; ensure they are not bid pricing.</p>
+                    <ul style="margin:6px 0 0 16px;padding:0;color:#fcd34d;">
+                        <?php foreach ($nonBlockingFindings as $finding): ?>
+                            <li><?= sanitize(($finding['path'] ?? 'field') . ' • ' . ($finding['reasonCode'] ?? 'reason') . ' • ' . ($finding['snippet'] ?? '')); ?></li>
+                        <?php endforeach; ?>
+                    </ul>
                 </div>
             <?php endif; ?>
 

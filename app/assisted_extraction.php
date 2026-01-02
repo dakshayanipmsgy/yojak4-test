@@ -700,108 +700,169 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
 {
     $findings = [];
     $skipKeys = ['validitydays', 'bidvaliditydays', 'completionmonths']; // Safe numeric fields
-    
+
     // Explicitly safe context words (fees)
-    $allowContextTokens = ['tenderfee', 'emd', 'earnestmoney', 'security', 'deposit', 'performance', 'guarantee', 'bg', 'sd', 'pg', 'gst', 'tax', 'levy', 'turnover', 'networth', 'financialyear', 'annual'];
-    
+    $allowContextTokens = [
+        'tenderfee',
+        'bidfee',
+        'tendercost',
+        'documentfee',
+        'processingfee',
+        'fee',
+        'emd',
+        'earnestmoney',
+        'bidsecurity',
+        'security',
+        'deposit',
+        'securitydeposit',
+        'performance',
+        'guarantee',
+        'bg',
+        'sd',
+        'pg',
+        'gst',
+        'tax',
+        'levy',
+        'turnover',
+        'networth',
+        'financialyear',
+        'annual',
+    ];
+
     // Explicitly blocked context words (pricing)
-    $blockContextTokens = ['boq', 'billofquantity', 'priceschedule', 'financialbid', 'pricebid', 'ratesheet', 'quotedrate', 'itemrate', 'unitrate', 'l1', 'lowestbid'];
-    
+    $blockContextTokens = [
+        'boq',
+        'billofquantity',
+        'sor',
+        'scheduleofrates',
+        'priceschedule',
+        'financialbid',
+        'pricebid',
+        'ratesheet',
+        'quotedrate',
+        'itemrate',
+        'unitrate',
+        'ratequoted',
+        'quotedprice',
+        'l1',
+        'lowestbidder',
+        'lowestbid',
+        'comparativestatement',
+    ];
+
     foreach ($payload as $key => $value) {
         $keyString = (string)$key;
         $keyLower = strtolower(preg_replace('/[^a-z0-9]/', '', $keyString));
         $currentPath = $path === '' ? $keyString : $path . '.' . $keyString;
-        
+        $segments = explode('.', $currentPath);
+        $isFeesPath = str_starts_with($currentPath, 'root.fees');
+
         if (in_array($keyLower, $skipKeys, true)) {
             continue;
         }
 
-        // Check key for Blocked tokens
-        foreach ($blockContextTokens as $token) {
-            if (str_contains($keyLower, $token)) {
-                $findings[] = [
-                    'path' => $currentPath,
-                    'reasonCode' => 'BLOCK_KEY',
-                    'snippet' => $keyString,
-                    'blocked' => true,
-                ];
-                // Don't break, keep checking value but we already know this node is bad
+        // Check key for Blocked tokens (unless explicitly allowed path)
+        if (!$isFeesPath) {
+            foreach ($blockContextTokens as $token) {
+                if (str_contains($keyLower, $token)) {
+                    $findings[] = [
+                        'path' => $currentPath,
+                        'reasonCode' => 'BLOCK_KEY',
+                        'snippet' => $keyString,
+                        'blocked' => true,
+                    ];
+                }
             }
         }
-        
-        $isSafeContext = false;
+
+        $isSafeContext = $isFeesPath;
         foreach ($allowContextTokens as $token) {
             if (str_contains($keyLower, $token)) {
                 $isSafeContext = true;
                 break;
             }
         }
-        
+
         if (is_string($value)) {
-             // String check
-             $finding = assisted_evaluate_string_forbidden($value, $currentPath, $isSafeContext, $context);
-             if ($finding) {
-                 $findings[] = $finding;
-             }
+            $finding = assisted_evaluate_string_forbidden($value, $currentPath, [
+                'pathAllowed' => $isFeesPath || (!empty($context['forceAllowCurrency'])),
+                'allowCurrency' => !empty($context['allowCurrency']) || $isSafeContext || $isFeesPath,
+                'keyAllowContext' => $isSafeContext,
+                'checklistCategory' => $context['checklistCategory'] ?? null,
+            ]);
+            if ($finding) {
+                $findings[] = $finding;
+            }
         } elseif (is_array($value)) {
-             // Recurse
-             $nextContext = $context;
-             if ($isSafeContext) {
-                 $nextContext['allowCurrency'] = true;
-             }
-             $findings = array_merge($findings, assisted_detect_forbidden_pricing($value, $currentPath, $nextContext));
+            $nextContext = $context;
+            if ($isSafeContext) {
+                $nextContext['allowCurrency'] = true;
+            }
+            if ($isFeesPath) {
+                $nextContext['forceAllowCurrency'] = true;
+            }
+
+            if (assisted_path_is_checklist_item($segments) && isset($value['category'])) {
+                $category = mb_strtolower(trim((string)$value['category']));
+                if ($category === 'fees') {
+                    $nextContext['allowCurrency'] = true;
+                    $nextContext['checklistCategory'] = 'fees';
+                }
+            }
+
+            $findings = array_merge($findings, assisted_detect_forbidden_pricing($value, $currentPath, $nextContext));
         }
     }
     return $findings;
 }
 
-function assisted_evaluate_string_forbidden(string $value, string $path, bool $safeContext, array $context = []): ?array
+function assisted_evaluate_string_forbidden(string $value, string $path, array $context = []): ?array
 {
-    $lower = mb_strtolower($value);
-    
-    // Explicit Block Markers (Strong)
-    $blockMarkers = ['financial bid', 'price bid', 'quoted rate', 'boq', 'bill of quantity', 'rate sheet', 'price schedule'];
-    foreach ($blockMarkers as $marker) {
-        if (str_contains($lower, $marker)) {
-             // Special case: if it's just mentioning "Cover 2: Financial Bid" in a checklist, it might be okay?
-             // But the rules say "Must block... restricted".
-             // We'll mark as restricted if it's an annexure label, else block.
-             // Actually, if it's in a checklist item as "Submit Financial Bid", we should NOT block import, just maybe flag it.
-             // The prompt says "Must block... BOQ... numeric rate lines". "If annexures... include Price Bid... do not fail import... move into lists.restricted".
-             
-             // So here we only return 'blocked' if it looks like actual DATA (numbers + rates), or if we want to flag usage.
-             // But detecting context is hard.
-             
-             // Refined rule: If the string contains currency AND "rate"/"price", it's dangerous.
-             // If it's just "Financial Bid" title, it's safe-ish (will be handled by restricted logic).
-        }
+    if (!empty($context['pathAllowed'])) {
+        return null;
     }
-    
-    // Real pricing detection: Currency + Number + Rate Context
-    $hasCurrency = (bool)preg_match('/(₹|rs\.?|inr)\s*\d+/i', $lower); // Currency followed by digit
-    $hasCurrencySymbol = (bool)preg_match('/(₹|rs\.?|inr)/i', $lower);
-    
-    // If context is explicitly safe (Fee/EMD/Turnover), allow currency.
-    if ($safeContext || !empty($context['allowCurrency'])) {
-        return null; 
-    }
-    
-    // If context is NOT safe, and we see currency with numbers -> Block.
-    if ($hasCurrency) {
-         return [
+
+    $hasCurrency = assisted_contains_currency_amount($value);
+    $hasCurrencyMarker = assisted_contains_currency_marker($value);
+    $hasAllowMarker = assisted_contains_allow_marker($value);
+    $hasBlockMarker = assisted_contains_block_marker($value);
+
+    if ($hasBlockMarker) {
+        return [
             'path' => $path,
-            'reasonCode' => 'BLOCK_CURRENCY_NO_CONTEXT',
+            'reasonCode' => 'BLOCK_VALUE_CONTEXT',
             'snippet' => assisted_redact_snippet($value),
             'blocked' => true,
         ];
     }
-    
-    return null;
+
+    $allowByContext = !empty($context['allowCurrency']) || !empty($context['keyAllowContext']) || (($context['checklistCategory'] ?? '') === 'fees');
+
+    if (!$hasCurrency && !$hasCurrencyMarker) {
+        return null;
+    }
+
+    if ($allowByContext || $hasAllowMarker) {
+        return null;
+    }
+
+    return [
+        'path' => $path,
+        'reasonCode' => 'CURRENCY_UNKNOWN_CONTEXT',
+        'snippet' => assisted_redact_snippet($value),
+        'blocked' => false,
+        'message' => 'Currency found but context unclear. Please ensure this is not bid pricing.',
+    ];
 }
 
 function assisted_contains_currency_marker(string $value): bool
 {
     return (bool)preg_match('/(₹|\bRs\.?\b|\bINR\b)/iu', $value);
+}
+
+function assisted_contains_currency_amount(string $value): bool
+{
+    return (bool)preg_match('/(₹|\bRs\.?\b|\bINR\b)\s*\d[\d,]*(\.\d+)?/iu', $value);
 }
 
 function assisted_contains_allow_marker(string $value): bool
@@ -813,16 +874,19 @@ function assisted_contains_allow_marker(string $value): bool
         '/bid\s+security/i',
         '/security\s+money/i',
         '/\bdeposit\b/i',
-        '/\bsd\b/i',
         '/security\s+deposit/i',
+        '/\bsd\b/i',
         '/\bpg\b/i',
         '/performance\s+guarantee/i',
         '/\bbg\b/i',
         '/tender\s+fee/i',
+        '/tender\s+fees/i',
+        '/bid\s+fee/i',
         '/tender\s+cost/i',
         '/cost\s+of\s+tender/i',
         '/document\s+fee/i',
         '/processing\s+fee/i',
+        '/\bfee\b/i',
         '/\bgst\b/i',
         '/bank\s+guarantee/i',
     ];
@@ -847,13 +911,14 @@ function assisted_contains_block_marker(string $value): bool
         '/unit\s+rate/i',
         '/rate\s+quoted/i',
         '/quoted\s+rate/i',
+        '/quoted\s+price/i',
         '/financial\s+bid/i',
         '/price\s+bid/i',
         '/bid\s+value/i',
         '/total\s+value/i',
         '/contract\s+value/i',
         '/\bl1\b/i',
-        '/lowest/i',
+        '/lowest\s+bidder/i',
         '/comparative\s+statement/i',
         '/\bcs\b/i',
         '/price\s+schedule/i',

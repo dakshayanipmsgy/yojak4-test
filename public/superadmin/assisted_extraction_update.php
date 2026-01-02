@@ -48,9 +48,16 @@ safe_page(function () {
     $nonBlockingFindings = array_values(array_filter($validation['allFindings'] ?? [], static function ($finding) {
         return ($finding['blocked'] ?? true) === false;
     }));
+    $nonBlockingLog = array_map(static function ($finding) {
+        return [
+            'path' => $finding['path'] ?? '',
+            'reasonCode' => $finding['reasonCode'] ?? '',
+        ];
+    }, $nonBlockingFindings);
     if ($errors) {
         $_SESSION['assisted_draft_input'][$reqId] = $sanitizedInput;
         $_SESSION['assisted_validation'][$reqId] = $validation;
+        $_SESSION['assisted_validation'][$reqId]['nonBlockingFindings'] = $nonBlockingFindings;
         $forbidden = $validation['forbiddenFindings'] ?? [];
         if (!empty($forbidden)) {
             $findingsToLog = [];
@@ -67,7 +74,7 @@ safe_page(function () {
                 'actor' => assisted_actor_label($actor),
                 'findings' => $findingsToLog,
                 'restrictedAnnexuresCount' => $validation['restrictedAnnexuresCount'] ?? 0,
-                'nonBlockingFindings' => $nonBlockingFindings,
+                'nonBlockingFindings' => $nonBlockingLog,
             ]);
         } else {
             logEvent(ASSISTED_EXTRACTION_LOG, [
@@ -78,7 +85,7 @@ safe_page(function () {
                 'actor' => assisted_actor_label($actor),
                 'missingKeys' => $validation['missingKeys'] ?? [],
                 'restrictedAnnexuresCount' => $validation['restrictedAnnexuresCount'] ?? 0,
-                'nonBlockingFindings' => $nonBlockingFindings,
+                'nonBlockingFindings' => $nonBlockingLog,
             ]);
         }
         set_flash('error', implode(' ', $errors));
@@ -90,6 +97,7 @@ safe_page(function () {
         'errors' => [],
         'missingKeys' => [],
         'forbiddenFindings' => [],
+        'nonBlockingFindings' => $nonBlockingFindings,
     ];
     logEvent(ASSISTED_EXTRACTION_LOG, [
         'at' => now_kolkata()->format(DateTime::ATOM),
@@ -100,7 +108,7 @@ safe_page(function () {
         'missingKeys' => [],
         'forbiddenFindings' => [],
         'restrictedAnnexuresCount' => $validation['restrictedAnnexuresCount'] ?? 0,
-        'nonBlockingFindings' => $nonBlockingFindings,
+        'nonBlockingFindings' => $nonBlockingLog,
     ]);
 
     $normalized = $validation['normalized'] ?? assisted_normalize_payload($decoded);
