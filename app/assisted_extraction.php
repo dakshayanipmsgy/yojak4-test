@@ -755,14 +755,19 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
         $keyLower = strtolower(preg_replace('/[^a-z0-9]/', '', $keyString));
         $currentPath = $path === '' ? $keyString : $path . '.' . $keyString;
         $segments = explode('.', $currentPath);
+        $currentContext = $context;
         $isFeesPath = str_starts_with($currentPath, 'root.fees');
+        $isRestrictedPath = assisted_is_restricted_path($currentPath) || (!empty($currentContext['restrictedPath']));
+        if ($isRestrictedPath) {
+            $currentContext['restrictedPath'] = true;
+        }
 
         if (in_array($keyLower, $skipKeys, true)) {
             continue;
         }
 
         // Check key for Blocked tokens (unless explicitly allowed path)
-        if (!$isFeesPath) {
+        if (!$isFeesPath && !$isRestrictedPath) {
             foreach ($blockContextTokens as $token) {
                 if (str_contains($keyLower, $token)) {
                     $findings[] = [
@@ -785,21 +790,25 @@ function assisted_detect_forbidden_pricing(array $payload, string $path = 'root'
 
         if (is_string($value)) {
             $finding = assisted_evaluate_string_forbidden($value, $currentPath, [
-                'pathAllowed' => $isFeesPath || (!empty($context['forceAllowCurrency'])),
-                'allowCurrency' => !empty($context['allowCurrency']) || $isSafeContext || $isFeesPath,
+                'pathAllowed' => $isFeesPath || (!empty($currentContext['forceAllowCurrency'])),
+                'allowCurrency' => !empty($currentContext['allowCurrency']) || $isSafeContext || $isFeesPath,
                 'keyAllowContext' => $isSafeContext,
-                'checklistCategory' => $context['checklistCategory'] ?? null,
+                'checklistCategory' => $currentContext['checklistCategory'] ?? null,
+                'restrictedPath' => $isRestrictedPath,
             ]);
             if ($finding) {
                 $findings[] = $finding;
             }
         } elseif (is_array($value)) {
-            $nextContext = $context;
+            $nextContext = $currentContext;
             if ($isSafeContext) {
                 $nextContext['allowCurrency'] = true;
             }
             if ($isFeesPath) {
                 $nextContext['forceAllowCurrency'] = true;
+            }
+            if ($isRestrictedPath) {
+                $nextContext['restrictedPath'] = true;
             }
 
             if (assisted_path_is_checklist_item($segments) && isset($value['category'])) {
@@ -822,23 +831,66 @@ function assisted_evaluate_string_forbidden(string $value, string $path, array $
         return null;
     }
 
+    $isRestrictedPath = !empty($context['restrictedPath']);
     $hasCurrency = assisted_contains_currency_amount($value);
     $hasCurrencyMarker = assisted_contains_currency_marker($value);
+    $hasNumericRatePattern = assisted_contains_numeric_rate_pattern($value);
     $hasAllowMarker = assisted_contains_allow_marker($value);
     $hasBlockMarker = assisted_contains_block_marker($value);
+    $hasExplicitPricingPhrase = assisted_contains_explicit_pricing_phrase($value);
 
-    if ($hasBlockMarker) {
+    $pricingEvidence = $hasCurrency || $hasNumericRatePattern;
+    $suspiciousRestricted = $hasCurrencyMarker || $pricingEvidence;
+    $allowByContext = !empty($context['allowCurrency']) || !empty($context['keyAllowContext']) || (($context['checklistCategory'] ?? '') === 'fees');
+
+    if ($isRestrictedPath) {
+        if (!$suspiciousRestricted) {
+            assisted_log_restricted_validation($path, 'allowed', 'RESTRICTED_REFERENCE_ALLOWED');
+            return null;
+        }
+
+        if (($hasBlockMarker || $hasExplicitPricingPhrase) && ($pricingEvidence || $hasCurrencyMarker)) {
+            assisted_log_restricted_validation($path, 'blocked', 'RESTRICTED_PRICING_BLOCKED');
+            return [
+                'path' => $path,
+                'reasonCode' => 'RESTRICTED_PRICING_BLOCKED',
+                'snippet' => assisted_redact_snippet($value),
+                'blocked' => true,
+                'message' => 'Pricing/rate content detected in restricted text. Remove bid values.',
+            ];
+        }
+
+        assisted_log_restricted_validation($path, 'warned', 'RESTRICTED_PRICING_WARNING');
+        return [
+            'path' => $path,
+            'reasonCode' => 'RESTRICTED_PRICING_WARNING',
+            'snippet' => assisted_redact_snippet($value),
+            'blocked' => false,
+            'message' => 'Review restricted text; may contain pricing.',
+        ];
+    }
+
+    if ($hasExplicitPricingPhrase) {
         return [
             'path' => $path,
             'reasonCode' => 'BLOCK_VALUE_CONTEXT',
             'snippet' => assisted_redact_snippet($value),
             'blocked' => true,
+            'message' => 'Explicit quoted pricing detected. Remove quoted rates or prices.',
         ];
     }
 
-    $allowByContext = !empty($context['allowCurrency']) || !empty($context['keyAllowContext']) || (($context['checklistCategory'] ?? '') === 'fees');
+    if ($hasBlockMarker && $pricingEvidence) {
+        return [
+            'path' => $path,
+            'reasonCode' => 'BLOCK_VALUE_CONTEXT',
+            'snippet' => assisted_redact_snippet($value),
+            'blocked' => true,
+            'message' => 'Pricing/rate content detected. Remove BOQ or quoted rates.',
+        ];
+    }
 
-    if (!$hasCurrency && !$hasCurrencyMarker) {
+    if (!$hasCurrency && !$hasCurrencyMarker && !$hasNumericRatePattern) {
         return null;
     }
 
@@ -934,6 +986,25 @@ function assisted_contains_block_marker(string $value): bool
     return false;
 }
 
+function assisted_contains_explicit_pricing_phrase(string $value): bool
+{
+    $patterns = [
+        '/quoted\s+(rate|price|value)/i',
+        '/rate\s+quoted/i',
+        '/unit\s+rate/i',
+        '/item\s+rate/i',
+        '/quoted\s+bid/i',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function assisted_is_restricted_financial_label(string $lower): bool
 {
     $patterns = [
@@ -953,6 +1024,52 @@ function assisted_is_restricted_financial_label(string $lower): bool
         }
     }
     return false;
+}
+
+function assisted_contains_numeric_rate_pattern(string $value): bool
+{
+    $patterns = [
+        '/\d[\d,]*(\.\d+)?\s*(per|\\/)\s*[a-z]{1,12}\b/i', // per kW, /MT etc.
+        '/\brate\s*(of)?\s*[:\-]?\s*\d[\d,]*(\.\d+)?/i',
+        '/\b\d[\d,]*(\.\d+)?\s*(%|percent)\s+[^\\n]{0,20}rate/i',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function assisted_is_restricted_path(string $path): bool
+{
+    $lower = mb_strtolower($path);
+    $prefixes = [
+        'root.lists.restricted',
+        'root.restrictedannexures',
+        'root.restricted',
+        'root.notes',
+        'root.sourcesnippets',
+    ];
+    foreach ($prefixes as $prefix) {
+        if (str_starts_with($lower, $prefix)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function assisted_log_restricted_validation(string $path, string $action, string $reasonCode = 'RESTRICTED_REFERENCE_ALLOWED'): void
+{
+    logEvent(ASSISTED_EXTRACTION_LOG, [
+        'at' => now_kolkata()->format(DateTime::ATOM),
+        'event' => 'VALIDATE_RESTRICTED_TEXT',
+        'path' => $path,
+        'action' => $action,
+        'reasonCode' => $reasonCode,
+    ]);
 }
 
 function assisted_is_annexure_like_path(array $segments): bool
