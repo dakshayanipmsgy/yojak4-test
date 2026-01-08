@@ -575,7 +575,22 @@ function contractor_vault_index(string $yojId): array
 {
     $path = contractors_vault_index_path($yojId);
     $index = readJson($path);
-    return is_array($index) ? $index : [];
+    if (!is_array($index)) {
+        return [];
+    }
+    foreach ($index as &$record) {
+        if (!is_array($record)) {
+            $record = [];
+            continue;
+        }
+        $record['docId'] = $record['docId'] ?? ($record['fileId'] ?? '');
+        $record['docType'] = $record['docType'] ?? ($record['category'] ?? 'Other');
+        if (!isset($record['tags']) || !is_array($record['tags'])) {
+            $record['tags'] = [];
+        }
+    }
+    unset($record);
+    return $index;
 }
 
 function save_contractor_vault_index(string $yojId, array $records): void

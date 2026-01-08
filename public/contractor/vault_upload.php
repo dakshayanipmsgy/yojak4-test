@@ -13,21 +13,21 @@ safe_page(function () {
     $title = get_app_config()['appName'] . ' | Upload';
     $errors = [];
     $titleInput = '';
-    $category = 'Other';
+    $docType = 'Other';
     $tagsInput = '';
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_csrf();
         $titleInput = trim($_POST['title'] ?? '');
-        $category = trim($_POST['category'] ?? 'Other');
+        $docType = trim($_POST['docType'] ?? 'Other');
         $tagsInput = trim($_POST['tags'] ?? '');
 
         if ($titleInput === '') {
             $errors[] = 'Title is required.';
         }
-        $allowedCategories = ['GST','PAN','ITR','Affidavit','Experience','BalanceSheet','Other'];
-        if (!in_array($category, $allowedCategories, true)) {
-            $errors[] = 'Invalid category selected.';
+        $allowedDocTypes = ['GST','PAN','ITR','BalanceSheet','Affidavit','Undertaking','ExperienceCert','Other'];
+        if (!in_array($docType, $allowedDocTypes, true)) {
+            $errors[] = 'Invalid document type selected.';
         }
 
         $tags = [];
@@ -86,8 +86,10 @@ safe_page(function () {
                 $storedPath = str_replace(PUBLIC_PATH, '', $destination);
                 $record = [
                     'fileId' => $fileId,
+                    'docId' => $fileId,
                     'title' => $titleInput,
-                    'category' => $category,
+                    'category' => $docType,
+                    'docType' => $docType,
                     'tags' => $tags,
                     'storedPath' => $storedPath,
                     'mime' => $mime,
@@ -120,7 +122,7 @@ safe_page(function () {
         }
     }
 
-    render_layout($title, function () use ($errors, $titleInput, $category, $tagsInput) {
+    render_layout($title, function () use ($errors, $titleInput, $docType, $tagsInput) {
         ?>
         <div class="card">
             <h2><?= sanitize('Upload Document'); ?></h2>
@@ -139,10 +141,10 @@ safe_page(function () {
                     <input id="title" name="title" value="<?= sanitize($titleInput); ?>" required>
                 </div>
                 <div class="field">
-                    <label for="category"><?= sanitize('Category'); ?></label>
-                    <select id="category" name="category">
-                        <?php foreach (['GST','PAN','ITR','Affidavit','Experience','BalanceSheet','Other'] as $cat): ?>
-                            <option value="<?= sanitize($cat); ?>" <?= $cat === $category ? 'selected' : ''; ?>><?= sanitize($cat); ?></option>
+                    <label for="docType"><?= sanitize('Document type'); ?></label>
+                    <select id="docType" name="docType">
+                        <?php foreach (['GST','PAN','ITR','BalanceSheet','Affidavit','Undertaking','ExperienceCert','Other'] as $type): ?>
+                            <option value="<?= sanitize($type); ?>" <?= $type === $docType ? 'selected' : ''; ?>><?= sanitize($type); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>

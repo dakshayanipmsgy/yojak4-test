@@ -336,6 +336,12 @@ function pack_apply_schema_defaults(array $pack): array
     if (!isset($pack['vaultMappings']) || !is_array($pack['vaultMappings'])) {
         $pack['vaultMappings'] = [];
     }
+    if (!isset($pack['attachmentsPlan']) || !is_array($pack['attachmentsPlan'])) {
+        $pack['attachmentsPlan'] = [];
+    }
+    if (!isset($pack['missingChecklistItemIds']) || !is_array($pack['missingChecklistItemIds'])) {
+        $pack['missingChecklistItemIds'] = [];
+    }
 
     return $pack;
 }
@@ -396,7 +402,13 @@ function pack_template_payloads(array $pack, array $contractor): array
     return $payloads;
 }
 
-function pack_vault_suggestions(array $pack, array $vaultFiles): array
+function pack_vault_doc_type(array $file): string
+{
+    $docType = trim((string)($file['docType'] ?? $file['category'] ?? ''));
+    return $docType !== '' ? $docType : 'Other';
+}
+
+function pack_vault_suggestions(array $pack, array $vaultFiles, array $attachments = []): array
 {
     $suggestions = [];
     $vaultMap = [];
@@ -404,6 +416,8 @@ function pack_vault_suggestions(array $pack, array $vaultFiles): array
         if (!empty($file['deletedAt'])) {
             continue;
         }
+        $file['docType'] = pack_vault_doc_type($file);
+        $file['tags'] = array_values(array_filter(array_map('strval', $file['tags'] ?? [])));
         $vaultMap[$file['fileId'] ?? ''] = $file;
     }
 
@@ -413,43 +427,150 @@ function pack_vault_suggestions(array $pack, array $vaultFiles): array
         if ($itemId === null || $title === '') {
             continue;
         }
-        $best = null;
-        $bestScore = 0.0;
-        foreach ($vaultMap as $file) {
-            $score = 0.0;
-            $matchedTags = [];
-            $fileTitle = strtolower($file['title'] ?? '');
-            if ($fileTitle !== '' && str_contains($title, $fileTitle)) {
-                $score += 1.5;
-            }
-            foreach ($file['tags'] ?? [] as $tag) {
-                $tagLower = strtolower((string)$tag);
-                if ($tagLower !== '' && str_contains($title, $tagLower)) {
-                    $score += 2.0;
-                    $matchedTags[] = $tag;
+        if (!empty($attachments[$itemId])) {
+            continue;
+        }
+
+        $ruleMap = [
+            'GST' => ['gst'],
+            'PAN' => ['pan'],
+            'ITR' => ['itr', 'income tax'],
+            'BalanceSheet' => ['balance sheet', 'balance-sheet'],
+            'Affidavit' => ['affidavit', 'undertaking'],
+            'ExperienceCert' => ['experience', 'work experience', 'completion certificate'],
+        ];
+        $targetDocTypes = [];
+        foreach ($ruleMap as $docType => $keywords) {
+            foreach ($keywords as $keyword) {
+                if (str_contains($title, $keyword)) {
+                    $targetDocTypes[] = $docType;
+                    break;
                 }
             }
-            $category = strtolower((string)($file['category'] ?? ''));
-            if ($category !== '' && str_contains($title, $category)) {
-                $score += 1.0;
-            }
-            if ($score > $bestScore) {
-                $bestScore = $score;
-                $best = [
-                    'checklistItemId' => $itemId,
-                    'suggestedVaultDocId' => $file['fileId'] ?? '',
-                    'confidence' => min(1, $score / 5),
-                    'reason' => $matchedTags ? 'Matched tags: ' . implode(', ', $matchedTags) : ($category !== '' ? 'Category match: ' . strtoupper($category) : 'Title similarity'),
-                    'fileTitle' => $file['title'] ?? '',
-                ];
-            }
         }
-        if ($best) {
-            $suggestions[$itemId] = $best;
+        $targetDocTypes = array_values(array_unique($targetDocTypes));
+
+        $matches = [];
+        foreach ($vaultMap as $file) {
+            $score = 0.0;
+            $reasons = [];
+            $fileDocType = strtoupper(pack_vault_doc_type($file));
+            $fileTitle = strtolower((string)($file['title'] ?? ''));
+            $fileTags = array_map('strtolower', $file['tags'] ?? []);
+
+            foreach ($targetDocTypes as $docType) {
+                if ($fileDocType === strtoupper($docType)
+                    || ($docType === 'Affidavit' && in_array($fileDocType, ['AFFIDAVIT', 'UNDERTAKING'], true))) {
+                    $score += 3.0;
+                    $reasons[] = 'Doc type match: ' . $docType;
+                    break;
+                }
+            }
+
+            foreach ($ruleMap as $docType => $keywords) {
+                foreach ($keywords as $keyword) {
+                    if ($fileTitle !== '' && str_contains($fileTitle, $keyword)) {
+                        $score += 1.5;
+                        $reasons[] = 'Title match: ' . strtoupper($keyword);
+                        break 2;
+                    }
+                    foreach ($fileTags as $tag) {
+                        if ($tag !== '' && str_contains($tag, str_replace(' ', '', $keyword))) {
+                            $score += 2.0;
+                            $reasons[] = 'Tag match: ' . strtoupper($keyword);
+                            break 3;
+                        }
+                    }
+                }
+            }
+
+            if ($score <= 0) {
+                continue;
+            }
+            $matches[] = [
+                'checklistItemId' => $itemId,
+                'suggestedVaultDocId' => $file['fileId'] ?? '',
+                'fileTitle' => $file['title'] ?? '',
+                'docType' => $file['docType'] ?? '',
+                'confidenceScore' => $score,
+                'confidenceLabel' => $score >= 4 ? 'High' : 'Medium',
+                'reason' => $reasons ? implode(' • ', array_unique($reasons)) : 'Rule-based match',
+            ];
+        }
+
+        if ($matches) {
+            usort($matches, static function (array $a, array $b): int {
+                return $b['confidenceScore'] <=> $a['confidenceScore'];
+            });
+            $suggestions[$itemId] = array_slice($matches, 0, 3);
         }
     }
 
     return $suggestions;
+}
+
+function pack_attachment_map(array $pack, array $vaultFiles = []): array
+{
+    $vaultMap = [];
+    foreach ($vaultFiles as $file) {
+        $vaultMap[$file['fileId'] ?? ''] = $file;
+    }
+
+    $attachments = [];
+    foreach ($pack['attachmentsPlan'] ?? [] as $entry) {
+        $itemId = $entry['checklistItemId'] ?? '';
+        $docId = $entry['vaultDocId'] ?? '';
+        if ($itemId === '' || $docId === '') {
+            continue;
+        }
+        $title = $entry['fileName'] ?? ($vaultMap[$docId]['title'] ?? 'Vault document');
+        $attachments[$itemId] = [
+            'fileId' => $docId,
+            'title' => $title,
+            'attachedAt' => $entry['attachedAt'] ?? null,
+            'reason' => 'Attached from vault',
+        ];
+    }
+
+    if (!$attachments && !empty($pack['vaultMappings'])) {
+        foreach ($pack['vaultMappings'] ?? [] as $map) {
+            $itemId = $map['checklistItemId'] ?? '';
+            $docId = $map['suggestedVaultDocId'] ?? '';
+            if ($itemId === '' || $docId === '') {
+                continue;
+            }
+            $attachments[$itemId] = [
+                'fileId' => $docId,
+                'title' => $map['fileTitle'] ?? ($vaultMap[$docId]['title'] ?? 'Vault document'),
+                'reason' => $map['reason'] ?? 'Previously mapped',
+                'confidence' => $map['confidence'] ?? null,
+            ];
+        }
+    }
+
+    return $attachments;
+}
+
+function pack_missing_checklist_item_ids(array $pack, array $attachments = []): array
+{
+    $missing = [];
+    foreach ($pack['items'] ?? [] as $item) {
+        $itemId = $item['itemId'] ?? ($item['id'] ?? '');
+        if ($itemId === '') {
+            continue;
+        }
+        if (empty($item['required'])) {
+            continue;
+        }
+        if (($item['status'] ?? 'pending') !== 'pending') {
+            continue;
+        }
+        if (!empty($attachments[$itemId])) {
+            continue;
+        }
+        $missing[] = $itemId;
+    }
+    return array_values(array_unique($missing));
 }
 function generate_pack_id(string $yojId, string $context = 'tender'): string
 {
@@ -1100,25 +1221,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         return $trim === '' ? str_repeat('_', $minLength) : htmlspecialchars($trim, ENT_QUOTES, 'UTF-8');
     };
 
-    $vaultMap = [];
-    foreach ($vaultFiles as $file) {
-        $vaultMap[$file['fileId'] ?? ''] = $file;
-    }
-
-    $attachments = [];
-    foreach ($pack['vaultMappings'] ?? [] as $map) {
-        $itemId = $map['checklistItemId'] ?? '';
-        $docId = $map['suggestedVaultDocId'] ?? '';
-        if ($itemId === '' || $docId === '') {
-            continue;
-        }
-        $attachments[$itemId] = [
-            'fileId' => $docId,
-            'title' => $map['fileTitle'] ?? ($vaultMap[$docId]['title'] ?? 'Vault document'),
-            'reason' => $map['reason'] ?? '',
-            'confidence' => $map['confidence'] ?? null,
-        ];
-    }
+    $attachments = pack_attachment_map($pack, $vaultFiles);
 
     $checklist = $pack['checklist'] ?? [];
     if ($options['pendingOnly']) {
