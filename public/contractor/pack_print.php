@@ -7,6 +7,10 @@ safe_page(function () {
     $yojId = $user['yojId'];
     $packId = trim($_GET['packId'] ?? '');
     $doc = trim($_GET['doc'] ?? 'index');
+    $allowedDocs = ['index', 'checklist', 'annexures', 'templates', 'full'];
+    if (!in_array($doc, $allowedDocs, true)) {
+        $doc = 'index';
+    }
     $context = detect_pack_context($packId);
     ensure_packs_env($yojId, $context);
 
@@ -24,6 +28,8 @@ safe_page(function () {
         'pendingOnly' => ($_GET['pendingOnly'] ?? '') === '1',
         'useLetterhead' => ($_GET['letterhead'] ?? '1') !== '0',
         'annexureId' => trim((string)($_GET['annexId'] ?? '')) ?: null,
+        'templateId' => trim((string)($_GET['tplId'] ?? '')) ?: null,
+        'annexurePreview' => ($_GET['annexurePreview'] ?? '') === '1',
     ];
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
     $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles, $annexureTemplates);

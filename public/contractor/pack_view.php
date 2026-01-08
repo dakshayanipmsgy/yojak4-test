@@ -82,6 +82,40 @@ safe_page(function () {
 
         <form id="status-form" method="post" action="/contractor/pack_mark_status.php"></form>
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-top:12px;">
+            <div class="card" style="display:grid; gap:12px;" id="checklist-toggle">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <h3 style="margin:0;"><?= sanitize('Checklist (quick toggle)'); ?></h3>
+                    <span class="pill"><?= sanitize(count($pack['checklist'] ?? []) . ' items'); ?></span>
+                </div>
+                <?php if (!empty($pack['checklist'])): ?>
+                    <div style="display:grid; gap:8px;">
+                        <?php foreach ($pack['checklist'] as $item): ?>
+                            <?php $itemId = $item['itemId'] ?? ($item['id'] ?? ''); ?>
+                            <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:grid; gap:6px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                                    <div>
+                                        <strong><?= sanitize($item['title'] ?? ''); ?></strong>
+                                        <?php if (!empty($item['description'])): ?>
+                                            <div class="muted" style="margin-top:4px;"><?= sanitize($item['description']); ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <span class="pill" style="<?= ($item['status'] ?? '') === 'done' ? 'border-color:#2ea043;color:#8ce99a;' : ''; ?>"><?= sanitize(ucfirst($item['status'] ?? 'pending')); ?></span>
+                                </div>
+                                <form method="post" action="/contractor/pack_checklist_toggle.php" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                    <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
+                                    <input type="hidden" name="itemId" value="<?= sanitize($itemId); ?>">
+                                    <button class="btn secondary" type="submit" name="status" value="pending"><?= sanitize('Mark Pending'); ?></button>
+                                    <button class="btn" type="submit" name="status" value="done"><?= sanitize('Mark Done'); ?></button>
+                                </form>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <p class="muted" style="margin:0;"><?= sanitize('No checklist items available yet.'); ?></p>
+                <?php endif; ?>
+            </div>
+
             <div class="card" style="display:grid; gap:12px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                     <h3 style="margin:0;"><?= sanitize('Pack items'); ?></h3>
@@ -157,11 +191,17 @@ safe_page(function () {
                                     <strong><?= sanitize($tpl['name'] ?? 'Template'); ?></strong>
                                     <div class="muted" style="margin-top:4px;"><?= sanitize($tpl['lastGeneratedAt'] ?? ''); ?></div>
                                 </div>
-                                <?php if (!empty($tpl['storedPath'])): ?>
-                                    <a class="btn secondary" href="<?= sanitize($tpl['storedPath']); ?>" target="_blank" rel="noopener"><?= sanitize('Open'); ?></a>
-                                <?php else: ?>
-                                    <span class="pill"><?= sanitize('Printable only'); ?></span>
-                                <?php endif; ?>
+                                <div class="buttons" style="gap:6px;">
+                                    <?php if (!empty($tpl['tplId'])): ?>
+                                        <a class="btn secondary" href="/contractor/template_preview_pack.php?packId=<?= sanitize($pack['packId']); ?>&tplId=<?= sanitize($tpl['tplId']); ?>&letterhead=1" data-print-base="/contractor/template_preview_pack.php?packId=<?= sanitize($pack['packId']); ?>&tplId=<?= sanitize($tpl['tplId']); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
+                                        <a class="btn" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=templates&tplId=<?= sanitize($tpl['tplId']); ?>&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=templates&tplId=<?= sanitize($tpl['tplId']); ?>" target="_blank" rel="noopener"><?= sanitize('Print'); ?></a>
+                                    <?php endif; ?>
+                                    <?php if (!empty($tpl['storedPath'])): ?>
+                                        <a class="btn secondary" href="<?= sanitize($tpl['storedPath']); ?>" target="_blank" rel="noopener"><?= sanitize('Open'); ?></a>
+                                    <?php else: ?>
+                                        <span class="pill"><?= sanitize('Printable only'); ?></span>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         <?php endforeach; ?>
                         <?php if (empty($pack['generatedTemplates'])): ?>
@@ -226,7 +266,7 @@ safe_page(function () {
                                 <div>
                                     <strong><?= sanitize($label); ?></strong>
                                     <?php if (pack_is_restricted_annexure_label($label)): ?>
-                                        <div class="muted" style="color:#ffb3b8;"><?= sanitize('Restricted'); ?></div>
+                                        <div class="muted" style="color:#ffb3b8;"><?= sanitize('Not supported in YOJAK'); ?></div>
                                     <?php endif; ?>
                                 </div>
                                 <span class="pill"><?= sanitize('Annexure'); ?></span>
@@ -243,64 +283,70 @@ safe_page(function () {
                     <div>
                         <h4 style="margin:0 0 6px 0;"><?= sanitize('Generated templates'); ?></h4>
                         <div style="display:grid;gap:6px;">
-                            <?php foreach (array_slice($annexureTemplates, 0, 5) as $tpl): ?>
-                                <div class="pill"><?= sanitize(($tpl['annexureCode'] ?? 'Annexure') . ' • ' . ($tpl['title'] ?? 'Template')); ?></div>
+                            <?php foreach ($annexureTemplates as $tpl): ?>
+                                <div style="border:1px solid #30363d;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                                    <div>
+                                        <strong><?= sanitize(($tpl['annexureCode'] ?? 'Annexure') . ' • ' . ($tpl['title'] ?? 'Template')); ?></strong>
+                                        <div class="muted" style="margin-top:4px;"><?= sanitize($tpl['type'] ?? 'Annexure'); ?></div>
+                                    </div>
+                                    <div class="buttons" style="gap:6px;">
+                                        <a class="btn secondary" href="/contractor/annexure_preview.php?packId=<?= sanitize($pack['packId']); ?>&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&letterhead=1" data-print-base="/contractor/annexure_preview.php?packId=<?= sanitize($pack['packId']); ?>&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
+                                        <a class="btn" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1" target="_blank" rel="noopener"><?= sanitize('Print'); ?></a>
+                                    </div>
+                                </div>
                             <?php endforeach; ?>
-                            <?php if (count($annexureTemplates) > 5): ?>
-                                <div class="muted"><?= sanitize('+' . (count($annexureTemplates) - 5) . ' more templates'); ?></div>
-                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endif; ?>
             </div>
-            <div class="card" style="display:grid; gap:12px;">
+            <div class="card" style="display:grid; gap:12px;" id="print-center">
                 <div>
-                    <h3 style="margin:0;"><?= sanitize('Print / Export'); ?></h3>
-                    <p class="muted" style="margin:0;">Print clean layouts or export ZIPs. No bid values are printed.</p>
+                    <h3 style="margin:0;"><?= sanitize('Print Center'); ?></h3>
+                    <p class="muted" style="margin:0;">Preview or print every section with letterhead on/off.</p>
                 </div>
-                <form id="print-options" method="get" action="/contractor/pack_print.php" style="display:grid; gap:8px;">
-                    <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
-                    <label class="field" style="margin:0;">
-                        <span class="muted" style="font-size:12px;"><?= sanitize('Include source snippets'); ?></span>
-                        <select name="snippets">
-                            <option value="1"><?= sanitize('Yes'); ?></option>
-                            <option value="0"><?= sanitize('No'); ?></option>
-                        </select>
-                    </label>
-                    <label class="field" style="margin:0;">
-                        <span class="muted" style="font-size:12px;"><?= sanitize('Include restricted annexure warning'); ?></span>
-                        <select name="restricted">
-                            <option value="1"><?= sanitize('Yes'); ?></option>
-                            <option value="0"><?= sanitize('No'); ?></option>
-                        </select>
-                    </label>
-                    <label class="field" style="margin:0;">
-                        <span class="muted" style="font-size:12px;"><?= sanitize('Print only pending checklist items'); ?></span>
-                        <select name="pendingOnly">
-                            <option value="0"><?= sanitize('No'); ?></option>
-                            <option value="1"><?= sanitize('Yes'); ?></option>
-                        </select>
-                    </label>
-                    <label class="field" style="margin:0;">
-                        <span class="muted" style="font-size:12px;"><?= sanitize('Use saved letterhead (logo/header/footer)'); ?></span>
-                        <select name="letterhead">
-                            <option value="1"><?= sanitize('Yes'); ?></option>
-                            <option value="0"><?= sanitize('No — reserve blank space'); ?></option>
-                        </select>
-                    </label>
-                </form>
-                <div class="buttons" style="gap:8px;">
-                    <button class="btn secondary" type="submit" form="print-options" name="doc" value="checklist"><?= sanitize('Print Checklist'); ?></button>
-                    <button class="btn secondary" type="submit" form="print-options" name="doc" value="annexures"><?= sanitize('Print Annexures'); ?></button>
-                    <button class="btn secondary" type="submit" form="print-options" name="doc" value="templates"><?= sanitize('Print Templates'); ?></button>
-                    <button class="btn" type="submit" form="print-options" name="doc" value="full"><?= sanitize('Print Full Pack'); ?></button>
+                <div class="flash" style="display:grid;gap:6px;background:#0f1625;border:1px solid #1f6feb;">
+                    <strong><?= sanitize('Stepper'); ?></strong>
+                    <ol style="margin:0 0 0 18px; padding:0; color:var(--text); line-height:1.5;">
+                        <li><?= sanitize('Review checklist'); ?></li>
+                        <li><?= sanitize('Generate annexures/templates'); ?></li>
+                        <li><?= sanitize('Print or export the full pack'); ?></li>
+                    </ol>
+                </div>
+                <label class="field" style="margin:0;">
+                    <span class="muted" style="font-size:12px;"><?= sanitize('Letterhead on print'); ?></span>
+                    <select id="letterhead-select">
+                        <option value="1"><?= sanitize('ON — use saved logo/header/footer'); ?></option>
+                        <option value="0"><?= sanitize('OFF — reserve blank space'); ?></option>
+                    </select>
+                </label>
+                <div class="muted" style="font-size:12px;"><?= sanitize('Header (30mm) and footer (20mm) space are always reserved for printing.'); ?></div>
+                <div style="display:grid; gap:8px;">
+                    <?php
+                    $docLinks = [
+                        ['id' => 'index', 'title' => 'Pack Index', 'desc' => 'Tender + contractor summary with key dates.'],
+                        ['id' => 'checklist', 'title' => 'Checklist', 'desc' => 'Checklist status table and notes.'],
+                        ['id' => 'annexures', 'title' => 'Annexures & Formats', 'desc' => 'Annexure list with generated templates.'],
+                        ['id' => 'templates', 'title' => 'Templates', 'desc' => 'Letters/undertakings from your profile.'],
+                        ['id' => 'full', 'title' => 'Full Pack', 'desc' => 'All sections in one print-ready set.'],
+                    ];
+                    ?>
+                    <?php foreach ($docLinks as $docLink): ?>
+                        <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                            <div>
+                                <strong><?= sanitize($docLink['title']); ?></strong>
+                                <div class="muted" style="margin-top:4px;"><?= sanitize($docLink['desc']); ?></div>
+                            </div>
+                            <div class="buttons" style="gap:6px;">
+                                <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
+                                <a class="btn" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>" target="_blank" rel="noopener"><?= sanitize('Print'); ?></a>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
                 <div class="buttons" style="gap:8px;">
-                    <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=index" target="_blank" rel="noopener"><?= sanitize('Print Index'); ?></a>
                     <a class="btn" href="/contractor/pack_export_zip.php?packId=<?= sanitize($pack['packId']); ?>&token=<?= sanitize($signedToken); ?>"><?= sanitize('Export ZIP'); ?></a>
                     <a class="btn secondary" href="/contractor/print_settings.php"><?= sanitize('Print header/footer settings'); ?></a>
                 </div>
-                <p class="muted" style="margin:0;font-size:12px;"><?= sanitize('Header/footer space is always reserved; logo is auto-resized to 35mm x 20mm.'); ?></p>
             </div>
             <div class="card" style="display:grid; gap:12px;">
                 <div>
@@ -345,6 +391,29 @@ safe_page(function () {
                 <a class="btn secondary" href="/contractor/vault.php"><?= sanitize('Open Vault'); ?></a>
             </div>
         </div>
+        <script>
+            (() => {
+                const select = document.getElementById('letterhead-select');
+                const updateLinks = () => {
+                    if (!select) {
+                        return;
+                    }
+                    const value = encodeURIComponent(select.value || '1');
+                    document.querySelectorAll('[data-print-base]').forEach((link) => {
+                        const base = link.getAttribute('data-print-base');
+                        if (!base) {
+                            return;
+                        }
+                        const joiner = base.includes('?') ? '&' : '?';
+                        link.setAttribute('href', `${base}${joiner}letterhead=${value}`);
+                    });
+                };
+                if (select) {
+                    select.addEventListener('change', updateLinks);
+                    updateLinks();
+                }
+            })();
+        </script>
         <?php
     });
 });
