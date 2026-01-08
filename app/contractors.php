@@ -310,7 +310,10 @@ function approve_pending_contractor(string $signupId, string $actor): ?array
     ];
     $contractor = normalize_contractor_profile($contractor);
     writeJsonAtomic($basePath . '/contractor.json', $contractor);
-    writeJsonAtomic(contractors_vault_index_path($yojId), []);
+    writeJsonAtomic(contractors_vault_index_path($yojId), [
+        'items' => [],
+        'updatedAt' => $now,
+    ]);
 
     $index = contractors_index();
     $index[] = [
@@ -581,6 +584,9 @@ function contractor_vault_index(string $yojId): array
     if (!is_array($index)) {
         return [];
     }
+    if (array_key_exists('items', $index) && is_array($index['items'])) {
+        $index = $index['items'];
+    }
     foreach ($index as &$record) {
         if (!is_array($record)) {
             $record = [];
@@ -591,6 +597,19 @@ function contractor_vault_index(string $yojId): array
         if (!isset($record['tags']) || !is_array($record['tags'])) {
             $record['tags'] = [];
         }
+        if (!isset($record['title']) || $record['title'] === '') {
+            $record['title'] = $record['originalName'] ?? ($record['storedName'] ?? 'Untitled');
+        }
+        if (!isset($record['originalName']) || $record['originalName'] === '') {
+            $record['originalName'] = $record['title'] ?? ($record['storedName'] ?? 'Untitled');
+        }
+        if (!isset($record['storedName']) || $record['storedName'] === '') {
+            $path = (string)($record['storedPath'] ?? '');
+            $record['storedName'] = $path !== '' ? basename($path) : ($record['originalName'] ?? ($record['fileId'] ?? ''));
+        }
+        if (!isset($record['sizeBytes']) && isset($record['size'])) {
+            $record['sizeBytes'] = (int)$record['size'];
+        }
     }
     unset($record);
     return $index;
@@ -598,12 +617,16 @@ function contractor_vault_index(string $yojId): array
 
 function save_contractor_vault_index(string $yojId, array $records): void
 {
-    writeJsonAtomic(contractors_vault_index_path($yojId), array_values($records));
+    writeJsonAtomic(contractors_vault_index_path($yojId), [
+        'items' => array_values($records),
+        'updatedAt' => now_kolkata()->format(DateTime::ATOM),
+    ]);
 }
 
 function generate_vault_file_id(): string
 {
-    return 'VF-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 6));
+    $date = now_kolkata()->format('Ymd');
+    return 'VLT-' . $date . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
 }
 
 function allowed_vault_mimes(): array
@@ -612,6 +635,7 @@ function allowed_vault_mimes(): array
         'application/pdf' => 'pdf',
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
+        'image/webp' => 'webp',
     ];
 }
 

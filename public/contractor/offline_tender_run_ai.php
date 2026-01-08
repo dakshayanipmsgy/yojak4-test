@@ -171,15 +171,27 @@ safe_page(function () {
         'schemaErrors' => array_slice((array)($aiState['schemaValidation']['errors'] ?? []), 0, 5),
     ]);
 
+    ai_log([
+        'event' => 'AI_RERUN',
+        'at' => $nowIso,
+        'provider' => $aiState['provider'] ?? '',
+        'model' => $aiResult['modelUsed'] ?? ($aiState['rawEnvelope']['model'] ?? ''),
+        'requestId' => $aiState['requestId'] ?? null,
+        'httpStatus' => $aiState['httpStatus'] ?? null,
+        'parsed' => (bool)($aiState['parsedOk'] ?? false),
+        'parseStage' => $aiState['parseStage'] ?? 'fallback_manual',
+        'errorsCount' => count($aiState['errors'] ?? []),
+    ]);
+
     if ($aiState['parsedOk']) {
         set_flash('success', 'AI responded successfully. Review the extracted values and apply them when ready.');
     } elseif (!empty($aiState['providerOk'])) {
         if (($aiState['schemaValidation']['enabled'] ?? false) && !($aiState['schemaValidation']['passed'] ?? true)) {
             set_flash('error', 'AI responded, but the structured JSON was missing required keys. Automatic retries/fallbacks have run; please review the debug details.');
         } elseif (trim((string)($aiState['rawText'] ?? '')) === '') {
-            set_flash('error', 'Gemini returned an empty final response. Streaming/retry/fallback have been attempted automatically. Consider switching to a fallback model in AI Studio.');
+            set_flash('error', 'AI response could not be parsed. You can retry or request assisted extraction.');
         } else {
-            set_flash('error', 'AI responded, but the output was not in JSON format. Review the debug details below and try again.');
+            set_flash('error', 'AI response could not be parsed. You can retry or request assisted extraction.');
         }
     } else {
         set_flash('error', 'The AI provider returned an error. Please review the debug details and retry.');

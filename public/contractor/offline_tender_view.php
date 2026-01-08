@@ -181,7 +181,7 @@ safe_page(function () {
                         <?php elseif ($aiEmpty): ?>
                             <?= sanitize('Gemini returned an empty final response. Streaming fallback, retry, and fallback model attempts were triggered automatically. Consider switching models in AI Studio if the issue persists.'); ?>
                         <?php elseif (!empty($ai['providerOk'])): ?>
-                            <?= sanitize('AI responded, but the output was not in the expected format. You can edit manually, or re-run AI. The raw AI text is shown below.'); ?>
+                            <?= sanitize('AI response could not be parsed. You can retry or request assisted extraction.'); ?>
                         <?php else: ?>
                             <?= sanitize('The AI provider reported a problem. Please review the debug info below and retry.'); ?>
                         <?php endif; ?>
@@ -192,6 +192,22 @@ safe_page(function () {
                                 <?php endforeach; ?>
                             </ul>
                         <?php endif; ?>
+                        <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <form method="post" action="/contractor/offline_tender_request_help.php" style="margin:0;">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                                <button class="btn secondary" type="submit"><?= sanitize('Request Assisted Extraction'); ?></button>
+                            </form>
+                        </div>
+                        <details style="margin-top:10px; border:1px solid #30363d; border-radius:10px; padding:10px; background:#0f1520;">
+                            <summary style="cursor:pointer; font-weight:600;"><?= sanitize('Debug details'); ?></summary>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                                <span class="pill"><?= sanitize('Provider: ' . ($ai['provider'] ?? 'unknown')); ?></span>
+                                <span class="pill"><?= sanitize('Model: ' . (($ai['rawEnvelope']['model'] ?? '') ?: 'unknown')); ?></span>
+                                <span class="pill"><?= sanitize('Request ID: ' . (($ai['requestId'] ?? 'n/a'))); ?></span>
+                                <span class="pill"><?= sanitize('Parse stage: ' . ($ai['parseStage'] ?? 'fallback_manual')); ?></span>
+                            </div>
+                        </details>
                     </div>
                 </div>
             <?php endif; ?>

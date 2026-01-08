@@ -94,7 +94,7 @@ safe_page(function () {
         <div class="card">
             <h3><?= sanitize('Shortcuts'); ?></h3>
             <div class="buttons">
-                <a class="btn" href="/contractor/vault_upload.php"><?= sanitize('Upload Document'); ?></a>
+                <a class="btn" href="/contractor/vault.php#vault-upload"><?= sanitize('Upload Document'); ?></a>
                 <a class="btn secondary" href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
                 <a class="btn secondary" href="/contractor/reminders.php"><?= sanitize('Reminders'); ?></a>
                 <a class="btn secondary" href="/contractor/support.php"><?= sanitize('Report Issue'); ?></a>
