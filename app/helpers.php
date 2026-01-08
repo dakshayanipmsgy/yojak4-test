@@ -122,6 +122,8 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/packs.log',
         DATA_PATH . '/logs/assisted_extraction.log',
         DATA_PATH . '/logs/print.log',
+        DATA_PATH . '/logs/contractor_profile.log',
+        DATA_PATH . '/logs/templates.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {

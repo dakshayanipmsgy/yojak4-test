@@ -11,7 +11,8 @@ safe_page(function () {
     }
 
     $title = get_app_config()['appName'] . ' | Contractor Profile';
-    $errors = [];
+    $errors = $_SESSION['contractor_profile_errors'] ?? [];
+    unset($_SESSION['contractor_profile_errors']);
     $form = [
         'name' => trim((string)($contractor['name'] ?? '')),
         'firmName' => trim((string)($contractor['firmName'] ?? '')),
@@ -32,82 +33,35 @@ safe_page(function () {
         'placeDefault' => trim((string)($contractor['placeDefault'] ?? '')),
     ];
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        require_csrf();
-        $form['name'] = trim($_POST['name'] ?? '');
-        $form['firmName'] = trim($_POST['firmName'] ?? '');
-        $form['firmType'] = trim($_POST['firmType'] ?? '');
-        $form['addressLine1'] = trim($_POST['addressLine1'] ?? '');
-        $form['addressLine2'] = trim($_POST['addressLine2'] ?? '');
-        $form['district'] = trim($_POST['district'] ?? '');
-        $form['state'] = trim($_POST['state'] ?? '');
-        $form['pincode'] = trim($_POST['pincode'] ?? '');
-        $form['authorizedSignatoryName'] = trim($_POST['authorizedSignatoryName'] ?? '');
-        $form['authorizedSignatoryDesignation'] = trim($_POST['authorizedSignatoryDesignation'] ?? '');
-        $form['email'] = trim($_POST['email'] ?? '');
-        $form['gstNumber'] = trim($_POST['gstNumber'] ?? '');
-        $form['panNumber'] = strtoupper(trim($_POST['panNumber'] ?? ''));
-        $form['bankName'] = trim($_POST['bankName'] ?? '');
-        $form['bankAccount'] = trim($_POST['bankAccount'] ?? '');
-        $form['ifsc'] = strtoupper(trim($_POST['ifsc'] ?? ''));
-        $form['placeDefault'] = trim($_POST['placeDefault'] ?? '');
-
-        $allowedFirmTypes = ['Proprietorship', 'Partnership', 'LLP', 'Company', 'Other'];
-        if ($form['name'] !== '' && strlen($form['name']) < 2) {
-            $errors[] = 'Name must be at least 2 characters.';
-        }
-        if ($form['firmName'] !== '' && strlen($form['firmName']) < 2) {
-            $errors[] = 'Firm name must be at least 2 characters.';
-        }
-        if ($form['firmType'] !== '' && !in_array($form['firmType'], $allowedFirmTypes, true)) {
-            $errors[] = 'Invalid firm type selected.';
-        }
-        if ($form['email'] !== '' && !filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'Invalid email address.';
-        }
-        if ($form['pincode'] !== '' && !preg_match('/^[0-9]{6}$/', $form['pincode'])) {
-            $errors[] = 'Pincode must be 6 digits.';
-        }
-        if ($form['panNumber'] !== '' && !preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/', $form['panNumber'])) {
-            $errors[] = 'PAN should follow standard format (e.g., ABCDE1234F).';
-        }
-        if ($form['gstNumber'] !== '' && !preg_match('/^[0-9A-Z]{15}$/', $form['gstNumber'])) {
-            $errors[] = 'GST number should be 15 characters.';
-        }
-        if ($form['ifsc'] !== '' && !preg_match('/^[A-Z]{4}0[A-Z0-9]{6}$/', $form['ifsc'])) {
-            $errors[] = 'Invalid IFSC code.';
-        }
-        if ($form['bankAccount'] !== '' && strlen($form['bankAccount']) > 30) {
-            $errors[] = 'Bank account number is too long.';
-        }
-
-        if (!$errors) {
-            $contractor['name'] = $form['name'];
-            $contractor['firmName'] = $form['firmName'];
-            $contractor['firmType'] = $form['firmType'];
-            $contractor['addressLine1'] = $form['addressLine1'];
-            $contractor['addressLine2'] = $form['addressLine2'];
-            $contractor['address'] = trim($form['addressLine1'] . ' ' . $form['addressLine2']);
-            $contractor['district'] = $form['district'];
-            $contractor['state'] = $form['state'];
-            $contractor['pincode'] = $form['pincode'];
-            $contractor['authorizedSignatoryName'] = $form['authorizedSignatoryName'];
-            $contractor['authorizedSignatoryDesignation'] = $form['authorizedSignatoryDesignation'];
-            $contractor['email'] = $form['email'];
-            $contractor['gstNumber'] = $form['gstNumber'];
-            $contractor['panNumber'] = $form['panNumber'];
-            $contractor['bankName'] = $form['bankName'];
-            $contractor['bankAccount'] = $form['bankAccount'];
-            $contractor['ifsc'] = $form['ifsc'];
-            $contractor['placeDefault'] = $form['placeDefault'];
-            save_contractor($contractor);
-            $_SESSION['user']['displayName'] = $form['firmName'] ?: ($form['name'] ?: $contractor['mobile']);
-            set_flash('success', 'Profile updated.');
-            redirect('/contractor/profile.php');
-        }
+    if (isset($_SESSION['contractor_profile_form']) && is_array($_SESSION['contractor_profile_form'])) {
+        $form = array_merge($form, $_SESSION['contractor_profile_form']);
+        unset($_SESSION['contractor_profile_form']);
     }
 
-    render_layout($title, function () use ($errors, $contractor, $form) {
+    $requiredFields = [
+        'firmName' => 'Firm name',
+        'firmType' => 'Firm type',
+        'addressLine1' => 'Address line 1',
+        'district' => 'District',
+        'state' => 'State',
+        'pincode' => 'Pincode',
+        'authorizedSignatoryName' => 'Authorized signatory name',
+    ];
+    $missing = [];
+    foreach ($requiredFields as $field => $label) {
+        if (trim((string)($form[$field] ?? '')) === '') {
+            $missing[] = $label;
+        }
+    }
+    $hasTaxId = trim((string)($form['gstNumber'] ?? '')) !== '' || trim((string)($form['panNumber'] ?? '')) !== '';
+    if (!$hasTaxId) {
+        $missing[] = 'GST or PAN';
+    }
+    $totalRequired = count($requiredFields) + 1;
+    $completedRequired = $totalRequired - count($missing);
+    $completionPercent = (int)round(($completedRequired / max(1, $totalRequired)) * 100);
+
+    render_layout($title, function () use ($errors, $contractor, $form, $completionPercent, $missing) {
         $districts = ['Bokaro', 'Chatra', 'Deoghar', 'Dhanbad', 'Dumka', 'East Singhbhum', 'Garhwa', 'Giridih', 'Godda', 'Gumla', 'Hazaribagh', 'Jamtara', 'Khunti', 'Koderma', 'Latehar', 'Lohardaga', 'Pakur', 'Palamu', 'Ramgarh', 'Ranchi', 'Sahebganj', 'Seraikela Kharsawan', 'Simdega', 'West Singhbhum'];
         $firmTypes = ['Proprietorship', 'Partnership', 'LLP', 'Company', 'Other'];
         ?>
@@ -116,6 +70,29 @@ safe_page(function () {
                 <h2 style="margin-bottom:6px;"><?= sanitize('Profile'); ?></h2>
                 <p class="muted" style="margin:0;"><?= sanitize('Keep your contact and firm details updated. These values auto-fill tender templates.'); ?></p>
             </div>
+            <div style="border:1px solid #30363d;border-radius:12px;padding:12px;background:#0f1520;display:grid;gap:10px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                    <div>
+                        <div style="font-weight:600;"><?= sanitize('Profile completion'); ?></div>
+                        <div class="muted" style="font-size:13px;"><?= sanitize('Missing fields will print as blanks.'); ?></div>
+                    </div>
+                    <div class="pill" style="border-color:#2ea043;color:#8ce99a;font-weight:700;"><?= sanitize($completionPercent . '%'); ?></div>
+                </div>
+                <div style="background:#0b111b;border-radius:999px;height:10px;overflow:hidden;border:1px solid #2a323c;">
+                    <div style="height:10px;width:<?= (int)$completionPercent; ?>%;background:linear-gradient(90deg,#2563eb,#22c55e);"></div>
+                </div>
+                <?php if ($missing): ?>
+                    <div>
+                        <div class="muted" style="font-size:13px;margin-bottom:6px;"><?= sanitize('Still missing:'); ?></div>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            <?php foreach ($missing as $item): ?>
+                                <span class="tag"><?= sanitize($item); ?></span>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <a class="btn secondary" href="#profile-form" style="width:max-content;color:var(--text);"><?= sanitize('Add now'); ?></a>
+                <?php endif; ?>
+            </div>
             <?php if ($errors): ?>
                 <div class="flashes">
                     <?php foreach ($errors as $error): ?>
@@ -123,7 +100,7 @@ safe_page(function () {
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
-            <form method="post" action="/contractor/profile.php" style="display:grid;gap:12px;">
+            <form id="profile-form" method="post" action="/contractor/profile_save.php" style="display:grid;gap:12px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
                     <div class="field">

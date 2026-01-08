@@ -473,7 +473,7 @@ safe_page(function () {
                     </form>
                     <div style="border:1px solid #30363d;border-radius:10px;padding:10px;">
                         <strong><?= sanitize('Letterhead preview'); ?></strong>
-                        <p class="muted" style="margin:6px 0 0;"><?= sanitize(!empty($printSettings['logoPathPublic']) ? 'Logo uploaded and will be resized automatically.' : 'No logo uploaded yet.'); ?></p>
+                        <p class="muted" style="margin:6px 0 0;"><?= sanitize(!empty($printSettings['logoPublicPath']) ? 'Logo uploaded and will be resized automatically.' : 'No logo uploaded yet.'); ?></p>
                         <p class="muted" style="margin:0;"><?= sanitize(!empty($printSettings['headerEnabled']) ? 'Header text enabled.' : 'Header text disabled (space reserved).'); ?></p>
                         <p class="muted" style="margin:0;"><?= sanitize(!empty($printSettings['footerEnabled']) ? 'Footer text enabled.' : 'Footer text disabled (space reserved).'); ?></p>
                     </div>
