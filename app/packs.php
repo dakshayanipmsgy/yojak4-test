@@ -152,7 +152,7 @@ function default_print_settings(): array
         'footerEnabled' => false,
         'footerText' => '',
         'logoEnabled' => false,
-        'logoPathPublic' => null,
+        'logoPublicPath' => null,
         'logoAlign' => 'left',
         'updatedAt' => now_kolkata()->format(DateTime::ATOM),
     ];
@@ -170,6 +170,9 @@ function load_contractor_print_settings(string $yojId): array
         if (!array_key_exists($key, $data)) {
             $data[$key] = $value;
         }
+    }
+    if (!array_key_exists('logoPublicPath', $data) && array_key_exists('logoPathPublic', $data)) {
+        $data['logoPublicPath'] = $data['logoPathPublic'];
     }
     if (!in_array($data['logoAlign'] ?? 'left', ['left', 'center', 'right'], true)) {
         $data['logoAlign'] = 'left';
@@ -1525,9 +1528,9 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $printSettings['logoEnabled'] = false;
     }
     $logoHtml = '';
-    if (!empty($printSettings['logoEnabled']) && !empty($printSettings['logoPathPublic'])) {
+    if (!empty($printSettings['logoEnabled']) && !empty($printSettings['logoPublicPath'])) {
         $align = $printSettings['logoAlign'] ?? 'left';
-        $logoHtml = '<div style="flex:0 0 auto;text-align:' . htmlspecialchars($align, ENT_QUOTES, 'UTF-8') . ';"><img class="logo" src="' . htmlspecialchars($printSettings['logoPathPublic'], ENT_QUOTES, 'UTF-8') . '" alt="Logo"></div>';
+        $logoHtml = '<div style="flex:0 0 auto;text-align:' . htmlspecialchars($align, ENT_QUOTES, 'UTF-8') . ';"><img class="logo" src="' . htmlspecialchars($printSettings['logoPublicPath'], ENT_QUOTES, 'UTF-8') . '" alt="Logo"></div>';
     }
     $headerText = '';
     if (!empty($printSettings['headerEnabled']) && trim((string)$printSettings['headerText']) !== '') {

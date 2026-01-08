@@ -48,6 +48,9 @@ safe_page(function () {
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <a class="btn secondary" href="/contractor/template_preview.php?tplId=<?= sanitize($tpl['tplId'] ?? ''); ?>" target="_blank" rel="noopener" style="color:var(--text);"><?= sanitize('Preview & Print'); ?></a>
+                        </div>
                         <p class="muted" style="margin:0;">Updated: <?= sanitize($tpl['updatedAt'] ?? ''); ?></p>
                     </div>
                 <?php endforeach; ?>

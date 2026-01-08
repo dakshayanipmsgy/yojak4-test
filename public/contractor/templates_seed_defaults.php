@@ -19,5 +19,12 @@ safe_page(function () {
         set_flash('success', 'Defaults already present.');
     }
 
+    logEvent(DATA_PATH . '/logs/templates.log', [
+        'event' => 'templates_seeded',
+        'yojId' => $yojId,
+        'createdCount' => count($created),
+        'ip' => mask_ip($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
+    ]);
+
     redirect('/contractor/templates.php');
 });

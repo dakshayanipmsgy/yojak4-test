@@ -48,6 +48,8 @@ function contractors_index(): array
 function contractor_profile_defaults(): array
 {
     return [
+        'yojId' => null,
+        'mobile' => null,
         'firmName' => null,
         'firmType' => null,
         'addressLine1' => null,
@@ -57,7 +59,6 @@ function contractor_profile_defaults(): array
         'pincode' => null,
         'authorizedSignatoryName' => null,
         'authorizedSignatoryDesignation' => null,
-        'mobile' => null,
         'email' => null,
         'gstNumber' => null,
         'panNumber' => null,
@@ -65,6 +66,7 @@ function contractor_profile_defaults(): array
         'bankAccount' => null,
         'ifsc' => null,
         'placeDefault' => null,
+        'updatedAt' => null,
     ];
 }
 
@@ -403,6 +405,7 @@ function save_contractor(array $contractor): void
         throw new InvalidArgumentException('Missing contractor id.');
     }
     $contractor = normalize_contractor_profile($contractor);
+    $contractor['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
     if (!array_key_exists('mustResetPassword', $contractor)) {
         $contractor['mustResetPassword'] = false;
     }

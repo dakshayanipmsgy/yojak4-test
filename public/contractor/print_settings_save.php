@@ -32,7 +32,7 @@ safe_page(function () {
     $settings['footerText'] = $footerText;
     $settings['headerEnabled'] = $headerEnabled;
     $settings['footerEnabled'] = $footerEnabled;
-    $settings['logoEnabled'] = $logoEnabled && !empty($settings['logoPathPublic']);
+    $settings['logoEnabled'] = $logoEnabled && !empty($settings['logoPublicPath']);
     $settings['logoAlign'] = $logoAlign;
     save_contractor_print_settings($yojId, $settings);
 

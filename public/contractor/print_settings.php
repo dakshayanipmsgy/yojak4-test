@@ -14,6 +14,32 @@ safe_page(function () {
                 <h2 style="margin:0 0 6px 0;"><?= sanitize('Print Header / Footer'); ?></h2>
                 <p class="muted" style="margin:0;"><?= sanitize('Configure reusable header, footer and logo for contractor printouts. Reserved space is always kept so your letterhead fits. Toggle the letterhead option while printing if you are using pre-printed paper.'); ?></p>
             </div>
+            <div style="border:1px solid #30363d;border-radius:12px;padding:12px;background:#0f1520;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                    <strong><?= sanitize('Letterhead Preview'); ?></strong>
+                    <span class="pill"><?= sanitize('Printable preview'); ?></span>
+                </div>
+                <div style="border:1px dashed #2a323c;border-radius:10px;background:#0b111b;padding:12px;display:grid;gap:12px;">
+                    <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;border-bottom:1px solid #2a323c;padding-bottom:10px;min-height:90px;">
+                        <div style="flex:0 0 auto;max-width:160px;text-align:<?= sanitize($settings['logoAlign'] ?? 'left'); ?>;">
+                            <?php if (!empty($settings['logoEnabled']) && !empty($settings['logoPublicPath'])): ?>
+                                <img src="<?= sanitize($settings['logoPublicPath']); ?>" alt="<?= sanitize('Logo preview'); ?>" style="max-width:140px;max-height:80px;object-fit:contain;border:1px solid #30363d;border-radius:8px;padding:6px;background:#0f1520;">
+                            <?php else: ?>
+                                <div style="width:140px;height:80px;border:1px dashed #30363d;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:12px;"><?= sanitize('Logo off'); ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <div style="flex:1;white-space:pre-wrap;color:#e5e7eb;">
+                            <?= !empty($settings['headerEnabled']) && trim((string)($settings['headerText'] ?? '')) !== '' ? nl2br(sanitize($settings['headerText'])) : '<span class="muted">Header text disabled</span>'; ?>
+                        </div>
+                    </div>
+                    <div style="min-height:120px;color:#9ca3af;">
+                        <?= sanitize('Your tender template content will appear here during printing.'); ?>
+                    </div>
+                    <div style="border-top:1px solid #2a323c;padding-top:10px;white-space:pre-wrap;">
+                        <?= !empty($settings['footerEnabled']) && trim((string)($settings['footerText'] ?? '')) !== '' ? nl2br(sanitize($settings['footerText'])) : '<span class="muted">Footer text disabled</span>'; ?>
+                    </div>
+                </div>
+            </div>
             <form method="post" action="/contractor/print_settings_save.php" style="display:grid;gap:12px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                 
@@ -74,9 +100,9 @@ safe_page(function () {
                 <h3 style="margin:0 0 6px 0;"><?= sanitize('Upload Logo'); ?></h3>
                 <p class="muted" style="margin:0;"><?= sanitize('PNG/JPG/WebP up to 2MB. Resized to fit 35mm x 20mm box for clean prints.'); ?></p>
             </div>
-            <?php if (!empty($settings['logoPathPublic'])): ?>
+            <?php if (!empty($settings['logoPublicPath'])): ?>
                 <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-                    <img src="<?= sanitize($settings['logoPathPublic']); ?>" alt="<?= sanitize('Current logo'); ?>" style="max-height:60px;max-width:180px;object-fit:contain;border:1px solid #30363d;border-radius:8px;padding:6px;background:#0f1520;">
+                    <img src="<?= sanitize($settings['logoPublicPath']); ?>" alt="<?= sanitize('Current logo'); ?>" style="max-height:60px;max-width:180px;object-fit:contain;border:1px solid #30363d;border-radius:8px;padding:6px;background:#0f1520;">
                     <span class="pill"><?= sanitize('Logo enabled: ' . (!empty($settings['logoEnabled']) ? 'Yes' : 'No')); ?></span>
                 </div>
             <?php endif; ?>

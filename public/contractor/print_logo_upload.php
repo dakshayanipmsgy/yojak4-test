@@ -77,8 +77,26 @@ safe_page(function () {
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0775, true);
     }
-    $destPath = $uploadDir . '/logo.png';
-    if (!imagepng($canvas, $destPath)) {
+    $extension = $mime === 'image/png' ? 'png' : ($mime === 'image/webp' ? 'webp' : 'jpg');
+    foreach (['png', 'jpg', 'webp'] as $ext) {
+        $oldPath = $uploadDir . '/logo.' . $ext;
+        if (file_exists($oldPath)) {
+            unlink($oldPath);
+        }
+    }
+    $destPath = $uploadDir . '/logo.' . $extension;
+    $saved = false;
+    if ($extension === 'png') {
+        $saved = imagepng($canvas, $destPath);
+    } elseif ($extension === 'webp') {
+        $saved = imagewebp($canvas, $destPath);
+    } else {
+        $white = imagecolorallocate($canvas, 255, 255, 255);
+        imagefill($canvas, 0, 0, $white);
+        imagecopyresampled($canvas, $source, 0, 0, 0, 0, $targetW, $targetH, $width, $height);
+        $saved = imagejpeg($canvas, $destPath, 90);
+    }
+    if (!$saved) {
         set_flash('error', 'Failed to save resized logo.');
         redirect('/contractor/print_settings.php');
         return;
@@ -88,7 +106,7 @@ safe_page(function () {
     imagedestroy($canvas);
 
     $settings = load_contractor_print_settings($yojId);
-    $settings['logoPathPublic'] = str_replace(PUBLIC_PATH, '', $destPath);
+    $settings['logoPublicPath'] = str_replace(PUBLIC_PATH, '', $destPath);
     $settings['logoEnabled'] = true;
     save_contractor_print_settings($yojId, $settings);
 
