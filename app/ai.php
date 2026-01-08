@@ -477,6 +477,72 @@ function ai_schema_validation(string $purpose, ?array $json): array
     return $result;
 }
 
+function sanitize_schema_for_provider(array $schema, string $provider, array &$stats = []): array
+{
+    $stats = $stats ?: ['strippedKeys' => 0];
+    if ($provider !== 'gemini') {
+        return $schema;
+    }
+
+    $stripKeys = [
+        'additionalProperties',
+        '$schema',
+        'definitions',
+        'patternProperties',
+        'oneOf',
+        'anyOf',
+        'allOf',
+        'unevaluatedProperties',
+        'dependentSchemas',
+        'propertyNames',
+        'if',
+        'then',
+        'else',
+    ];
+
+    $sanitizeNode = function (array $node) use (&$sanitizeNode, &$stats, $stripKeys): array {
+        foreach ($stripKeys as $key) {
+            if (array_key_exists($key, $node)) {
+                unset($node[$key]);
+                $stats['strippedKeys'] = (int)($stats['strippedKeys'] ?? 0) + 1;
+            }
+        }
+
+        if (isset($node['properties']) && is_array($node['properties'])) {
+            foreach ($node['properties'] as $propKey => $propValue) {
+                if (is_array($propValue)) {
+                    $node['properties'][$propKey] = $sanitizeNode($propValue);
+                }
+            }
+        }
+
+        if (isset($node['items'])) {
+            if (is_array($node['items'])) {
+                $keys = array_keys($node['items']);
+                $isList = $keys === range(0, count($keys) - 1);
+                if ($isList) {
+                    $candidate = $node['items'][0] ?? null;
+                    if (is_array($candidate)) {
+                        $node['items'] = $sanitizeNode($candidate);
+                    } else {
+                        unset($node['items']);
+                        $stats['strippedKeys'] = (int)($stats['strippedKeys'] ?? 0) + 1;
+                    }
+                } else {
+                    $node['items'] = $sanitizeNode($node['items']);
+                }
+            } else {
+                unset($node['items']);
+                $stats['strippedKeys'] = (int)($stats['strippedKeys'] ?? 0) + 1;
+            }
+        }
+
+        return $node;
+    };
+
+    return $sanitizeNode($schema);
+}
+
 function ai_apply_provider_result(array &$result, array $providerResult, array $config, bool $expectJson, float $temperature, int $maxTokens, string $provider, string $purpose): void
 {
     $result['httpStatus'] = $providerResult['httpStatus'] ?? $result['httpStatus'];
@@ -513,6 +579,7 @@ function ai_apply_provider_result(array &$result, array $providerResult, array $
         'stream' => $providerResult['stream'] ?? false,
         'structured' => $providerResult['structured'] ?? false,
         'responseMimeType' => $providerResult['responseMimeType'] ?? null,
+        'schemaStrippedKeys' => $providerResult['schemaStrippedKeys'] ?? null,
         'responseId' => $result['responseId'],
         'finishReasons' => $result['finishReasons'],
         'blockReason' => $result['promptBlockReason'],
@@ -876,6 +943,8 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
     $attemptType = $options['attemptType'] ?? 'primary';
     $structured = (bool)($options['structured'] ?? false);
     $responseSchema = $options['responseSchema'] ?? null;
+    $responseMimeType = $options['responseMimeType'] ?? null;
+    $schemaStrippedKeys = $options['schemaStrippedKeys'] ?? null;
     $urlBase = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($model);
     $url = $urlBase . ($stream ? ':streamGenerateContent' : ':generateContent') . '?key=' . urlencode((string)($config['apiKey'] ?? ''));
     $payload = [
@@ -897,8 +966,10 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
             'max_output_tokens' => $maxTokens,
         ],
     ];
+    if (is_string($responseMimeType) && $responseMimeType !== '') {
+        $payload['generation_config']['response_mime_type'] = $responseMimeType;
+    }
     if ($structured && is_array($responseSchema)) {
-        $payload['generation_config']['response_mime_type'] = 'application/json';
         $payload['generation_config']['response_schema'] = $responseSchema;
         $payload['generation_config']['response_json_schema'] = $responseSchema;
     }
@@ -1056,9 +1127,10 @@ function ai_provider_response_gemini(array $config, string $systemPrompt, string
         'temperatureUsed' => $temperature,
         'maxTokensUsed' => $maxTokens,
         'structured' => $structured,
-        'responseMimeType' => $structured ? 'application/json' : null,
+        'responseMimeType' => $responseMimeType,
         'schemaApplied' => $structured && is_array($responseSchema),
         'responseSchema' => $structured ? $responseSchema : null,
+        'schemaStrippedKeys' => $schemaStrippedKeys,
         'diagnosticError' => $diagnosticError,
         'rawHeaders' => $responseHeaders,
     ];
@@ -1121,10 +1193,13 @@ function ai_call(array $params): array
     if ($fallbackModelOverride !== null) {
         $purposeModels['fallbackModel'] = $fallbackModelOverride !== '' ? $fallbackModelOverride : null;
     }
-    $structuredOutput = ($config['provider'] ?? '') === 'gemini'
-        && ai_purpose_key($purpose) === 'offlineTenderExtract'
-        && !empty($purposeModels['useStructuredJson']);
-    $responseSchema = $structuredOutput && function_exists('offline_tender_response_schema') ? offline_tender_response_schema() : null;
+    $schemaStats = ['strippedKeys' => 0];
+    $responseSchema = null;
+    if ($provider === 'gemini' && ai_purpose_key($purpose) === 'offlineTenderExtract' && function_exists('offline_tender_response_schema')) {
+        $responseSchema = sanitize_schema_for_provider(offline_tender_response_schema(), $provider, $schemaStats);
+    }
+    $structuredOutput = false;
+    $responseMimeType = $expectJson ? 'application/json' : null;
     $temperature = isset($params['temperature']) ? max(0.1, min(1.0, (float)$params['temperature'])) : 0.2;
     $maxTokens = isset($params['maxTokens']) ? max(200, (int)$params['maxTokens']) : 500;
 
@@ -1179,6 +1254,8 @@ function ai_call(array $params): array
                         'attemptType' => 'primary',
                         'structured' => $structuredOutput,
                         'responseSchema' => $responseSchema,
+                        'responseMimeType' => $responseMimeType,
+                        'schemaStrippedKeys' => $schemaStats['strippedKeys'] ?? 0,
                     ]
                 );
                 $result['attempts'][] = $primary;
@@ -1197,6 +1274,8 @@ function ai_call(array $params): array
                                 'attemptType' => 'stream_fallback',
                                 'structured' => $structuredOutput,
                                 'responseSchema' => $responseSchema,
+                                'responseMimeType' => $responseMimeType,
+                                'schemaStrippedKeys' => $schemaStats['strippedKeys'] ?? 0,
                             ]
                         );
                         $result['attempts'][] = $streamAttempt;
@@ -1215,6 +1294,8 @@ function ai_call(array $params): array
                                 'attemptType' => 'retry',
                                 'structured' => $structuredOutput,
                                 'responseSchema' => $responseSchema,
+                                'responseMimeType' => $responseMimeType,
+                                'schemaStrippedKeys' => $schemaStats['strippedKeys'] ?? 0,
                             ]
                         );
                         $result['attempts'][] = $retryAttempt;
@@ -1234,6 +1315,8 @@ function ai_call(array $params): array
                                 'attemptType' => 'fallback_model',
                                 'structured' => $structuredOutput,
                                 'responseSchema' => $responseSchema,
+                                'responseMimeType' => $responseMimeType,
+                                'schemaStrippedKeys' => $schemaStats['strippedKeys'] ?? 0,
                             ]
                         );
                         $result['attempts'][] = $fallbackAttempt;
@@ -1253,6 +1336,8 @@ function ai_call(array $params): array
                             'attemptType' => 'fallback_model',
                             'structured' => $structuredOutput,
                             'responseSchema' => $responseSchema,
+                            'responseMimeType' => $responseMimeType,
+                            'schemaStrippedKeys' => $schemaStats['strippedKeys'] ?? 0,
                         ]
                     );
                     $result['attempts'][] = $fallbackAttempt;
@@ -1293,6 +1378,8 @@ function ai_call(array $params): array
                 'attemptType' => 'fallback_schema',
                 'structured' => $structuredOutput,
                 'responseSchema' => $responseSchema,
+                'responseMimeType' => $responseMimeType,
+                'schemaStrippedKeys' => $schemaStats['strippedKeys'] ?? 0,
             ]
         );
         $result['attempts'][] = $fallbackAttempt;
@@ -1350,6 +1437,7 @@ function ai_call(array $params): array
             'structured' => $attempt['structured'] ?? false,
             'responseMimeType' => $attempt['responseMimeType'] ?? null,
             'schemaApplied' => $attempt['schemaApplied'] ?? false,
+            'schemaStrippedKeys' => $attempt['schemaStrippedKeys'] ?? null,
             'diagnosticError' => $attempt['diagnosticError'] ?? null,
         ]);
 
@@ -1373,6 +1461,7 @@ function ai_call(array $params): array
             'structured' => $attempt['structured'] ?? false,
             'responseMimeType' => $attempt['responseMimeType'] ?? null,
             'purpose' => $purpose,
+            'schemaStrippedKeys' => $attempt['schemaStrippedKeys'] ?? null,
         ]);
     }
 
@@ -1401,6 +1490,7 @@ function ai_call(array $params): array
         'structured' => is_array($result['rawEnvelope']) ? ($result['rawEnvelope']['structured'] ?? false) : false,
         'schemaValidation' => $result['schemaValidation'],
         'responseMimeType' => is_array($result['rawEnvelope']) ? ($result['rawEnvelope']['responseMimeType'] ?? null) : null,
+        'schemaStrippedKeys' => is_array($result['rawEnvelope']) ? ($result['rawEnvelope']['schemaStrippedKeys'] ?? null) : null,
         'diagnosticError' => $result['diagnosticError'],
     ]);
 

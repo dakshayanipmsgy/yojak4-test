@@ -3,6 +3,30 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../app/bootstrap.php';
 
 safe_page(function () {
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        redirect('/contractor/vault.php#vault-upload');
+        return;
+    }
+
+    $isJson = isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+        && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+    $respond = function (array $payload, int $status = 200) use ($isJson): void {
+        if ($isJson) {
+            http_response_code($status);
+            header('Content-Type: application/json');
+            echo json_encode($payload);
+            return;
+        }
+        if (!empty($payload['errors']) && is_array($payload['errors'])) {
+            foreach ($payload['errors'] as $error) {
+                set_flash('error', (string)$error);
+            }
+        } elseif (!empty($payload['message'])) {
+            set_flash('success', (string)$payload['message']);
+        }
+        redirect('/contractor/vault.php');
+    };
+
     $user = require_role('contractor');
     $contractor = load_contractor($user['yojId']);
     if (!$contractor) {
@@ -10,25 +34,10 @@ safe_page(function () {
         return;
     }
 
-    $title = get_app_config()['appName'] . ' | Upload';
-    $errors = [];
-    $titleInput = '';
-    $docType = 'Other';
-    $tagsInput = '';
-
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_csrf();
-        $titleInput = trim($_POST['title'] ?? '');
-        $docType = trim($_POST['docType'] ?? 'Other');
+        $errors = [];
         $tagsInput = trim($_POST['tags'] ?? '');
-
-        if ($titleInput === '') {
-            $errors[] = 'Title is required.';
-        }
-        $allowedDocTypes = ['GST','PAN','ITR','BalanceSheet','Affidavit','Undertaking','ExperienceCert','Other'];
-        if (!in_array($docType, $allowedDocTypes, true)) {
-            $errors[] = 'Invalid document type selected.';
-        }
 
         $tags = [];
         if ($tagsInput !== '') {
@@ -55,9 +64,9 @@ safe_page(function () {
 
         if (!$errors && isset($_FILES['document'])) {
             $file = $_FILES['document'];
-            $maxSize = 10 * 1024 * 1024;
+            $maxSize = 15 * 1024 * 1024;
             if (($file['size'] ?? 0) > $maxSize) {
-                $errors[] = 'File too large. Max 10MB allowed.';
+                $errors[] = 'File too large. Max 15MB allowed.';
             }
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
             $mime = $finfo ? finfo_file($finfo, $file['tmp_name']) : '';
@@ -65,11 +74,18 @@ safe_page(function () {
                 finfo_close($finfo);
             }
             $allowed = allowed_vault_mimes();
-            if (!isset($allowed[$mime])) {
+            $extension = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
+            $blockedExtensions = ['php', 'phtml', 'phar', 'js', 'exe', 'sh', 'bat', 'cmd', 'com', 'msi'];
+            if ($extension !== '' && in_array($extension, $blockedExtensions, true)) {
+                $errors[] = 'File type not allowed.';
+            } elseif (!isset($allowed[$mime])) {
                 $errors[] = 'Unsupported file type.';
             } else {
-                $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-                if ($extension !== $allowed[$mime]) {
+                $allowedExts = [$allowed[$mime]];
+                if ($mime === 'image/jpeg') {
+                    $allowedExts[] = 'jpeg';
+                }
+                if (!in_array($extension, $allowedExts, true)) {
                     $errors[] = 'File extension does not match the detected file type.';
                 }
             }
@@ -78,28 +94,36 @@ safe_page(function () {
         if (!$errors) {
             $fileId = generate_vault_file_id();
             $ext = allowed_vault_mimes()[$mime];
-            ensure_contractor_upload_dir($contractor['yojId']);
-            $destination = contractor_upload_dir($contractor['yojId']) . '/' . $fileId . '.' . $ext;
+            $originalName = basename((string)$file['name']);
+            $storedName = $fileId . '.' . $ext;
+            $vaultFilesDir = contractors_vault_files_path($contractor['yojId']);
+            if (!is_dir($vaultFilesDir)) {
+                mkdir($vaultFilesDir, 0775, true);
+            }
+            $destination = $vaultFilesDir . '/' . $storedName;
             if (!move_uploaded_file($file['tmp_name'], $destination)) {
                 $errors[] = 'Failed to store the uploaded file.';
             } else {
-                $storedPath = str_replace(PUBLIC_PATH, '', $destination);
+                $uploadedAt = now_kolkata()->format(DateTime::ATOM);
                 $record = [
                     'fileId' => $fileId,
                     'docId' => $fileId,
-                    'title' => $titleInput,
-                    'category' => $docType,
-                    'docType' => $docType,
-                    'tags' => $tags,
-                    'storedPath' => $storedPath,
+                    'title' => pathinfo($originalName, PATHINFO_FILENAME),
+                    'category' => 'Other',
+                    'docType' => 'Other',
+                    'originalName' => $originalName,
+                    'storedName' => $storedName,
+                    'storedPath' => $destination,
                     'mime' => $mime,
+                    'size' => (int)$file['size'],
                     'sizeBytes' => (int)$file['size'],
-                    'uploadedAt' => now_kolkata()->format(DateTime::ATOM),
+                    'tags' => $tags,
+                    'uploadedAt' => $uploadedAt,
                     'deletedAt' => null,
                 ];
 
                 $index = contractor_vault_index($contractor['yojId']);
-                $index[] = $record;
+                array_unshift($index, $record);
                 save_contractor_vault_index($contractor['yojId'], $index);
 
                 $fileDir = ensure_vault_file_dir($contractor['yojId'], $fileId);
@@ -108,60 +132,42 @@ safe_page(function () {
                 $meta['source'] = 'uploaded';
                 writeJsonAtomic($fileDir . '/meta.json', $meta);
 
-                logEvent(DATA_PATH . '/logs/uploads.log', [
-                    'event' => 'contractor_upload',
-                    'fileId' => $fileId,
+                logEvent(DATA_PATH . '/logs/vault_upload.log', [
+                    'at' => $uploadedAt,
+                    'event' => 'VAULT_UPLOAD',
                     'yojId' => $contractor['yojId'],
-                    'mime' => $mime,
-                    'sizeBytes' => (int)$file['size'],
+                    'fileId' => $fileId,
+                    'result' => 'success',
+                    'errorCode' => null,
+                    'ua' => $_SERVER['HTTP_USER_AGENT'] ?? '',
+                    'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
                 ]);
 
-                set_flash('success', 'File uploaded to vault.');
-                redirect('/contractor/vault.php');
+                $respond([
+                    'ok' => true,
+                    'message' => 'File uploaded to vault.',
+                    'item' => $record,
+                    'downloadUrl' => '/contractor/vault_download.php?fileId=' . urlencode($fileId),
+                ]);
+                return;
             }
         }
-    }
 
-    render_layout($title, function () use ($errors, $titleInput, $docType, $tagsInput) {
-        ?>
-        <div class="card">
-            <h2><?= sanitize('Upload Document'); ?></h2>
-            <p class="muted"><?= sanitize('PDF, JPG, or PNG up to 10MB.'); ?></p>
-            <?php if ($errors): ?>
-                <div class="flashes">
-                    <?php foreach ($errors as $error): ?>
-                        <div class="flash error"><?= sanitize($error); ?></div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-            <form method="post" action="/contractor/vault_upload.php" enctype="multipart/form-data">
-                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                <div class="field">
-                    <label for="title"><?= sanitize('Title'); ?></label>
-                    <input id="title" name="title" value="<?= sanitize($titleInput); ?>" required>
-                </div>
-                <div class="field">
-                    <label for="docType"><?= sanitize('Document type'); ?></label>
-                    <select id="docType" name="docType">
-                        <?php foreach (['GST','PAN','ITR','BalanceSheet','Affidavit','Undertaking','ExperienceCert','Other'] as $type): ?>
-                            <option value="<?= sanitize($type); ?>" <?= $type === $docType ? 'selected' : ''; ?>><?= sanitize($type); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="field">
-                    <label for="tags"><?= sanitize('Tags (comma separated)'); ?></label>
-                    <input id="tags" name="tags" value="<?= sanitize($tagsInput); ?>" placeholder="license, fy2023">
-                </div>
-                <div class="field">
-                    <label for="document"><?= sanitize('Choose file'); ?></label>
-                    <input id="document" name="document" type="file" accept=".pdf,.jpg,.jpeg,.png" required>
-                </div>
-                <div class="buttons">
-                    <button class="btn" type="submit"><?= sanitize('Upload'); ?></button>
-                    <a class="btn secondary" href="/contractor/vault.php"><?= sanitize('Back'); ?></a>
-                </div>
-            </form>
-        </div>
-        <?php
-    });
+        logEvent(DATA_PATH . '/logs/vault_upload.log', [
+            'at' => now_kolkata()->format(DateTime::ATOM),
+            'event' => 'VAULT_UPLOAD',
+            'yojId' => $contractor['yojId'],
+            'fileId' => null,
+            'result' => 'fail',
+            'errorCode' => $errors[0] ?? 'upload_failed',
+            'ua' => $_SERVER['HTTP_USER_AGENT'] ?? '',
+            'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+        ]);
+
+        $respond([
+            'ok' => false,
+            'errors' => $errors ?: ['Upload failed. Please retry.'],
+        ], 400);
+        return;
+    }
 });
