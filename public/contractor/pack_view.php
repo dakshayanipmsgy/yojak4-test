@@ -16,13 +16,9 @@ safe_page(function () {
     }
     $contractor = load_contractor($yojId) ?? [];
     $vaultFiles = contractor_vault_index($yojId);
-    $suggestions = pack_vault_suggestions($pack, $vaultFiles);
-    $mappings = [];
-    foreach ($pack['vaultMappings'] ?? [] as $map) {
-        if (!empty($map['checklistItemId'])) {
-            $mappings[$map['checklistItemId']] = $map;
-        }
-    }
+    $attachments = pack_attachment_map($pack, $vaultFiles);
+    $missingIds = pack_missing_checklist_item_ids($pack, $attachments);
+    $suggestions = pack_vault_suggestions($pack, $vaultFiles, $attachments);
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
 
     $progress = pack_progress_percent($pack);
@@ -30,7 +26,7 @@ safe_page(function () {
     $title = get_app_config()['appName'] . ' | ' . ($pack['title'] ?? 'Tender Pack');
     $signedToken = pack_signed_token($pack['packId'], $yojId);
 
-    render_layout($title, function () use ($pack, $progress, $stats, $signedToken, $contractor, $suggestions, $mappings, $annexureTemplates) {
+    render_layout($title, function () use ($pack, $progress, $stats, $signedToken, $contractor, $suggestions, $attachments, $missingIds, $annexureTemplates) {
         ?>
         <div class="card" style="display:grid; gap:10px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
@@ -82,6 +78,53 @@ safe_page(function () {
 
         <form id="status-form" method="post" action="/contractor/pack_mark_status.php"></form>
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-top:12px;">
+            <div class="card" style="display:grid; gap:12px;" id="missing-docs">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <h3 style="margin:0;"><?= sanitize('Missing documents'); ?></h3>
+                    <span class="pill" style="<?= $missingIds ? 'border-color:#f85149;color:#ffb3b8;' : ''; ?>"><?= sanitize(count($missingIds) . ' pending'); ?></span>
+                </div>
+                <p class="muted" style="margin:0;"><?= sanitize('Required checklist items still pending without a vault attachment.'); ?></p>
+                <?php if ($missingIds): ?>
+                    <div style="display:grid; gap:8px;">
+                        <?php foreach ($pack['items'] ?? [] as $item): ?>
+                            <?php $itemId = $item['itemId'] ?? ($item['id'] ?? ''); ?>
+                            <?php if (!in_array($itemId, $missingIds, true)) { continue; } ?>
+                            <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:grid; gap:6px;">
+                                <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                                    <div>
+                                        <strong><?= sanitize($item['title'] ?? ''); ?></strong>
+                                        <div class="muted" style="margin-top:4px;"><?= sanitize($item['description'] ?? ''); ?></div>
+                                    </div>
+                                    <span class="pill"><?= sanitize(ucfirst($item['status'] ?? 'pending')); ?></span>
+                                </div>
+                                <?php $itemSuggestions = $suggestions[$itemId] ?? []; ?>
+                                <?php if ($itemSuggestions): ?>
+                                    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                                        <?php foreach ($itemSuggestions as $suggested): ?>
+                                            <form method="post" action="/contractor/pack_attach_from_vault.php" style="display:flex; gap:6px; align-items:center;">
+                                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                                <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
+                                                <input type="hidden" name="itemId" value="<?= sanitize($itemId); ?>">
+                                                <input type="hidden" name="vaultDocId" value="<?= sanitize($suggested['suggestedVaultDocId'] ?? ''); ?>">
+                                                <button class="btn secondary" type="submit"><?= sanitize('Attach ' . ($suggested['fileTitle'] ?? 'Vault doc')); ?></button>
+                                                <span class="pill"><?= sanitize($suggested['confidenceLabel'] ?? 'Medium'); ?></span>
+                                            </form>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <div class="muted" style="font-size:12px;"><?= sanitize($itemSuggestions[0]['reason'] ?? 'Suggested match'); ?></div>
+                                <?php else: ?>
+                                    <div class="muted" style="font-size:12px;"><?= sanitize('No vault suggestion yet. Update tags in Vault to improve matches.'); ?></div>
+                                    <a class="btn secondary" href="/contractor/vault.php"><?= sanitize('Open Vault'); ?></a>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="flash" style="background:#0f1625;border:1px solid #2ea043;">
+                        <?= sanitize('All required items have vault attachments or are no longer pending.'); ?>
+                    </div>
+                <?php endif; ?>
+            </div>
             <div class="card" style="display:grid; gap:12px;" id="checklist-toggle">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
                     <h3 style="margin:0;"><?= sanitize('Checklist (quick toggle)'); ?></h3>
@@ -134,19 +177,22 @@ safe_page(function () {
                 <?php endif; ?>
                 <div style="display:grid; gap:10px;">
                     <?php foreach ($pack['items'] ?? [] as $item): ?>
+                        <?php $itemId = $item['itemId'] ?? ($item['id'] ?? ''); ?>
+                        <?php $itemSuggestions = $itemId !== '' ? ($suggestions[$itemId] ?? []) : []; ?>
+                        <?php $attached = $itemId !== '' ? ($attachments[$itemId] ?? null) : null; ?>
                         <div style="border:1px solid #30363d; border-radius:12px; padding:10px; display:grid; gap:8px;">
                             <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
                                 <div>
                                     <strong><?= sanitize($item['title'] ?? ''); ?></strong>
                                     <div class="muted" style="margin-top:4px;"><?= sanitize($item['description'] ?? ''); ?></div>
                                     <div class="pill" style="margin-top:6px;"><?= !empty($item['required']) ? sanitize('Required') : sanitize('Optional'); ?></div>
-                                    <?php if (!empty($mappings[$item['itemId']] ?? null)): ?>
+                                    <?php if (!empty($attachments[$item['itemId']] ?? null)): ?>
                                         <div class="pill" style="margin-top:6px; border-color:#1f6feb; color:#9cc4ff;">
-                                            <?= sanitize('Mapped: ' . (($mappings[$item['itemId']]['fileTitle'] ?? 'Vault doc')) . ' (' . ($mappings[$item['itemId']]['suggestedVaultDocId'] ?? '') . ')'); ?>
+                                            <?= sanitize('Attached: ' . ($attachments[$item['itemId']]['title'] ?? 'Vault doc') . ' (' . ($attachments[$item['itemId']]['fileId'] ?? '') . ')'); ?>
                                         </div>
                                     <?php endif; ?>
                                 </div>
-                                <select name="statuses[<?= sanitize($item['itemId']); ?>]" class="pill" style="min-width:140px;" form="status-form">
+                                <select name="statuses[<?= sanitize($itemId); ?>]" class="pill" style="min-width:140px;" form="status-form">
                                     <?php foreach (['pending','uploaded','generated','done'] as $status): ?>
                                         <option value="<?= sanitize($status); ?>" <?= ($item['status'] ?? '') === $status ? 'selected' : ''; ?>><?= sanitize(ucfirst($status)); ?></option>
                                     <?php endforeach; ?>
@@ -156,7 +202,7 @@ safe_page(function () {
                                 <form method="post" action="/contractor/pack_upload_item.php" enctype="multipart/form-data" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                                     <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
-                                    <input type="hidden" name="itemId" value="<?= sanitize($item['itemId']); ?>">
+                                    <input type="hidden" name="itemId" value="<?= sanitize($itemId); ?>">
                                     <label class="btn secondary" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
                                         <input type="file" name="documents[]" accept=".pdf,.jpg,.jpeg,.png" multiple required style="position:absolute; width:1px; height:1px; opacity:0;" onchange="this.form.submit();">
                                         <?= sanitize('Upload'); ?>
@@ -166,6 +212,36 @@ safe_page(function () {
                                 <?php foreach (($item['fileRefs'] ?? []) as $file): ?>
                                     <a class="pill" href="<?= sanitize($file['path'] ?? '#'); ?>" target="_blank" rel="noopener"><?= sanitize($file['name'] ?? 'File'); ?></a>
                                 <?php endforeach; ?>
+                            </div>
+                            <div style="display:grid; gap:6px;">
+                                <?php if ($attached): ?>
+                                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                        <span class="pill" style="border-color:#1f6feb; color:#9cc4ff;"><?= sanitize('Vault linked: ' . ($attached['title'] ?? 'Vault doc')); ?></span>
+                                        <form method="post" action="/contractor/pack_detach_vault.php">
+                                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                            <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
+                                            <input type="hidden" name="itemId" value="<?= sanitize($itemId); ?>">
+                                            <input type="hidden" name="vaultDocId" value="<?= sanitize($attached['fileId'] ?? ''); ?>">
+                                            <button class="btn secondary" type="submit"><?= sanitize('Detach'); ?></button>
+                                        </form>
+                                    </div>
+                                <?php elseif ($itemSuggestions): ?>
+                                    <div class="muted" style="font-size:12px;"><?= sanitize('Attach from vault suggestions'); ?></div>
+                                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                        <?php foreach ($itemSuggestions as $suggested): ?>
+                                            <form method="post" action="/contractor/pack_attach_from_vault.php" style="display:flex; gap:6px; align-items:center;">
+                                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                                <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
+                                                <input type="hidden" name="itemId" value="<?= sanitize($itemId); ?>">
+                                                <input type="hidden" name="vaultDocId" value="<?= sanitize($suggested['suggestedVaultDocId'] ?? ''); ?>">
+                                                <button class="btn secondary" type="submit"><?= sanitize('Attach ' . ($suggested['fileTitle'] ?? 'Vault doc')); ?></button>
+                                                <span class="pill"><?= sanitize($suggested['confidenceLabel'] ?? 'Medium'); ?></span>
+                                            </form>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="muted" style="font-size:12px;"><?= sanitize('No vault suggestions yet. Tag vault files to improve matches.'); ?></div>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -351,13 +427,15 @@ safe_page(function () {
             <div class="card" style="display:grid; gap:12px;">
                 <div>
                     <h3 style="margin:0;"><?= sanitize('Suggested attachments'); ?></h3>
-                    <p class="muted" style="margin:0;">Based on your vault tags. Attachments are linked, not copied.</p>
+                    <p class="muted" style="margin:0;">Rule-based vault matches (GST/PAN/ITR/etc.). Attachments are linked, not copied.</p>
                 </div>
                 <div style="display:grid; gap:10px;">
                     <?php $displayed = 0; ?>
                     <?php foreach ($pack['checklist'] ?? [] as $item): ?>
                         <?php if ($displayed >= 25) { break; } ?>
-                        <?php $displayed++; $itemId = $item['itemId'] ?? ($item['id'] ?? ''); $map = $itemId !== '' && isset($mappings[$itemId]) ? $mappings[$itemId] : null; $suggested = $itemId !== '' && isset($suggestions[$itemId]) ? $suggestions[$itemId] : null; ?>
+                        <?php $displayed++; $itemId = $item['itemId'] ?? ($item['id'] ?? ''); ?>
+                        <?php $attached = $itemId !== '' ? ($attachments[$itemId] ?? null) : null; ?>
+                        <?php $itemSuggestions = $itemId !== '' ? ($suggestions[$itemId] ?? []) : []; ?>
                         <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:grid; gap:6px;">
                             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <div>
@@ -366,19 +444,22 @@ safe_page(function () {
                                 </div>
                                 <span class="pill"><?= sanitize(ucfirst($item['status'] ?? 'pending')); ?></span>
                             </div>
-                            <?php if ($map): ?>
-                                <div class="pill" style="border-color:#2ea043; color:#8ce99a;"><?= sanitize('Mapped: ' . ($map['fileTitle'] ?? 'Vault doc') . ' (' . ($map['suggestedVaultDocId'] ?? '') . ')'); ?></div>
-                            <?php elseif ($suggested): ?>
-                                <form method="post" action="/contractor/pack_map_vault.php" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                                    <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
-                                    <input type="hidden" name="itemId" value="<?= sanitize($itemId); ?>">
-                                    <input type="hidden" name="fileId" value="<?= sanitize($suggested['suggestedVaultDocId'] ?? ''); ?>">
-                                    <input type="hidden" name="reason" value="<?= sanitize($suggested['reason'] ?? 'Suggested match'); ?>">
-                                    <input type="hidden" name="confidence" value="<?= sanitize((string)($suggested['confidence'] ?? 0.6)); ?>">
-                                    <div class="muted" style="flex:1; min-width:200px;"><?= sanitize('Suggested: ' . ($suggested['fileTitle'] ?? '') . ' (' . ($suggested['suggestedVaultDocId'] ?? '') . ')'); ?></div>
-                                    <button class="btn secondary" type="submit"><?= sanitize('Attach from Vault'); ?></button>
-                                </form>
+                            <?php if ($attached): ?>
+                                <div class="pill" style="border-color:#2ea043; color:#8ce99a;"><?= sanitize('Attached: ' . ($attached['title'] ?? 'Vault doc') . ' (' . ($attached['fileId'] ?? '') . ')'); ?></div>
+                            <?php elseif ($itemSuggestions): ?>
+                                <div style="display:grid; gap:6px;">
+                                    <?php foreach ($itemSuggestions as $suggested): ?>
+                                        <form method="post" action="/contractor/pack_attach_from_vault.php" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                            <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
+                                            <input type="hidden" name="itemId" value="<?= sanitize($itemId); ?>">
+                                            <input type="hidden" name="vaultDocId" value="<?= sanitize($suggested['suggestedVaultDocId'] ?? ''); ?>">
+                                            <div class="muted" style="flex:1; min-width:200px;"><?= sanitize('Suggested: ' . ($suggested['fileTitle'] ?? '') . ' (' . ($suggested['suggestedVaultDocId'] ?? '') . ')'); ?></div>
+                                            <span class="pill"><?= sanitize($suggested['confidenceLabel'] ?? 'Medium'); ?></span>
+                                            <button class="btn secondary" type="submit"><?= sanitize('Attach from Vault'); ?></button>
+                                        </form>
+                                    <?php endforeach; ?>
+                                </div>
                             <?php else: ?>
                                 <div class="muted"><?= sanitize('No suggestion yet. Tag vault files to improve matches.'); ?></div>
                             <?php endif; ?>
