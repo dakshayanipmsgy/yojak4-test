@@ -11,15 +11,15 @@ safe_page(function () {
     }
 
     $query = trim($_GET['q'] ?? '');
-    $categoryFilter = trim($_GET['category'] ?? '');
+    $docTypeFilter = trim($_GET['docType'] ?? '');
     $showDeleted = isset($_GET['showDeleted']) && $_GET['showDeleted'] === '1';
 
     $files = contractor_vault_index($contractor['yojId']);
-    $filtered = array_filter($files, function ($file) use ($query, $categoryFilter, $showDeleted) {
+    $filtered = array_filter($files, function ($file) use ($query, $docTypeFilter, $showDeleted) {
         if (!$showDeleted && !empty($file['deletedAt'])) {
             return false;
         }
-        if ($categoryFilter !== '' && ($file['category'] ?? '') !== $categoryFilter) {
+        if ($docTypeFilter !== '' && ($file['docType'] ?? ($file['category'] ?? '')) !== $docTypeFilter) {
             return false;
         }
         if ($query === '') {
@@ -31,8 +31,8 @@ safe_page(function () {
 
     $title = get_app_config()['appName'] . ' | Vault';
 
-    render_layout($title, function () use ($filtered, $query, $categoryFilter, $showDeleted) {
-        $categories = ['All', 'GST', 'PAN', 'ITR', 'Affidavit', 'Experience', 'BalanceSheet', 'Other'];
+    render_layout($title, function () use ($filtered, $query, $docTypeFilter, $showDeleted) {
+        $docTypes = ['All', 'GST', 'PAN', 'ITR', 'BalanceSheet', 'Affidavit', 'Undertaking', 'ExperienceCert', 'Other'];
         ?>
         <div class="card">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
@@ -45,10 +45,10 @@ safe_page(function () {
             <form method="get" action="/contractor/vault.php" style="margin-top:12px;">
                 <input type="text" name="q" placeholder="<?= sanitize('Search title or tags...'); ?>" value="<?= sanitize($query); ?>" style="width:100%; margin-bottom:10px;">
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <?php foreach ($categories as $cat): ?>
-                        <?php $value = $cat === 'All' ? '' : $cat; ?>
-                        <button name="category" value="<?= sanitize($value); ?>" class="pill" style="cursor:pointer; border-color: <?= $categoryFilter === $value ? 'var(--primary)' : '#30363d'; ?>; color: <?= $categoryFilter === $value ? '#fff' : 'var(--muted)'; ?>; background: <?= $categoryFilter === $value ? 'var(--primary)' : '#111820'; ?>;">
-                            <?= sanitize($cat); ?>
+                    <?php foreach ($docTypes as $type): ?>
+                        <?php $value = $type === 'All' ? '' : $type; ?>
+                        <button name="docType" value="<?= sanitize($value); ?>" class="pill" style="cursor:pointer; border-color: <?= $docTypeFilter === $value ? 'var(--primary)' : '#30363d'; ?>; color: <?= $docTypeFilter === $value ? '#fff' : 'var(--muted)'; ?>; background: <?= $docTypeFilter === $value ? 'var(--primary)' : '#111820'; ?>;">
+                            <?= sanitize($type); ?>
                         </button>
                     <?php endforeach; ?>
                     <label class="pill" style="display:inline-flex; align-items:center; gap:6px;">
@@ -68,7 +68,7 @@ safe_page(function () {
                     <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
                         <div>
                             <h3 style="margin:0;"><?= sanitize($file['title'] ?? 'Untitled'); ?></h3>
-                            <p class="muted" style="margin:4px 0 0;"><?= sanitize($file['fileId'] ?? ''); ?> • <?= sanitize(ucfirst($file['category'] ?? '')); ?> • <?= sanitize(format_bytes((int)($file['sizeBytes'] ?? 0))); ?></p>
+                            <p class="muted" style="margin:4px 0 0;"><?= sanitize($file['docId'] ?? ($file['fileId'] ?? '')); ?> • <?= sanitize(($file['docType'] ?? ($file['category'] ?? 'Other'))); ?> • <?= sanitize(format_bytes((int)($file['sizeBytes'] ?? 0))); ?></p>
                             <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
                                 <?php foreach (($file['tags'] ?? []) as $tag): ?>
                                     <span class="tag"><?= sanitize($tag); ?></span>
@@ -96,10 +96,10 @@ safe_page(function () {
                                     <input name="title" value="<?= sanitize($file['title'] ?? ''); ?>" required>
                                 </div>
                                 <div class="field">
-                                    <label><?= sanitize('Category'); ?></label>
-                                    <select name="category" required>
-                                        <?php foreach (['GST','PAN','ITR','Affidavit','Experience','BalanceSheet','Other'] as $cat): ?>
-                                            <option value="<?= sanitize($cat); ?>" <?= ($file['category'] ?? '') === $cat ? 'selected' : ''; ?>><?= sanitize($cat); ?></option>
+                                    <label><?= sanitize('Document type'); ?></label>
+                                    <select name="docType" required>
+                                        <?php foreach (['GST','PAN','ITR','BalanceSheet','Affidavit','Undertaking','ExperienceCert','Other'] as $type): ?>
+                                            <option value="<?= sanitize($type); ?>" <?= (($file['docType'] ?? ($file['category'] ?? '')) === $type) ? 'selected' : ''; ?>><?= sanitize($type); ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>

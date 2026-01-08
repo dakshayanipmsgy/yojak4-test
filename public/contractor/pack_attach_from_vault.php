@@ -12,18 +12,31 @@ safe_page(function () {
     $yojId = $user['yojId'];
     $packId = trim($_POST['packId'] ?? '');
     $itemId = trim($_POST['itemId'] ?? '');
-    $fileId = trim($_POST['fileId'] ?? '');
+    $vaultDocId = trim($_POST['vaultDocId'] ?? '');
+
+    if ($packId === '' || $itemId === '' || $vaultDocId === '') {
+        set_flash('error', 'Select a checklist item and vault document.');
+        redirect('/contractor/pack_view.php?packId=' . urlencode($packId));
+        return;
+    }
+
     $context = detect_pack_context($packId);
     ensure_packs_env($yojId, $context);
-
-    $pack = $packId !== '' ? load_pack($yojId, $packId, $context) : null;
+    $pack = load_pack($yojId, $packId, $context);
     if (!$pack || ($pack['yojId'] ?? '') !== $yojId) {
         render_error_page('Pack not found.');
         return;
     }
 
-    if ($itemId === '' || $fileId === '') {
-        set_flash('error', 'Select an item and vault document to map.');
+    $itemExists = false;
+    foreach ($pack['items'] ?? [] as $item) {
+        if (($item['itemId'] ?? '') === $itemId || ($item['id'] ?? '') === $itemId) {
+            $itemExists = true;
+            break;
+        }
+    }
+    if (!$itemExists) {
+        set_flash('error', 'Checklist item not found.');
         redirect('/contractor/pack_view.php?packId=' . urlencode($packId));
         return;
     }
@@ -31,7 +44,7 @@ safe_page(function () {
     $vaultFiles = contractor_vault_index($yojId);
     $match = null;
     foreach ($vaultFiles as $file) {
-        if (($file['fileId'] ?? '') === $fileId && empty($file['deletedAt'])) {
+        if (($file['fileId'] ?? '') === $vaultDocId && empty($file['deletedAt'])) {
             $match = $file;
             break;
         }
@@ -52,26 +65,25 @@ safe_page(function () {
     }
     $updated[] = [
         'checklistItemId' => $itemId,
-        'vaultDocId' => $fileId,
+        'vaultDocId' => $vaultDocId,
         'fileName' => $match['title'] ?? 'Vault document',
         'attachedAt' => now_kolkata()->format(DateTime::ATOM),
     ];
-
     $pack['attachmentsPlan'] = $updated;
     $pack['missingChecklistItemIds'] = pack_missing_checklist_item_ids($pack, pack_attachment_map($pack, $vaultFiles));
     $pack['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
     save_pack($pack, $context);
+
+    upsert_missing_docs_reminder($yojId, $pack, count($pack['missingChecklistItemIds'] ?? []));
 
     logEvent(DATA_PATH . '/logs/vault.log', [
         'event' => 'pack_attach_from_vault',
         'yojId' => $yojId,
         'packId' => $packId,
         'itemId' => $itemId,
-        'fileId' => $fileId,
+        'vaultDocId' => $vaultDocId,
     ]);
 
-    upsert_missing_docs_reminder($yojId, $pack, count($pack['missingChecklistItemIds'] ?? []));
-
     set_flash('success', 'Vault document attached to checklist item.');
-    redirect('/contractor/pack_view.php?packId=' . urlencode($packId));
+    redirect('/contractor/pack_view.php?packId=' . urlencode($packId) . '#missing-docs');
 });

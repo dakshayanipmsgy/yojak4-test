@@ -17,7 +17,7 @@ safe_page(function () {
 
     $fileId = trim($_POST['fileId'] ?? '');
     $title = trim($_POST['title'] ?? '');
-    $category = trim($_POST['category'] ?? '');
+    $docType = trim($_POST['docType'] ?? '');
     $tagsInput = trim($_POST['tags'] ?? '');
 
     $errors = [];
@@ -27,9 +27,9 @@ safe_page(function () {
     if ($title === '') {
         $errors[] = 'Title is required.';
     }
-    $allowedCategories = ['GST','PAN','ITR','Affidavit','Experience','BalanceSheet','Other'];
-    if (!in_array($category, $allowedCategories, true)) {
-        $errors[] = 'Invalid category.';
+    $allowedDocTypes = ['GST','PAN','ITR','BalanceSheet','Affidavit','Undertaking','ExperienceCert','Other'];
+    if (!in_array($docType, $allowedDocTypes, true)) {
+        $errors[] = 'Invalid document type.';
     }
 
     $tags = [];
@@ -59,8 +59,10 @@ safe_page(function () {
             if (!empty($record['deletedAt'])) {
                 $errors[] = 'Cannot edit a deleted file.';
             } else {
+                $record['docId'] = $record['docId'] ?? $fileId;
                 $record['title'] = $title;
-                $record['category'] = $category;
+                $record['category'] = $docType;
+                $record['docType'] = $docType;
                 $record['tags'] = $tags;
             }
             break;
@@ -84,7 +86,9 @@ safe_page(function () {
         $meta = readJson($metaPath);
         if (is_array($meta)) {
             $meta['title'] = $title;
-            $meta['category'] = $category;
+            $meta['category'] = $docType;
+            $meta['docType'] = $docType;
+            $meta['docId'] = $meta['docId'] ?? $fileId;
             $meta['tags'] = $tags;
             writeJsonAtomic($metaPath, $meta);
         }
