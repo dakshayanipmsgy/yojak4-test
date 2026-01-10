@@ -1,10 +1,87 @@
 <?php
 declare(strict_types=1);
 
-const ASSISTED_EXTRACTION_DIR = DATA_PATH . '/support/assisted_extraction';
-const ASSISTED_EXTRACTION_INDEX = ASSISTED_EXTRACTION_DIR . '/index.json';
-const ASSISTED_EXTRACTION_LOG = DATA_PATH . '/logs/assisted_extraction.log';
-const ASSISTED_REQUIRED_FIELDS = ['tender', 'lists', 'checklist'];
+const ASSISTED_TASKS_DIR = DATA_PATH . '/assisted_tasks';
+const ASSISTED_TASKS_INDEX = ASSISTED_TASKS_DIR . '/index.json';
+const ASSISTED_TASKS_LOG = DATA_PATH . '/logs/assisted_tasks.log';
+const ASSISTED_LEGACY_DIR = DATA_PATH . '/support/assisted_extraction';
+
+function ensure_assisted_extraction_env(): void
+{
+    $paths = [
+        ASSISTED_TASKS_DIR,
+        dirname(ASSISTED_TASKS_LOG),
+        DATA_PATH . '/_archive/assisted_extraction_old',
+    ];
+
+    foreach ($paths as $path) {
+        if (!is_dir($path)) {
+            mkdir($path, 0775, true);
+        }
+    }
+
+    if (is_dir(ASSISTED_LEGACY_DIR)) {
+        assisted_archive_legacy_storage();
+    }
+
+    if (!file_exists(ASSISTED_TASKS_INDEX)) {
+        writeJsonAtomic(ASSISTED_TASKS_INDEX, []);
+    }
+
+    if (!file_exists(ASSISTED_TASKS_LOG)) {
+        touch(ASSISTED_TASKS_LOG);
+    }
+}
+
+function assisted_archive_legacy_storage(): void
+{
+    if (!is_dir(ASSISTED_LEGACY_DIR)) {
+        return;
+    }
+
+    $archiveRoot = DATA_PATH . '/_archive/assisted_extraction_old';
+    if (!is_dir($archiveRoot)) {
+        mkdir($archiveRoot, 0775, true);
+    }
+
+    $stamp = now_kolkata()->format('Ymd_His');
+    $target = $archiveRoot . '/legacy_' . $stamp;
+    @rename(ASSISTED_LEGACY_DIR, $target);
+}
+
+function assisted_tasks_index(): array
+{
+    ensure_assisted_extraction_env();
+    $index = readJson(ASSISTED_TASKS_INDEX);
+    return is_array($index) ? array_values($index) : [];
+}
+
+function save_assisted_tasks_index(array $records): void
+{
+    ensure_assisted_extraction_env();
+    writeJsonAtomic(ASSISTED_TASKS_INDEX, array_values($records));
+}
+
+function assisted_task_path(string $taskId): string
+{
+    return ASSISTED_TASKS_DIR . '/' . $taskId . '.json';
+}
+
+function assisted_task_snapshot_path(string $taskId): string
+{
+    return ASSISTED_TASKS_DIR . '/' . $taskId . '.delivered.json';
+}
+
+function assisted_generate_task_id(): string
+{
+    $date = now_kolkata()->format('Ymd');
+    do {
+        $suffix = strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
+        $candidate = 'AST-' . $date . '-' . $suffix;
+    } while (file_exists(assisted_task_path($candidate)));
+
+    return $candidate;
+}
 
 function assisted_clean_string($value): ?string
 {
@@ -97,1081 +174,455 @@ function assisted_normalize_formats($value): array
     return $result;
 }
 
-function assisted_normalize_fees($value): array
-{
-    $fees = is_array($value) ? $value : [];
-    return [
-        'tenderFeeText' => assisted_clean_string($fees['tenderFeeText'] ?? ''),
-        'emdText' => assisted_clean_string($fees['emdText'] ?? ''),
-        'sdText' => assisted_clean_string($fees['sdText'] ?? ''),
-        'pgText' => assisted_clean_string($fees['pgText'] ?? ''),
-    ];
-}
-
-function assisted_map_payload_schema(array $payload): array
+function assisted_task_form_defaults(): array
 {
     return [
-        'submissionDeadline' => $payload['submissionDeadline'] ?? null,
-        'openingDate' => $payload['openingDate'] ?? null,
-        'completionMonths' => $payload['completionMonths'] ?? null,
-        'bidValidityDays' => $payload['bidValidityDays'] ?? null,
-        'eligibilityDocs' => $payload['eligibilityDocs'] ?? [],
-        'annexures' => $payload['annexures'] ?? [],
-        'formats' => $payload['formats'] ?? [],
-        'checklist' => $payload['checklist'] ?? [],
-        'fees' => $payload['fees'] ?? [],
-    ];
-}
-
-function assisted_schema_v2_structure(): array
-{
-    return [
-        'tender' => [
-            'documentType' => 'string',
-            'tenderTitle' => 'string|null',
-            'tenderNumber' => 'string|null',
-            'issuingAuthority' => 'string|null',
-            'departmentName' => 'string|null',
-            'location' => 'string|null',
-            'submissionDeadline' => 'string|null',
-            'openingDate' => 'string|null',
-            'completionMonths' => 'number|null',
-            'validityDays' => 'number|null',
-        ],
-        'lists' => [
-            'eligibilityDocs' => 'array',
-            'annexures' => 'array',
-            'formats' => 'array',
-            'restricted' => 'array',
-        ],
-        'fees' => 'object',
-        'checklist' => 'array',
-        'templates' => 'array',
-        'snippets' => 'array',
-    ];
-}
-
-function ensure_assisted_extraction_env(): void
-{
-    $paths = [
-        ASSISTED_EXTRACTION_DIR,
-        DATA_PATH . '/defaults',
-        dirname(ASSISTED_EXTRACTION_LOG),
-    ];
-
-    foreach ($paths as $path) {
-        if (!is_dir($path)) {
-            mkdir($path, 0775, true);
-        }
-    }
-
-    if (!file_exists(ASSISTED_EXTRACTION_INDEX)) {
-        writeJsonAtomic(ASSISTED_EXTRACTION_INDEX, []);
-    }
-
-    if (!file_exists(ASSISTED_EXTRACTION_LOG)) {
-        touch(ASSISTED_EXTRACTION_LOG);
-    }
-}
-
-function assisted_extraction_request_path(string $reqId): string
-{
-    return ASSISTED_EXTRACTION_DIR . '/' . $reqId . '.json';
-}
-
-function assisted_extraction_index(): array
-{
-    ensure_assisted_extraction_env();
-    $index = readJson(ASSISTED_EXTRACTION_INDEX);
-    return is_array($index) ? array_values($index) : [];
-}
-
-function save_assisted_extraction_index(array $records): void
-{
-    ensure_assisted_extraction_env();
-    writeJsonAtomic(ASSISTED_EXTRACTION_INDEX, array_values($records));
-}
-
-function assisted_generate_req_id(): string
-{
-    $date = now_kolkata()->format('Ymd');
-    do {
-        $suffix = random_int(1000, 9999);
-        $candidate = 'AEX-' . $date . '-' . $suffix;
-    } while (file_exists(assisted_extraction_request_path($candidate)));
-
-    return $candidate;
-}
-
-function assisted_active_request_for_tender(string $yojId, string $offtdId): ?array
-{
-    foreach (assisted_extraction_index() as $entry) {
-        if (($entry['yojId'] ?? '') !== $yojId || ($entry['offtdId'] ?? '') !== $offtdId) {
-            continue;
-        }
-        if (in_array($entry['status'] ?? '', ['requested', 'in_progress', 'delivered'], true)) {
-            $request = assisted_load_request($entry['reqId'] ?? '');
-            if ($request) {
-                return $request;
-            }
-        }
-    }
-    return null;
-}
-
-function assisted_recent_request_count(string $yojId, int $days = 7): int
-{
-    $threshold = now_kolkata()->modify("-{$days} days");
-    $count = 0;
-    foreach (assisted_extraction_index() as $entry) {
-        if (($entry['yojId'] ?? '') !== $yojId) {
-            continue;
-        }
-        try {
-            $createdAt = isset($entry['createdAt']) ? new DateTimeImmutable((string)$entry['createdAt']) : null;
-            if ($createdAt && $createdAt >= $threshold) {
-                $count++;
-            }
-        } catch (Throwable $e) {
-            continue;
-        }
-    }
-    return $count;
-}
-
-function assisted_validate_request_limits(string $yojId, string $offtdId): array
-{
-    $errors = [];
-    $active = assisted_active_request_for_tender($yojId, $offtdId);
-    if ($active && ($active['status'] ?? '') !== 'closed') {
-        $errors[] = 'An assisted extraction request already exists for this tender.';
-    }
-    if (assisted_recent_request_count($yojId, 7) >= 3) {
-        $errors[] = 'Weekly assisted extraction limit reached (3 per week).';
-    }
-    return $errors;
-}
-
-function assisted_pick_tender_pdf(array $tender): ?array
-{
-    foreach ($tender['sourceFiles'] ?? [] as $file) {
-        $path = $file['path'] ?? '';
-        if ($path === '') {
-            continue;
-        }
-        $fullPath = PUBLIC_PATH . $path;
-        if (!file_exists($fullPath)) {
-            continue;
-        }
-        $mime = mime_content_type($fullPath) ?: ($file['mime'] ?? '');
-        return [
-            'storedPath' => $path,
-            'fileName' => $file['name'] ?? basename($fullPath),
-            'size' => (int)($file['sizeBytes'] ?? (file_exists($fullPath) ? filesize($fullPath) : 0)),
-            'mime' => $mime ?: 'application/pdf',
-        ];
-    }
-    return null;
-}
-
-function assisted_create_request(string $yojId, string $offtdId, string $notes, array $tender): array
-{
-    ensure_assisted_extraction_env();
-    $errors = assisted_validate_request_limits($yojId, $offtdId);
-    if ($errors) {
-        throw new RuntimeException(implode(' ', $errors));
-    }
-
-    $reqId = assisted_generate_req_id();
-    $now = now_kolkata()->format(DateTime::ATOM);
-    $pdfRef = assisted_pick_tender_pdf($tender);
-
-    $request = [
-        'reqId' => $reqId,
-        'yojId' => $yojId,
-        'offtdId' => $offtdId,
-        'status' => 'requested',
-        'createdAt' => $now,
-        'assignedTo' => null,
-        'notesFromContractor' => mb_substr($notes, 0, 500),
-        'tenderPdfRef' => $pdfRef,
-        'assistantDraft' => [
-            'submissionDeadline' => null,
-            'openingDate' => null,
+        'basics' => [
+            'tenderTitle' => null,
+            'tenderNumber' => null,
+            'issuingAuthority' => null,
+            'departmentName' => null,
+            'location' => null,
             'completionMonths' => null,
             'bidValidityDays' => null,
+        ],
+        'dates' => [
+            'submissionDeadline' => null,
+            'openingDate' => null,
+            'preBidDate' => null,
+        ],
+        'fees' => [
+            'tenderFeeText' => null,
+            'emdText' => null,
+            'sdText' => null,
+            'pgText' => null,
+        ],
+        'lists' => [
             'eligibilityDocs' => [],
             'annexures' => [],
             'formats' => [],
-            'checklist' => [],
+            'restrictedAnnexures' => [],
         ],
-        'deliveredAt' => null,
-        'audit' => [
-            [
-                'at' => $now,
-                'by' => $yojId,
-                'action' => 'requested',
-                'note' => $notes !== '' ? mb_substr($notes, 0, 500) : null,
-            ],
-        ],
+        'checklist' => [],
+        'notes' => [],
     ];
-
-    writeJsonAtomic(assisted_extraction_request_path($reqId), $request);
-
-    $index = assisted_extraction_index();
-    $index[] = [
-        'reqId' => $reqId,
-        'yojId' => $yojId,
-        'offtdId' => $offtdId,
-        'status' => 'requested',
-        'createdAt' => $now,
-        'assignedTo' => null,
-    ];
-    save_assisted_extraction_index($index);
-
-    logEvent(ASSISTED_EXTRACTION_LOG, [
-        'event' => 'request_created',
-        'reqId' => $reqId,
-        'yojId' => $yojId,
-        'offtdId' => $offtdId,
-    ]);
-
-    return $request;
 }
 
-function assisted_load_request(string $reqId): ?array
+function assisted_task_template(array $contractor, array $tender): array
+{
+    $now = now_kolkata()->format(DateTime::ATOM);
+    $taskId = assisted_generate_task_id();
+    return [
+        'taskId' => $taskId,
+        'createdAt' => $now,
+        'updatedAt' => $now,
+        'status' => 'queued',
+        'priority' => 'normal',
+        'contractor' => [
+            'yojId' => $contractor['yojId'] ?? '',
+            'name' => $contractor['firmName'] ?? ($contractor['name'] ?? ''),
+            'mobile' => $contractor['mobile'] ?? '',
+        ],
+        'tender' => [
+            'offtdId' => $tender['id'] ?? '',
+            'title' => $tender['title'] ?? 'Offline Tender',
+            'pdfPath' => assisted_pick_tender_pdf($tender) ?? '',
+        ],
+        'assignedTo' => [
+            'userType' => null,
+            'userId' => null,
+            'name' => null,
+        ],
+        'history' => [
+            [
+                'at' => $now,
+                'by' => $contractor['yojId'] ?? 'contractor',
+                'event' => 'CREATED',
+            ],
+        ],
+        'form' => assisted_task_form_defaults(),
+        'ai' => [
+            'lastRunAt' => null,
+            'provider' => null,
+            'model' => null,
+            'requestId' => null,
+            'status' => 'never',
+            'error' => null,
+        ],
+        'delivered' => [
+            'deliveredAt' => null,
+            'deliveredBy' => null,
+            'snapshotPath' => null,
+        ],
+    ];
+}
+
+function assisted_pick_tender_pdf(array $tender): ?string
+{
+    $files = $tender['sourceFiles'] ?? [];
+    if (!is_array($files)) {
+        return null;
+    }
+    foreach ($files as $file) {
+        $path = trim((string)($file['path'] ?? ''));
+        if ($path !== '') {
+            return $path;
+        }
+    }
+    return null;
+}
+
+function assisted_load_task(string $taskId): ?array
 {
     ensure_assisted_extraction_env();
-    $path = assisted_extraction_request_path($reqId);
+    if ($taskId === '') {
+        return null;
+    }
+    $path = assisted_task_path($taskId);
     if (!file_exists($path)) {
         return null;
     }
     $data = readJson($path);
-    return $data ?: null;
+    return is_array($data) ? $data : null;
 }
 
-function assisted_save_request(array $request): void
+function assisted_task_summary(array $task): array
+{
+    return [
+        'taskId' => $task['taskId'] ?? null,
+        'status' => $task['status'] ?? 'queued',
+        'priority' => $task['priority'] ?? 'normal',
+        'createdAt' => $task['createdAt'] ?? null,
+        'updatedAt' => $task['updatedAt'] ?? null,
+        'contractor' => $task['contractor'] ?? [],
+        'tender' => $task['tender'] ?? [],
+        'assignedTo' => $task['assignedTo'] ?? [],
+    ];
+}
+
+function assisted_save_task(array $task): void
 {
     ensure_assisted_extraction_env();
-    if (empty($request['reqId'])) {
-        throw new InvalidArgumentException('Missing request id.');
+    if (empty($task['taskId'])) {
+        throw new InvalidArgumentException('Task id missing');
     }
-    $path = assisted_extraction_request_path($request['reqId']);
-    writeJsonAtomic($path, $request);
+    $task['updatedAt'] = $task['updatedAt'] ?? now_kolkata()->format(DateTime::ATOM);
+    writeJsonAtomic(assisted_task_path($task['taskId']), $task);
 
-    $index = assisted_extraction_index();
+    $index = assisted_tasks_index();
+    $summary = assisted_task_summary($task);
     $found = false;
     foreach ($index as &$entry) {
-        if (($entry['reqId'] ?? '') === $request['reqId']) {
-            $entry['status'] = $request['status'] ?? $entry['status'];
-            $entry['assignedTo'] = $request['assignedTo'] ?? ($entry['assignedTo'] ?? null);
-            $entry['createdAt'] = $request['createdAt'] ?? ($entry['createdAt'] ?? now_kolkata()->format(DateTime::ATOM));
+        if (($entry['taskId'] ?? '') === $task['taskId']) {
+            $entry = $summary;
             $found = true;
             break;
         }
     }
     unset($entry);
     if (!$found) {
-        $index[] = [
-            'reqId' => $request['reqId'],
-            'yojId' => $request['yojId'] ?? '',
-            'offtdId' => $request['offtdId'] ?? '',
-            'status' => $request['status'] ?? 'requested',
-            'createdAt' => $request['createdAt'] ?? now_kolkata()->format(DateTime::ATOM),
-            'assignedTo' => $request['assignedTo'] ?? null,
-        ];
+        $index[] = $summary;
     }
-    save_assisted_extraction_index($index);
+    usort($index, fn($a, $b) => strcmp($b['updatedAt'] ?? '', $a['updatedAt'] ?? ''));
+    save_assisted_tasks_index($index);
 }
 
-function assisted_deliver_payload(string $reqId, string $yojId, string $offtdId, array $payload, string $staffYojId): void
+function assisted_task_for_tender(string $yojId, string $offtdId): ?array
 {
-    // 1. Validate (should be clean if staff pasted it, but double check)
-    $validation = assisted_validate_payload($payload);
-    if (!empty($validation['errors'])) {
-        throw new RuntimeException('Payload validation failed: ' . implode(', ', $validation['errors']));
-    }
-    
-    // 2. Define path
-    // /data/contractors/approved/<yojId>/tenders_offline/<offtdId>/assisted.json
-    $targetDir = contractors_approved_path($yojId) . '/tenders_offline/' . $offtdId;
-    if (!is_dir($targetDir)) {
-        mkdir($targetDir, 0775, true);
-    }
-    $targetPath = $targetDir . '/assisted.json';
-    
-    $finalPayload = $validation['normalized'];
-    $finalPayload['meta'] = [
-        'deliveredAt' => now_kolkata()->format(DateTime::ATOM),
-        'deliveredBy' => $staffYojId,
-        'reqId' => $reqId,
-    ];
-    
-    // 3. Save Atomic
-    writeJsonAtomic($targetPath, $finalPayload);
-    
-    // 4. Update Tender to link it
-    $tender = load_offline_tender($yojId, $offtdId);
-    if ($tender) {
-        // Merge payload into tender
-        $tender['assisted'] = [
-            'deliveredAt' => now_kolkata()->format(DateTime::ATOM),
-            'deliveredBy' => $staffYojId,
-            'payloadPath' => $targetPath,
-        ];
-        
-        // Map V2 Payload to Tender Fields
-        $tData = $finalPayload['tender'] ?? [];
-        $lData = $finalPayload['lists'] ?? [];
-        
-        $tender['title'] = !empty($tData['tenderTitle']) ? $tData['tenderTitle'] : ($tender['title'] ?? 'Untitled');
-        $tender['location'] = $tData['location'] ?? ($tender['location'] ?? null);
-        $tender['tenderNumber'] = $tData['tenderNumber'] ?? ($tender['tenderNumber'] ?? null);
-        $tender['authority'] = $tData['issuingAuthority'] ?? ($tender['authority'] ?? null);
-        
-        if (!isset($tender['extracted'])) { $tender['extracted'] = []; }
-        $tender['extracted']['submissionDeadline'] = $tData['submissionDeadline'] ?? ($tender['extracted']['submissionDeadline'] ?? null);
-        $tender['extracted']['openingDate'] = $tData['openingDate'] ?? ($tender['extracted']['openingDate'] ?? null);
-        $tender['extracted']['completionMonths'] = $tData['completionMonths'] ?? ($tender['extracted']['completionMonths'] ?? null);
-        $tender['extracted']['bidValidityDays'] = $tData['validityDays'] ?? ($tender['extracted']['bidValidityDays'] ?? null);
-
-        $tender['checklist'] = $finalPayload['checklist'] ?? ($tender['checklist'] ?? []);
-        $tender['annexures'] = $lData['annexures'] ?? ($tender['annexures'] ?? []);
-        $tender['formats'] = $lData['formats'] ?? ($tender['formats'] ?? []);
-        $tender['eligibilityDocs'] = $lData['eligibilityDocs'] ?? ($tender['eligibilityDocs'] ?? []);
-        $tender['restrictedAnnexures'] = $lData['restricted'] ?? ($tender['restrictedAnnexures'] ?? []);
-
-        // Also store templates if any (though usually pack handles them)
-        if (!empty($finalPayload['templates'])) {
-             $tender['suggestedTemplates'] = $finalPayload['templates'];
+    foreach (assisted_tasks_index() as $entry) {
+        if (($entry['contractor']['yojId'] ?? '') === $yojId && ($entry['tender']['offtdId'] ?? '') === $offtdId) {
+            return assisted_load_task($entry['taskId'] ?? '');
         }
-
-        save_offline_tender($tender);
     }
-    
-    // 5. Update Request Status
-    $request = assisted_load_request($reqId);
-    if ($request) {
-        $request['status'] = 'delivered';
-        $request['deliveredAt'] = now_kolkata()->format(DateTime::ATOM);
-        $request['assistantDraft'] = $finalPayload; // Also save copy in request for history/debugging
-        $request['assistantDeliveredPayload'] = $finalPayload;
-        $request['restrictedAnnexures'] = $finalPayload['lists']['restricted'] ?? [];
-        assisted_save_request($request);
-    }
+    return null;
 }
 
-function assisted_forbidden_fields_present(array $payload): bool
+function assisted_active_task_for_tender(string $yojId, string $offtdId): ?array
 {
-    $findings = assisted_detect_forbidden_pricing($payload);
-    foreach ($findings as $finding) {
-        if (($finding['blocked'] ?? true) === true) {
-            return true;
+    foreach (assisted_tasks_index() as $entry) {
+        $status = $entry['status'] ?? '';
+        if (($entry['contractor']['yojId'] ?? '') === $yojId && ($entry['tender']['offtdId'] ?? '') === $offtdId && in_array($status, ['queued', 'in_progress'], true)) {
+            return assisted_load_task($entry['taskId'] ?? '');
         }
     }
-    return false;
-}
-
-function assisted_validate_payload(array $payload): array
-{
-    // Normalize first to handle legacy/flat structures if needed
-    $normalized = assisted_normalize_payload($payload);
-    
-    $errors = [];
-    $missingKeys = [];
-    
-    // Check top-level structure
-    $schema = assisted_schema_v2_structure();
-    foreach ($schema as $key => $type) {
-        if (!array_key_exists($key, $normalized)) {
-             // For tolerance, we populate missing keys in normalize, but strictly speaking they are part of the schema
-             // If normalized failed to populate them, it's an error.
-             $errors[] = "Missing top-level key: $key";
-             $missingKeys[] = $key;
-        }
-    }
-
-    if (!empty($errors)) {
-        return [
-            'errors' => $errors,
-            'missingKeys' => $missingKeys,
-            'forbiddenFindings' => [],
-            'allFindings' => [],
-            'restrictedAnnexuresCount' => 0,
-            'normalized' => $normalized,
-        ];
-    }
-
-    // Deep validation
-    // Tender fields
-    $tender = $normalized['tender'] ?? [];
-    if (!is_array($tender)) { $errors[] = 'tender must be an object'; }
-    
-    // Lists
-    $lists = $normalized['lists'] ?? [];
-    if (!is_array($lists)) { $errors[] = 'lists must be an object'; }
-    
-    // Forbidden Check (Pricing)
-    $forbiddenFindings = assisted_detect_forbidden_pricing($normalized);
-    $blockedFindings = array_values(array_filter($forbiddenFindings, static function ($finding) {
-        return ($finding['blocked'] ?? true) === true;
-    }));
-    
-    if ($blockedFindings) {
-        $errors[] = 'Pricing/rate content detected. Remove BOQ/quoted rates; tender fee/EMD/security amounts are allowed.';
-    }
-
-    $restrictedAnnexuresCount = count($lists['restricted'] ?? []);
-
-    return [
-        'errors' => $errors,
-        'missingKeys' => [],
-        'forbiddenFindings' => $blockedFindings,
-        'allFindings' => $forbiddenFindings,
-        'restrictedAnnexuresCount' => $restrictedAnnexuresCount,
-        'normalized' => $normalized,
-    ];
-}
-
-function assisted_normalize_payload(array $payload): array
-{
-    // Handle V2 vs V1 inputs
-    $isV2 = isset($payload['tender']) && isset($payload['lists']);
-    
-    // Defaults structure
-    $normalized = [
-        'tender' => [
-            'documentType' => 'Unknown',
-            'tenderTitle' => null,
-            'tenderNumber' => null,
-            'issuingAuthority' => null,
-            'departmentName' => null,
-            'location' => null,
-            'submissionDeadline' => null,
-            'openingDate' => null,
-            'completionMonths' => null,
-            'validityDays' => null,
-        ],
-        'lists' => [
-            'eligibilityDocs' => [],
-            'annexures' => [],
-            'formats' => [],
-            'restricted' => [],
-        ],
-        'fees' => assisted_normalize_fees($payload['fees'] ?? []),
-        'checklist' => [],
-        'templates' => [],
-        'snippets' => $payload['snippets'] ?? [],
-    ];
-
-    if ($isV2) {
-        // Direct mapping with sanitization
-        $srcTender = $payload['tender'] ?? [];
-        $srcLists = $payload['lists'] ?? [];
-        
-        $normalized['tender']['documentType'] = assisted_clean_string($srcTender['documentType'] ?? 'Unknown');
-        $normalized['tender']['tenderTitle'] = assisted_clean_string($srcTender['tenderTitle'] ?? null);
-        $normalized['tender']['tenderNumber'] = assisted_clean_string($srcTender['tenderNumber'] ?? null);
-        $normalized['tender']['issuingAuthority'] = assisted_clean_string($srcTender['issuingAuthority'] ?? null);
-        $normalized['tender']['departmentName'] = assisted_clean_string($srcTender['departmentName'] ?? null);
-        $normalized['tender']['location'] = assisted_clean_string($srcTender['location'] ?? null);
-        $normalized['tender']['submissionDeadline'] = assisted_clean_string($srcTender['submissionDeadline'] ?? null);
-        $normalized['tender']['openingDate'] = assisted_clean_string($srcTender['openingDate'] ?? null);
-        $normalized['tender']['completionMonths'] = assisted_clean_numeric($srcTender['completionMonths'] ?? null);
-        $normalized['tender']['validityDays'] = assisted_clean_numeric($srcTender['validityDays'] ?? null);
-        
-        $annexures = assisted_normalize_string_list($srcLists['annexures'] ?? []);
-        $formats = assisted_normalize_formats($srcLists['formats'] ?? []);
-        $restrictedExisting = assisted_normalize_string_list($srcLists['restricted'] ?? []);
-        
-        // Split restricted/safe
-        [$safeAnnexures, $safeFormats, $newRestricted] = assisted_split_restricted_annexures($annexures, $formats);
-        
-        $normalized['lists']['eligibilityDocs'] = assisted_normalize_string_list($srcLists['eligibilityDocs'] ?? []);
-        $normalized['lists']['annexures'] = $safeAnnexures;
-        $normalized['lists']['formats'] = $safeFormats;
-        $normalized['lists']['restricted'] = array_values(array_unique(array_merge($restrictedExisting, $newRestricted)));
-        $normalized['fees'] = assisted_normalize_fees($payload['fees'] ?? ($payload['tender']['fees'] ?? []));
-        
-        $normalized['checklist'] = assisted_normalize_checklist($payload['checklist'] ?? []);
-        $normalized['templates'] = $payload['templates'] ?? [];
-
-    } else {
-        // Legacy Map
-        $mapped = assisted_map_payload_schema($payload);
-        
-        $normalized['tender']['submissionDeadline'] = assisted_clean_string($mapped['submissionDeadline'] ?? null);
-        $normalized['tender']['openingDate'] = assisted_clean_string($mapped['openingDate'] ?? null);
-        $normalized['tender']['completionMonths'] = assisted_clean_numeric($mapped['completionMonths'] ?? null);
-        $normalized['tender']['validityDays'] = assisted_clean_numeric($mapped['bidValidityDays'] ?? null);
-        
-        $normalized['lists']['eligibilityDocs'] = assisted_normalize_string_list($mapped['eligibilityDocs'] ?? []);
-        
-        $annexures = assisted_normalize_string_list($mapped['annexures'] ?? []);
-        $formats = assisted_normalize_formats($mapped['formats'] ?? []);
-        
-        [$safeAnnexures, $safeFormats, $restricted] = assisted_split_restricted_annexures($annexures, $formats);
-        
-        $normalized['lists']['annexures'] = $safeAnnexures;
-        $normalized['lists']['formats'] = $safeFormats;
-        $normalized['lists']['restricted'] = $restricted;
-        $normalized['fees'] = assisted_normalize_fees($mapped['fees'] ?? []);
-        
-        $normalized['checklist'] = assisted_normalize_checklist($mapped);
-    }
-
-    return $normalized;
-}
-
-function assisted_normalize_checklist(array $payload): array
-{
-    $checklist = $payload['checklist'] ?? [];
-    $normalized = [];
-
-    if (is_array($checklist)) {
-        foreach ($checklist as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $title = assisted_clean_string($item['title'] ?? '');
-            if ($title === '') {
-                continue;
-            }
-            $normalized[] = [
-                'title' => $title,
-                'description' => assisted_clean_string($item['description'] ?? ''),
-                'required' => (bool)($item['required'] ?? true),
-            ];
-            if (count($normalized) >= 300) {
-                break;
-            }
-        }
-    }
-
-    if (empty($normalized)) {
-        $eligibilityDocs = assisted_normalize_string_list($payload['eligibilityDocs'] ?? []);
-        foreach ($eligibilityDocs as $doc) {
-            $normalized[] = [
-                'title' => $doc,
-                'description' => '',
-                'required' => true,
-            ];
-            if (count($normalized) >= 50) {
-                break;
-            }
-        }
-    }
-
-    return $normalized;
-}
-
-function assisted_split_restricted_annexures(array $annexures, array $formats): array
-{
-    $restricted = [];
-    $safeAnnexures = [];
-    foreach ($annexures as $annexure) {
-        if (assisted_is_restricted_financial_label(mb_strtolower($annexure))) {
-            $restricted[] = $annexure;
-            continue;
-        }
-        $safeAnnexures[] = $annexure;
-        if (count($safeAnnexures) >= 200) {
-            break;
-        }
-    }
-
-    $safeFormats = [];
-    foreach ($formats as $format) {
-        $name = $format['name'] ?? '';
-        if (assisted_is_restricted_financial_label(mb_strtolower($name))) {
-            $restricted[] = $name;
-            continue;
-        }
-        $safeFormats[] = $format;
-        if (count($safeFormats) >= 200) {
-            break;
-        }
-    }
-
-    return [$safeAnnexures, $safeFormats, $restricted];
-}
-
-function assisted_detect_forbidden_pricing(array $payload, string $path = 'root', array $context = []): array
-{
-    $findings = [];
-    $skipKeys = ['validitydays', 'bidvaliditydays', 'completionmonths']; // Safe numeric fields
-
-    // Explicitly safe context words (fees)
-    $allowContextTokens = [
-        'tenderfee',
-        'bidfee',
-        'tendercost',
-        'documentfee',
-        'processingfee',
-        'fee',
-        'emd',
-        'earnestmoney',
-        'bidsecurity',
-        'security',
-        'deposit',
-        'securitydeposit',
-        'performance',
-        'guarantee',
-        'bg',
-        'sd',
-        'pg',
-        'gst',
-        'tax',
-        'levy',
-        'turnover',
-        'networth',
-        'financialyear',
-        'annual',
-    ];
-
-    // Explicitly blocked context words (pricing)
-    $blockContextTokens = [
-        'boq',
-        'billofquantity',
-        'sor',
-        'scheduleofrates',
-        'priceschedule',
-        'financialbid',
-        'pricebid',
-        'ratesheet',
-        'quotedrate',
-        'itemrate',
-        'unitrate',
-        'ratequoted',
-        'quotedprice',
-        'l1',
-        'lowestbidder',
-        'lowestbid',
-        'comparativestatement',
-    ];
-
-    foreach ($payload as $key => $value) {
-        $keyString = (string)$key;
-        $keyLower = strtolower(preg_replace('/[^a-z0-9]/', '', $keyString));
-        $currentPath = $path === '' ? $keyString : $path . '.' . $keyString;
-        $segments = explode('.', $currentPath);
-        $currentContext = $context;
-        $isFeesPath = str_starts_with($currentPath, 'root.fees');
-        $isRestrictedPath = assisted_is_restricted_path($currentPath) || (!empty($currentContext['restrictedPath']));
-        if ($isRestrictedPath) {
-            $currentContext['restrictedPath'] = true;
-        }
-
-        if (in_array($keyLower, $skipKeys, true)) {
-            continue;
-        }
-
-        // Check key for Blocked tokens (unless explicitly allowed path)
-        if (!$isFeesPath && !$isRestrictedPath) {
-            foreach ($blockContextTokens as $token) {
-                if (str_contains($keyLower, $token)) {
-                    $findings[] = [
-                        'path' => $currentPath,
-                        'reasonCode' => 'BLOCK_KEY',
-                        'snippet' => $keyString,
-                        'blocked' => true,
-                    ];
-                }
-            }
-        }
-
-        $isSafeContext = $isFeesPath;
-        foreach ($allowContextTokens as $token) {
-            if (str_contains($keyLower, $token)) {
-                $isSafeContext = true;
-                break;
-            }
-        }
-
-        if (is_string($value)) {
-            $finding = assisted_evaluate_string_forbidden($value, $currentPath, [
-                'pathAllowed' => $isFeesPath || (!empty($currentContext['forceAllowCurrency'])),
-                'allowCurrency' => !empty($currentContext['allowCurrency']) || $isSafeContext || $isFeesPath,
-                'keyAllowContext' => $isSafeContext,
-                'checklistCategory' => $currentContext['checklistCategory'] ?? null,
-                'restrictedPath' => $isRestrictedPath,
-            ]);
-            if ($finding) {
-                $findings[] = $finding;
-            }
-        } elseif (is_array($value)) {
-            $nextContext = $currentContext;
-            if ($isSafeContext) {
-                $nextContext['allowCurrency'] = true;
-            }
-            if ($isFeesPath) {
-                $nextContext['forceAllowCurrency'] = true;
-            }
-            if ($isRestrictedPath) {
-                $nextContext['restrictedPath'] = true;
-            }
-
-            if (assisted_path_is_checklist_item($segments) && isset($value['category'])) {
-                $category = mb_strtolower(trim((string)$value['category']));
-                if ($category === 'fees') {
-                    $nextContext['allowCurrency'] = true;
-                    $nextContext['checklistCategory'] = 'fees';
-                }
-            }
-
-            $findings = array_merge($findings, assisted_detect_forbidden_pricing($value, $currentPath, $nextContext));
-        }
-    }
-    return $findings;
-}
-
-function assisted_evaluate_string_forbidden(string $value, string $path, array $context = []): ?array
-{
-    if (!empty($context['pathAllowed'])) {
-        return null;
-    }
-
-    $isRestrictedPath = !empty($context['restrictedPath']);
-    $hasCurrency = assisted_contains_currency_amount($value);
-    $hasCurrencyMarker = assisted_contains_currency_marker($value);
-    $hasNumericRatePattern = assisted_contains_numeric_rate_pattern($value);
-    $hasAllowMarker = assisted_contains_allow_marker($value);
-    $hasBlockMarker = assisted_contains_block_marker($value);
-    $hasExplicitPricingPhrase = assisted_contains_explicit_pricing_phrase($value);
-
-    $pricingEvidence = $hasCurrency || $hasNumericRatePattern;
-    $suspiciousRestricted = $hasCurrencyMarker || $pricingEvidence;
-    $allowByContext = !empty($context['allowCurrency']) || !empty($context['keyAllowContext']) || (($context['checklistCategory'] ?? '') === 'fees');
-
-    if ($isRestrictedPath) {
-        if (!$suspiciousRestricted) {
-            assisted_log_restricted_validation($path, 'allowed', 'RESTRICTED_REFERENCE_ALLOWED');
-            return null;
-        }
-
-        if (($hasBlockMarker || $hasExplicitPricingPhrase) && ($pricingEvidence || $hasCurrencyMarker)) {
-            assisted_log_restricted_validation($path, 'blocked', 'RESTRICTED_PRICING_BLOCKED');
-            return [
-                'path' => $path,
-                'reasonCode' => 'RESTRICTED_PRICING_BLOCKED',
-                'snippet' => assisted_redact_snippet($value),
-                'blocked' => true,
-                'message' => 'Pricing/rate content detected in restricted text. Remove bid values.',
-            ];
-        }
-
-        assisted_log_restricted_validation($path, 'warned', 'RESTRICTED_PRICING_WARNING');
-        return [
-            'path' => $path,
-            'reasonCode' => 'RESTRICTED_PRICING_WARNING',
-            'snippet' => assisted_redact_snippet($value),
-            'blocked' => false,
-            'message' => 'Review restricted text; may contain pricing.',
-        ];
-    }
-
-    if ($hasExplicitPricingPhrase) {
-        return [
-            'path' => $path,
-            'reasonCode' => 'BLOCK_VALUE_CONTEXT',
-            'snippet' => assisted_redact_snippet($value),
-            'blocked' => true,
-            'message' => 'Explicit quoted pricing detected. Remove quoted rates or prices.',
-        ];
-    }
-
-    if ($hasBlockMarker && $pricingEvidence) {
-        return [
-            'path' => $path,
-            'reasonCode' => 'BLOCK_VALUE_CONTEXT',
-            'snippet' => assisted_redact_snippet($value),
-            'blocked' => true,
-            'message' => 'Pricing/rate content detected. Remove BOQ or quoted rates.',
-        ];
-    }
-
-    if (!$hasCurrency && !$hasCurrencyMarker && !$hasNumericRatePattern) {
-        return null;
-    }
-
-    if ($allowByContext || $hasAllowMarker) {
-        return null;
-    }
-
-    return [
-        'path' => $path,
-        'reasonCode' => 'CURRENCY_UNKNOWN_CONTEXT',
-        'snippet' => assisted_redact_snippet($value),
-        'blocked' => false,
-        'message' => 'Currency found but context unclear. Please ensure this is not bid pricing.',
-    ];
-}
-
-function assisted_contains_currency_marker(string $value): bool
-{
-    return (bool)preg_match('/(₹|\bRs\.?\b|\bINR\b)/iu', $value);
-}
-
-function assisted_contains_currency_amount(string $value): bool
-{
-    return (bool)preg_match('/(₹|\bRs\.?\b|\bINR\b)\s*\d[\d,]*(\.\d+)?/iu', $value);
-}
-
-function assisted_contains_allow_marker(string $value): bool
-{
-    $patterns = [
-        '/\bemd\b/i',
-        '/earnest\s+money/i',
-        '/earnest\s+money\s+deposit/i',
-        '/bid\s+security/i',
-        '/security\s+money/i',
-        '/\bdeposit\b/i',
-        '/security\s+deposit/i',
-        '/\bsd\b/i',
-        '/\bpg\b/i',
-        '/performance\s+guarantee/i',
-        '/\bbg\b/i',
-        '/tender\s+fee/i',
-        '/tender\s+fees/i',
-        '/bid\s+fee/i',
-        '/tender\s+cost/i',
-        '/cost\s+of\s+tender/i',
-        '/document\s+fee/i',
-        '/processing\s+fee/i',
-        '/\bfee\b/i',
-        '/\bgst\b/i',
-        '/bank\s+guarantee/i',
-    ];
-
-    foreach ($patterns as $pattern) {
-        if (preg_match($pattern, $value)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-function assisted_contains_block_marker(string $value): bool
-{
-    $patterns = [
-        '/\bboq\b/i',
-        '/bill\s+of\s+quantity/i',
-        '/schedule\s+of\s+rates/i',
-        '/\bsor\b/i',
-        '/item\s+rate/i',
-        '/unit\s+rate/i',
-        '/rate\s+quoted/i',
-        '/quoted\s+rate/i',
-        '/quoted\s+price/i',
-        '/financial\s+bid/i',
-        '/price\s+bid/i',
-        '/bid\s+value/i',
-        '/total\s+value/i',
-        '/contract\s+value/i',
-        '/\bl1\b/i',
-        '/lowest\s+bidder/i',
-        '/comparative\s+statement/i',
-        '/\bcs\b/i',
-        '/price\s+schedule/i',
-        '/rate\s+sheet/i',
-    ];
-
-    foreach ($patterns as $pattern) {
-        if (preg_match($pattern, $value)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-function assisted_contains_explicit_pricing_phrase(string $value): bool
-{
-    $patterns = [
-        '/quoted\s+(rate|price|value)/i',
-        '/rate\s+quoted/i',
-        '/unit\s+rate/i',
-        '/item\s+rate/i',
-        '/quoted\s+bid/i',
-    ];
-
-    foreach ($patterns as $pattern) {
-        if (preg_match($pattern, $value)) {
-            return true;
-        }
-    }
-
-    return false;
+    return null;
 }
 
 function assisted_is_restricted_financial_label(string $lower): bool
 {
-    $patterns = [
-        '/price\s+bid/i',
-        '/financial\s+bid/i',
-        '/\bboq\b/i',
-        '/bill\s+of\s+quantity/i',
-        '/schedule\s+of\s+rates/i',
-        '/\bsor\b/i',
-        '/rate\s+sheet/i',
-        '/price\s+schedule/i',
+    $restricted = [
+        'price bid',
+        'financial bid',
+        'boq',
+        'b.o.q',
+        'sor',
+        'schedule of rates',
+        'schedule of rate',
+        'rate analysis',
+        'quoted rates',
+    ];
+    foreach ($restricted as $needle) {
+        if (str_contains($lower, $needle)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function assisted_classify_restricted_annexures(array $annexures, array $formats): array
+{
+    $restricted = [];
+    foreach (array_merge($annexures, array_map(fn($f) => $f['name'] ?? '', $formats)) as $label) {
+        $label = trim((string)$label);
+        if ($label === '') {
+            continue;
+        }
+        if (assisted_is_restricted_financial_label(mb_strtolower($label))) {
+            $restricted[] = $label;
+        }
+    }
+    $restricted = array_values(array_unique($restricted));
+    $annexuresFiltered = array_values(array_filter($annexures, fn($label) => !in_array($label, $restricted, true)));
+    $formatsFiltered = array_values(array_filter($formats, fn($f) => !in_array($f['name'] ?? '', $restricted, true)));
+    return [$annexuresFiltered, $formatsFiltered, $restricted];
+}
+
+function assisted_task_form_from_post(array $input, array $existing): array
+{
+    $form = $existing ?: assisted_task_form_defaults();
+    $form['basics'] = [
+        'tenderTitle' => assisted_clean_string($input['tender_title'] ?? ''),
+        'tenderNumber' => assisted_clean_string($input['tender_number'] ?? ''),
+        'issuingAuthority' => assisted_clean_string($input['issuing_authority'] ?? ''),
+        'departmentName' => assisted_clean_string($input['department_name'] ?? ''),
+        'location' => assisted_clean_string($input['location'] ?? ''),
+        'completionMonths' => assisted_clean_numeric($input['completion_months'] ?? null),
+        'bidValidityDays' => assisted_clean_numeric($input['bid_validity_days'] ?? null),
+    ];
+    $form['dates'] = [
+        'submissionDeadline' => assisted_clean_string($input['submission_deadline'] ?? ''),
+        'openingDate' => assisted_clean_string($input['opening_date'] ?? ''),
+        'preBidDate' => assisted_clean_string($input['prebid_date'] ?? ''),
+    ];
+    $form['fees'] = [
+        'tenderFeeText' => assisted_clean_string($input['tender_fee_text'] ?? ''),
+        'emdText' => assisted_clean_string($input['emd_text'] ?? ''),
+        'sdText' => assisted_clean_string($input['sd_text'] ?? ''),
+        'pgText' => assisted_clean_string($input['pg_text'] ?? ''),
     ];
 
-    foreach ($patterns as $pattern) {
-        if (preg_match($pattern, $lower)) {
-            return true;
-        }
-    }
-    return false;
-}
+    $eligibilityDocs = assisted_normalize_string_list($input['eligibility_docs'] ?? []);
+    $annexures = assisted_normalize_string_list($input['annexures'] ?? []);
+    $formats = assisted_normalize_formats($input['formats'] ?? []);
 
-function assisted_contains_numeric_rate_pattern(string $value): bool
-{
-    $patterns = [
-        '/\d[\d,]*(\.\d+)?\s*(per|\\/)\s*[a-z]{1,12}\b/i', // per kW, /MT etc.
-        '/\brate\s*(of)?\s*[:\-]?\s*\d[\d,]*(\.\d+)?/i',
-        '/\b\d[\d,]*(\.\d+)?\s*(%|percent)\s+[^\\n]{0,20}rate/i',
+    [$annexures, $formats, $restricted] = assisted_classify_restricted_annexures($annexures, $formats);
+
+    $form['lists'] = [
+        'eligibilityDocs' => $eligibilityDocs,
+        'annexures' => $annexures,
+        'formats' => $formats,
+        'restrictedAnnexures' => $restricted,
     ];
 
-    foreach ($patterns as $pattern) {
-        if (preg_match($pattern, $value)) {
-            return true;
+    $checklistLines = assisted_normalize_string_list($input['checklist_lines'] ?? []);
+    $checklist = [];
+    foreach ($checklistLines as $line) {
+        $parts = array_map('trim', explode('|', $line));
+        $title = $parts[0] ?? '';
+        if ($title === '') {
+            continue;
+        }
+        $category = $parts[1] ?? 'Other';
+        $requiredInput = mb_strtolower($parts[2] ?? 'yes');
+        $required = !in_array($requiredInput, ['no', 'false', '0'], true);
+        $notes = $parts[3] ?? '';
+        $checklist[] = [
+            'title' => $title,
+            'category' => $category !== '' ? $category : 'Other',
+            'required' => $required,
+            'notes' => $notes,
+        ];
+        if (count($checklist) >= 300) {
+            break;
         }
     }
+    $form['checklist'] = $checklist;
 
-    return false;
+    $notes = assisted_normalize_string_list($input['notes'] ?? []);
+    $form['notes'] = $notes;
+
+    return $form;
 }
 
-function assisted_is_restricted_path(string $path): bool
+function assisted_task_form_to_tender_extract(array $form): array
 {
-    $lower = mb_strtolower($path);
-    $prefixes = [
-        'root.lists.restricted',
-        'root.restrictedannexures',
-        'root.restricted',
-        'root.notes',
-        'root.sourcesnippets',
-    ];
-    foreach ($prefixes as $prefix) {
-        if (str_starts_with($lower, $prefix)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function assisted_log_restricted_validation(string $path, string $action, string $reasonCode = 'RESTRICTED_REFERENCE_ALLOWED'): void
-{
-    logEvent(ASSISTED_EXTRACTION_LOG, [
-        'at' => now_kolkata()->format(DateTime::ATOM),
-        'event' => 'VALIDATE_RESTRICTED_TEXT',
-        'path' => $path,
-        'action' => $action,
-        'reasonCode' => $reasonCode,
-    ]);
-}
-
-function assisted_is_annexure_like_path(array $segments): bool
-{
-    return in_array('annexures', $segments, true) || in_array('formats', $segments, true) || in_array('formatsandannexures', $segments, true);
-}
-
-function assisted_path_is_checklist_item(array $segments): bool
-{
-    return in_array('checklist', $segments, true);
-}
-
-function assisted_checklist_item_allows_currency(array $item): bool
-{
-    $category = mb_strtolower(trim((string)($item['category'] ?? '')));
-    if ($category !== '' && $category === 'fees') {
-        $title = mb_strtolower((string)($item['title'] ?? ''));
-        $desc = mb_strtolower((string)($item['description'] ?? ''));
-        $quote = mb_strtolower((string)($item['sourceQuote'] ?? ''));
-        if (assisted_contains_allow_marker($title) || assisted_contains_allow_marker($desc) || assisted_contains_allow_marker($quote)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function assisted_path_has_allowed_segment(array $segments, array $allowed): bool
-{
-    foreach ($segments as $segment) {
-        if (in_array($segment, $allowed, true)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function assisted_redact_snippet(string $value): string
-{
-    $clean = assisted_clean_string($value);
-    if (mb_strlen($clean) > 160) {
-        return mb_substr($clean, 0, 157) . '...';
-    }
-    return $clean;
-}
-
-function assisted_sanitize_json_input(string $input): string
-{
-    $sanitized = preg_replace('/^\xEF\xBB\xBF/', '', $input);
-    $sanitized = preg_replace('/[\x{2028}\x{2029}]/u', "\n", (string)$sanitized);
-    return (string)$sanitized;
-}
-
-function assisted_append_audit(array &$request, string $by, string $action, ?string $note = null): void
-{
-    $request['audit'][] = [
-        'at' => now_kolkata()->format(DateTime::ATOM),
-        'by' => $by,
-        'action' => $action,
-        'note' => $note ? mb_substr($note, 0, 500) : null,
+    $defaults = offline_tender_defaults();
+    return [
+        'publishDate' => $defaults['publishDate'],
+        'submissionDeadline' => $form['dates']['submissionDeadline'] ?? null,
+        'openingDate' => $form['dates']['openingDate'] ?? null,
+        'fees' => [
+            'tenderFee' => (string)($form['fees']['tenderFeeText'] ?? ''),
+            'emd' => (string)($form['fees']['emdText'] ?? ''),
+            'other' => implode(' | ', array_filter([
+                (string)($form['fees']['sdText'] ?? ''),
+                (string)($form['fees']['pgText'] ?? ''),
+            ])),
+        ],
+        'completionMonths' => $form['basics']['completionMonths'] ?? null,
+        'bidValidityDays' => $form['basics']['bidValidityDays'] ?? null,
+        'eligibilityDocs' => $form['lists']['eligibilityDocs'] ?? [],
+        'annexures' => $form['lists']['annexures'] ?? [],
+        'restrictedAnnexures' => $form['lists']['restrictedAnnexures'] ?? [],
+        'formats' => $form['lists']['formats'] ?? [],
+        'checklist' => $form['checklist'] ?? [],
     ];
 }
 
-function assisted_staff_actor(): array
+function assisted_task_form_to_checklist(array $form): array
+{
+    $items = [];
+    foreach ($form['checklist'] ?? [] as $item) {
+        $title = trim((string)($item['title'] ?? ''));
+        if ($title === '') {
+            continue;
+        }
+        $items[] = [
+            'itemId' => 'CHK-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10)),
+            'title' => $title,
+            'description' => trim((string)($item['notes'] ?? '')),
+            'required' => (bool)($item['required'] ?? true),
+            'status' => 'pending',
+            'category' => $item['category'] ?? 'Other',
+            'source' => 'assisted_task',
+        ];
+    }
+    return $items;
+}
+
+function assisted_task_can_deliver(array $task): bool
+{
+    $form = $task['form'] ?? [];
+    $dates = $form['dates'] ?? [];
+    $checklist = $form['checklist'] ?? [];
+    return !empty($dates['submissionDeadline']) || !empty($dates['openingDate']) || count($checklist) >= 5;
+}
+
+function assisted_task_log(array $context): void
+{
+    logEvent(ASSISTED_TASKS_LOG, $context);
+}
+
+function assisted_require_staff_access(): array
 {
     $user = current_user();
     if ($user && ($user['type'] ?? '') === 'superadmin') {
-        return ['type' => 'superadmin', 'id' => $user['username'] ?? 'superadmin'];
+        return $user;
     }
+
     $employee = current_employee_record();
-    if ($employee && (employee_has_permission($employee, 'tickets') || employee_has_permission($employee, 'reset_approvals'))) {
-        return ['type' => 'employee', 'id' => $employee['empId'] ?? 'employee', 'record' => $employee];
+    if ($employee) {
+        $role = $employee['role'] ?? '';
+        $permissions = $employee['permissions'] ?? [];
+        $allowedRole = in_array($role, ['support', 'approvals'], true);
+        $allowedPerm = in_array('tickets', $permissions, true) || in_array('reset_approvals', $permissions, true) || in_array('*', $permissions, true);
+        if ($allowedRole || $allowedPerm) {
+            return $employee;
+        }
     }
+
     redirect('/auth/login.php');
 }
 
-function assisted_actor_label(array $actor): string
+function assisted_actor_identity(array $actor): array
 {
     if (($actor['type'] ?? '') === 'superadmin') {
-        return 'superadmin';
+        return [
+            'userType' => 'superadmin',
+            'userId' => $actor['username'] ?? 'superadmin',
+            'name' => $actor['username'] ?? 'Superadmin',
+        ];
     }
-    if (($actor['type'] ?? '') === 'employee') {
-        $record = $actor['record'] ?? [];
-        return ($record['username'] ?? 'employee') . ' (' . ($record['role'] ?? '') . ')';
-    }
-    return 'system';
+    return [
+        'userType' => 'employee',
+        'userId' => $actor['empId'] ?? '',
+        'name' => $actor['displayName'] ?? ($actor['username'] ?? ''),
+    ];
 }
 
-function assisted_assign_request(array &$request, array $actor): void
+function assisted_task_apply_ai_payload(array $form, array $payload): array
 {
-    if (($request['assignedTo'] ?? null) === null) {
-        $request['assignedTo'] = $actor['id'] ?? null;
+    $form = $form ?: assisted_task_form_defaults();
+    $form['basics']['tenderTitle'] = assisted_clean_string($payload['tenderTitle'] ?? $form['basics']['tenderTitle'] ?? null);
+    $form['basics']['tenderNumber'] = assisted_clean_string($payload['tenderNumber'] ?? $form['basics']['tenderNumber'] ?? null);
+    $form['basics']['issuingAuthority'] = assisted_clean_string($payload['issuingAuthority'] ?? $form['basics']['issuingAuthority'] ?? null);
+    $form['basics']['departmentName'] = assisted_clean_string($payload['departmentName'] ?? $form['basics']['departmentName'] ?? null);
+    $form['basics']['location'] = assisted_clean_string($payload['location'] ?? $form['basics']['location'] ?? null);
+    $form['basics']['completionMonths'] = assisted_clean_numeric($payload['completionMonths'] ?? $form['basics']['completionMonths'] ?? null);
+    $form['basics']['bidValidityDays'] = assisted_clean_numeric($payload['bidValidityDays'] ?? $form['basics']['bidValidityDays'] ?? null);
+
+    $form['dates']['submissionDeadline'] = assisted_clean_string($payload['submissionDeadline'] ?? $form['dates']['submissionDeadline'] ?? null);
+    $form['dates']['openingDate'] = assisted_clean_string($payload['openingDate'] ?? $form['dates']['openingDate'] ?? null);
+    $form['dates']['preBidDate'] = assisted_clean_string($payload['preBidDate'] ?? $form['dates']['preBidDate'] ?? null);
+
+    $fees = $payload['fees'] ?? [];
+    $form['fees']['tenderFeeText'] = assisted_clean_string($fees['tenderFeeText'] ?? $form['fees']['tenderFeeText'] ?? null);
+    $form['fees']['emdText'] = assisted_clean_string($fees['emdText'] ?? $form['fees']['emdText'] ?? null);
+    $form['fees']['sdText'] = assisted_clean_string($fees['sdText'] ?? $form['fees']['sdText'] ?? null);
+    $form['fees']['pgText'] = assisted_clean_string($fees['pgText'] ?? $form['fees']['pgText'] ?? null);
+
+    $annexures = assisted_normalize_string_list($payload['annexures'] ?? $form['lists']['annexures'] ?? []);
+    $eligibilityDocs = assisted_normalize_string_list($payload['eligibilityDocs'] ?? $form['lists']['eligibilityDocs'] ?? []);
+    $formats = assisted_normalize_formats($payload['formats'] ?? $form['lists']['formats'] ?? []);
+    [$annexures, $formats, $restricted] = assisted_classify_restricted_annexures($annexures, $formats);
+
+    $form['lists']['annexures'] = $annexures;
+    $form['lists']['eligibilityDocs'] = $eligibilityDocs;
+    $form['lists']['formats'] = $formats;
+    $form['lists']['restrictedAnnexures'] = $restricted;
+
+    $checklist = [];
+    if (isset($payload['checklist']) && is_array($payload['checklist'])) {
+        foreach ($payload['checklist'] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $title = assisted_clean_string($item['title'] ?? '') ?? '';
+            if ($title === '') {
+                continue;
+            }
+            $checklist[] = [
+                'title' => $title,
+                'category' => assisted_clean_string($item['category'] ?? '') ?? 'Other',
+                'required' => !isset($item['required']) || (bool)$item['required'],
+                'notes' => assisted_clean_string($item['notes'] ?? '') ?? '',
+            ];
+            if (count($checklist) >= 300) {
+                break;
+            }
+        }
     }
+    if ($checklist) {
+        $form['checklist'] = $checklist;
+    }
+
+    $notes = assisted_normalize_string_list($payload['notes'] ?? $form['notes'] ?? []);
+    $form['notes'] = $notes;
+
+    return $form;
 }
 
-function assisted_deliver_notification(array $request): void
+function assisted_task_ai_prompt(array $task): array
 {
-    if (empty($request['yojId']) || empty($request['offtdId'])) {
-        return;
-    }
-    create_contractor_notification($request['yojId'], [
-        'type' => 'info',
-        'title' => 'Assisted extraction delivered',
-        'message' => 'Checklist ready for tender ' . ($request['offtdId'] ?? ''),
-    ]);
+    $tender = $task['tender'] ?? [];
+    $form = $task['form'] ?? [];
+
+    $system = "You are assisting with tender extraction. Fill the form fields only. Do NOT include bid rates/BOQ pricing. Fees text is allowed.";
+    $user = "Tender title: " . ($tender['title'] ?? '') . "\n"
+        . "Tender ID: " . ($tender['offtdId'] ?? '') . "\n"
+        . "PDF path (may be needed for reference): " . ($tender['pdfPath'] ?? '') . "\n\n"
+        . "Return JSON with keys: tenderTitle, tenderNumber, issuingAuthority, departmentName, location, completionMonths, bidValidityDays, submissionDeadline, openingDate, preBidDate, fees{tenderFeeText,emdText,sdText,pgText}, eligibilityDocs[], annexures[], formats[{name,notes}], checklist[{title,category,required,notes}], notes[].\n\n"
+        . "Current form (may be partially filled): " . json_encode($form, JSON_UNESCAPED_SLASHES);
+
+    return [$system, $user];
 }

@@ -265,7 +265,7 @@ function render_layout(string $title, callable $content): void
                         <a href="/superadmin/tender_discovery.php"><?= sanitize('Tender Discovery'); ?></a>
                         <a href="/superadmin/backup.php"><?= sanitize('Backups'); ?></a>
                         <a href="/superadmin/support_dashboard.php"><?= sanitize('Support Inbox'); ?></a>
-                        <a href="/superadmin/assisted_extraction_queue.php"><?= sanitize('Assisted Extraction'); ?></a>
+                        <a href="/superadmin/assisted_queue.php"><?= sanitize('Assisted Extraction'); ?></a>
                         <a href="/superadmin/error_log.php"><?= sanitize('Error Log'); ?></a>
                         <a href="/superadmin/factory_reset.php"><?= sanitize('Factory Reset'); ?></a>
                         <a href="/superadmin/stats.php"><?= sanitize('Stats'); ?></a>
@@ -318,7 +318,7 @@ function render_layout(string $title, callable $content): void
                             <a href="/staff/tickets.php"><?= sanitize('Tickets'); ?></a>
                         <?php endif; ?>
                         <?php if (in_array('tickets', $user['permissions'] ?? [], true) || in_array('reset_approvals', $user['permissions'] ?? [], true)): ?>
-                            <a href="/superadmin/assisted_extraction_queue.php"><?= sanitize('Assisted Extraction'); ?></a>
+                            <a href="/superadmin/assisted_queue.php"><?= sanitize('Assisted Extraction'); ?></a>
                         <?php endif; ?>
                         <?php if (in_array('audit_view', $user['permissions'] ?? [], true)): ?>
                             <a href="/staff/audit.php"><?= sanitize('Audit'); ?></a>
