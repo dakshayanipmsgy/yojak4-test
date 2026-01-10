@@ -287,13 +287,10 @@ function pack_apply_schema_defaults(array $pack): array
     $pack['departmentName'] = $pack['departmentName']
         ?? ($pack['deptName'] ?? ($pack['sourceTender']['departmentName'] ?? ($pack['sourceTender']['deptName'] ?? '')));
     $pack['deptName'] = $pack['deptName'] ?? $pack['departmentName'];
-    $pack['issuingAuthority'] = $pack['issuingAuthority'] ?? ($pack['sourceTender']['issuingAuthority'] ?? '');
-    $pack['location'] = $pack['location'] ?? ($pack['sourceTender']['location'] ?? '');
     $pack['submissionDeadline'] = $pack['submissionDeadline']
         ?? ($pack['dates']['submission'] ?? ($pack['sourceTender']['submissionDeadline'] ?? ($pack['sourceTender']['extracted']['submissionDeadline'] ?? '')));
     $pack['openingDate'] = $pack['openingDate']
         ?? ($pack['dates']['opening'] ?? ($pack['sourceTender']['openingDate'] ?? ($pack['sourceTender']['extracted']['openingDate'] ?? '')));
-    $pack['preBidDate'] = $pack['preBidDate'] ?? ($pack['sourceTender']['preBidDate'] ?? '');
     $pack['completionMonths'] = $pack['completionMonths']
         ?? ($pack['sourceTender']['completionMonths'] ?? ($pack['sourceTender']['extracted']['completionMonths'] ?? null));
     $pack['bidValidityDays'] = $pack['bidValidityDays']
@@ -304,13 +301,6 @@ function pack_apply_schema_defaults(array $pack): array
     if ($pack['dates']['opening'] === '' && !empty($pack['openingDate'])) {
         $pack['dates']['opening'] = $pack['openingDate'];
     }
-    if (!isset($pack['fees']) || !is_array($pack['fees'])) {
-        $pack['fees'] = [];
-    }
-    $pack['tenderFeeText'] = $pack['tenderFeeText'] ?? ($pack['fees']['tenderFeeText'] ?? '');
-    $pack['emdText'] = $pack['emdText'] ?? ($pack['fees']['emdText'] ?? '');
-    $pack['sdText'] = $pack['sdText'] ?? ($pack['fees']['sdText'] ?? '');
-    $pack['pgText'] = $pack['pgText'] ?? ($pack['fees']['pgText'] ?? '');
 
     $pack['checklist'] = pack_sync_checklist($pack);
     if (!isset($pack['items']) || !is_array($pack['items'])) {
@@ -761,15 +751,15 @@ function pack_annexure_template_library(): array
         'cover_letter_fee' => [
             'type' => 'cover_letter',
             'title' => 'Covering Letter for Tender Fee Submission',
-            'body' => "To,\n{{department_name}}\nSubject: Submission of tender documents for {{tender_title}} ({{tender_number}})\n\nRespected Sir/Madam,\n\nWe, {{contractor_firm_name}}, are submitting our bid for the above-mentioned tender. Tender fee details: {{tender_fee_text}}. Supporting documents are enclosed.\n\nThank you,\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{department_name}}','{{tender_title}}','{{tender_number}}','{{tender_fee_text}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'body' => "To,\n{{department_name}}\nSubject: Submission of tender documents for {{tender_title}} ({{tender_number}})\n\nRespected Sir/Madam,\n\nWe, {{contractor_firm_name}}, are submitting our bid for the above-mentioned tender. Tender fee and supporting documents are enclosed.\n\nThank you,\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{department_name}}','{{tender_title}}','{{tender_number}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
             'createdAt' => $now,
         ],
         'cover_letter_emd' => [
             'type' => 'cover_letter',
             'title' => 'Covering Letter for EMD Submission',
-            'body' => "To,\n{{department_name}}\nSubject: Submission of EMD for {{tender_title}} ({{tender_number}})\n\nDear Sir/Madam,\n\nPlease find enclosed the Earnest Money Deposit for the above tender. EMD details: {{emd_text}}. All documents are authentic to the best of our knowledge.\n\nSincerely,\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{department_name}}','{{tender_title}}','{{tender_number}}','{{emd_text}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'body' => "To,\n{{department_name}}\nSubject: Submission of EMD for {{tender_title}} ({{tender_number}})\n\nDear Sir/Madam,\n\nPlease find enclosed the Earnest Money Deposit for the above tender. All documents are authentic to the best of our knowledge.\n\nSincerely,\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{department_name}}','{{tender_title}}','{{tender_number}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
             'createdAt' => $now,
         ],
         'information_sheet' => [
@@ -784,13 +774,6 @@ function pack_annexure_template_library(): array
             'title' => 'Declaration by Bidder',
             'body' => "We hereby declare that the information submitted for {{tender_title}} is true and correct. We accept all tender terms and conditions.\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
             'placeholders' => ['{{tender_title}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
-            'createdAt' => $now,
-        ],
-        'not_blacklisted' => [
-            'type' => 'undertaking',
-            'title' => 'Undertaking: Not Blacklisted',
-            'body' => "We, {{contractor_firm_name}}, hereby confirm that we have not been blacklisted or debarred by any government or public authority. This undertaking is submitted for {{tender_title}} ({{tender_number}}).\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{tender_title}}','{{tender_number}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
             'createdAt' => $now,
         ],
         'power_of_attorney' => [
@@ -830,9 +813,8 @@ function pack_match_annexure_template(string $label): ?array
     $library = pack_annexure_template_library();
     $map = [
         'cover_letter_fee' => ['covering letter', 'cover letter', 'tender fee', 'bid fee'],
-        'cover_letter_emd' => ['emd', 'earnest money', 'bid security'],
+        'cover_letter_emd' => ['emd', 'earnest money'],
         'information_sheet' => ['information sheet', 'bidder information', 'particulars of bidder'],
-        'not_blacklisted' => ['blacklist', 'debar', 'black listed'],
         'declaration_general' => ['declaration', 'undertaking'],
         'power_of_attorney' => ['power of attorney', 'poa', 'authorization'],
         'turnover_certificate' => ['turnover', 'annual turnover'],
@@ -883,30 +865,6 @@ function pack_generate_annexures(array $pack, array $contractor, string $context
     $sourceList = $pack['annexureList'] ?? [];
     if (!$sourceList && !empty($pack['annexures'])) {
         $sourceList = $pack['annexures'];
-    }
-    $formats = $pack['formats'] ?? [];
-    if ($formats) {
-        $sourceList = array_values(array_merge($sourceList, $formats));
-    }
-    $feeText = $pack['tenderFeeText'] ?? ($pack['fees']['tenderFeeText'] ?? '');
-    $emdText = $pack['emdText'] ?? ($pack['fees']['emdText'] ?? '');
-    $hasFeeAnnexure = false;
-    $hasEmdAnnexure = false;
-    foreach ($sourceList as $raw) {
-        $label = is_array($raw) ? ($raw['title'] ?? $raw['name'] ?? '') : (string)$raw;
-        $labelLower = mb_strtolower($label);
-        if (str_contains($labelLower, 'tender fee') || str_contains($labelLower, 'bid fee')) {
-            $hasFeeAnnexure = true;
-        }
-        if (str_contains($labelLower, 'emd') || str_contains($labelLower, 'earnest money')) {
-            $hasEmdAnnexure = true;
-        }
-    }
-    if (!$hasFeeAnnexure && $feeText !== '') {
-        $sourceList[] = 'Covering Letter - Tender Fee';
-    }
-    if (!$hasEmdAnnexure && $emdText !== '') {
-        $sourceList[] = 'Covering Letter - EMD';
     }
     foreach ($sourceList as $raw) {
         $label = is_array($raw) ? ($raw['title'] ?? ($raw['name'] ?? 'Annexure')) : (string)$raw;
@@ -1062,20 +1020,11 @@ function pack_annexure_placeholder_context(array $pack, array $contractor): arra
         '{{designation}}' => $prefill($contractor['authorizedSignatoryDesignation'] ?? '', 5),
         '{{tender_title}}' => $prefill($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender'), 6),
         '{{tender_number}}' => $prefill($pack['tenderNumber'] ?? '', 6),
-        '{{department_name}}' => $prefill($pack['departmentName'] ?? ($pack['deptName'] ?? ($pack['sourceTender']['deptName'] ?? '')), 6),
-        '{{issuing_authority}}' => $prefill($pack['issuingAuthority'] ?? '', 6),
-        '{{submission_deadline}}' => $prefill($pack['submissionDeadline'] ?? '', 6),
-        '{{opening_date}}' => $prefill($pack['openingDate'] ?? '', 6),
+        '{{department_name}}' => $prefill($pack['deptName'] ?? ($pack['sourceTender']['deptName'] ?? ''), 6),
         '{{place}}' => $prefill($placeDefault, 6),
         '{{date}}' => now_kolkata()->format('d M Y'),
         '{{contractor_email}}' => $prefill($contractor['email'] ?? '', 6),
         '{{contractor_mobile}}' => $prefill($contractor['mobile'] ?? '', 6),
-        '{{email}}' => $prefill($contractor['email'] ?? '', 6),
-        '{{mobile}}' => $prefill($contractor['mobile'] ?? '', 6),
-        '{{tender_fee_text}}' => $prefill($pack['tenderFeeText'] ?? ($pack['fees']['tenderFeeText'] ?? ''), 6),
-        '{{emd_text}}' => $prefill($pack['emdText'] ?? ($pack['fees']['emdText'] ?? ''), 6),
-        '{{sd_text}}' => $prefill($pack['sdText'] ?? ($pack['fees']['sdText'] ?? ''), 6),
-        '{{pg_text}}' => $prefill($pack['pgText'] ?? ($pack['fees']['pgText'] ?? ''), 6),
         '{{annexure_title}}' => '',
         '{{annexure_code}}' => '',
     ];
