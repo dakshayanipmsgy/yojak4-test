@@ -772,8 +772,15 @@ function pack_annexure_template_library(): array
         'declaration_general' => [
             'type' => 'declaration',
             'title' => 'Declaration by Bidder',
-            'body' => "We hereby declare that the information submitted for {{tender_title}} is true and correct. We accept all tender terms and conditions.\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
+            'body' => "We hereby declare that the information submitted for {{tender_title}} is true and correct, and no material facts have been concealed or misrepresented.\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
             'placeholders' => ['{{tender_title}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'createdAt' => $now,
+        ],
+        'no_blacklisting' => [
+            'type' => 'undertaking',
+            'title' => 'Undertaking: No Blacklisting',
+            'body' => "We, {{contractor_firm_name}}, hereby certify that we have not been blacklisted or debarred by any Government or PSU. We undertake to inform the tendering authority if any such action occurs in future.\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
             'createdAt' => $now,
         ],
         'power_of_attorney' => [
@@ -786,14 +793,14 @@ function pack_annexure_template_library(): array
         'turnover_certificate' => [
             'type' => 'turnover_certificate',
             'title' => 'Annual Turnover Certificate',
-            'body' => "This is to certify that {{contractor_firm_name}} has achieved the following turnovers (audited):\nFY ____ : ₹ __________\nFY ____ : ₹ __________\nFY ____ : ₹ __________\n\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
+            'body' => "This is to certify that {{contractor_firm_name}} has achieved the following turnovers (audited):\nFY ____ : ₹ __________\nFY ____ : ₹ __________\nFY ____ : ₹ __________\n\nUDIN: __________\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
             'placeholders' => ['{{contractor_firm_name}}','{{date}}','{{place}}'],
             'createdAt' => $now,
         ],
         'net_worth_certificate' => [
             'type' => 'net_worth_certificate',
             'title' => 'Net Worth Certificate',
-            'body' => "Certified that the Net Worth of {{contractor_firm_name}} as on ____ is ₹ __________ (in words: __________).\n\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
+            'body' => "Certified that the Net Worth of {{contractor_firm_name}} as on ____ is ₹ __________ (in words: __________).\n\nUDIN: __________\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
             'placeholders' => ['{{contractor_firm_name}}','{{date}}','{{place}}'],
             'createdAt' => $now,
         ],
@@ -815,6 +822,7 @@ function pack_match_annexure_template(string $label): ?array
         'cover_letter_fee' => ['covering letter', 'cover letter', 'tender fee', 'bid fee'],
         'cover_letter_emd' => ['emd', 'earnest money'],
         'information_sheet' => ['information sheet', 'bidder information', 'particulars of bidder'],
+        'no_blacklisting' => ['blacklist', 'black listing', 'debar'],
         'declaration_general' => ['declaration', 'undertaking'],
         'power_of_attorney' => ['power of attorney', 'poa', 'authorization'],
         'turnover_certificate' => ['turnover', 'annual turnover'],
@@ -880,8 +888,8 @@ function pack_generate_annexures(array $pack, array $contractor, string $context
         $matched = pack_match_annexure_template($label) ?? [
             'type' => 'other',
             'title' => $label,
-            'body' => "This annexure format is not auto-generated. Please prepare manually and attach.\n\nTitle: {{annexure_code}} — {{annexure_title}}\nContractor: {{contractor_firm_name}}",
-            'placeholders' => ['{{annexure_code}}','{{annexure_title}}','{{contractor_firm_name}}'],
+            'body' => "Annexure {{annexure_code}} — {{annexure_title}}\n\nProvide the required details below:\n1. ________________________________\n2. ________________________________\n3. ________________________________\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{annexure_code}}','{{annexure_title}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
             'createdAt' => now_kolkata()->format(DateTime::ATOM),
         ];
         $annexureCode = 'Annexure-' . (count($templates) + count($existingIndex) + 1);
