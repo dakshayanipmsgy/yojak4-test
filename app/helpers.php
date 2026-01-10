@@ -39,6 +39,8 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/runtime_errors',
         DATA_PATH . '/logs/public_tenders',
         DATA_PATH . '/support/assisted_extraction',
+        DATA_PATH . '/support/assisted_tasks',
+        DATA_PATH . '/support/assisted_tasks/tasks',
         DATA_PATH . '/defaults',
     ];
 
@@ -121,6 +123,8 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/tenders_publication.log',
         DATA_PATH . '/logs/packs.log',
         DATA_PATH . '/logs/assisted_extraction.log',
+        DATA_PATH . '/logs/assisted_tasks.log',
+        DATA_PATH . '/logs/ai.log',
         DATA_PATH . '/logs/print.log',
         DATA_PATH . '/logs/contractor_profile.log',
         DATA_PATH . '/logs/templates.log',
