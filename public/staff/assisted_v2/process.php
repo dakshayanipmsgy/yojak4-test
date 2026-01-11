@@ -36,7 +36,7 @@ safe_page(function () {
     $draftSummary = $draftPayload ? assisted_v2_payload_summary($draftPayload) : null;
 
     $title = get_app_config()['appName'] . ' | Assisted Pack v2';
-    render_layout($title, function () use ($request, $tender, $templatesIndex, $promptText, $draftSummary) {
+    render_layout($title, function () use ($request, $tender, $templatesIndex, $promptText, $draftSummary, $draftPayload) {
         $pdfPath = $request['source']['tenderPdfPath'] ?? '';
         ?>
         <div class="card" style="display:grid;gap:12px;">
@@ -115,6 +115,20 @@ safe_page(function () {
                             <li><?= sanitize('Formats listed: ' . $draftSummary['formatCount']); ?></li>
                             <li><?= sanitize('Restricted annexures: ' . $draftSummary['restrictedCount']); ?></li>
                         </ul>
+                        <?php if (!empty($draftPayload['restrictedAnnexures'])): ?>
+                            <div style="margin-top:10px;display:grid;gap:6px;">
+                                <strong><?= sanitize('Restricted annexures'); ?></strong>
+                                <div style="display:grid;gap:6px;">
+                                    <?php foreach ($draftPayload['restrictedAnnexures'] as $rest): ?>
+                                        <?php $label = is_array($rest) ? ($rest['title'] ?? ($rest['name'] ?? 'Restricted')) : (string)$rest; ?>
+                                        <div style="border:1px solid #30363d;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                                            <span><?= sanitize($label); ?></span>
+                                            <span class="pill" style="border-color:#30363d;color:#9da7b3;"><?= sanitize('Not supported (no rates)'); ?></span>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <form method="post" action="/staff/assisted_v2/deliver.php" style="display:grid;gap:8px;">
                         <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">

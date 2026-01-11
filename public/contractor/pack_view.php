@@ -342,7 +342,7 @@ safe_page(function () {
                                 <div>
                                     <strong><?= sanitize($label); ?></strong>
                                     <?php if (pack_is_restricted_annexure_label($label)): ?>
-                                        <div class="muted" style="color:#ffb3b8;"><?= sanitize('Not supported in YOJAK'); ?></div>
+                                        <div class="muted" style="color:#ffb3b8;"><?= sanitize('Restricted: not supported in YOJAK (no rate docs)'); ?></div>
                                     <?php endif; ?>
                                 </div>
                                 <span class="pill"><?= sanitize('Annexure'); ?></span>
@@ -380,7 +380,10 @@ safe_page(function () {
                         <p class="muted" style="margin:6px 0 0;"><?= sanitize('YOJAK will not ask for rates. These items are shown only for awareness.'); ?></p>
                         <ul style="margin:6px 0 0 16px; padding:0;">
                             <?php foreach ($pack['restrictedAnnexures'] as $rest): ?>
-                                <li><?= sanitize(is_array($rest) ? ($rest['title'] ?? ($rest['name'] ?? 'Restricted')) : (string)$rest); ?></li>
+                                <li>
+                                    <?= sanitize(is_array($rest) ? ($rest['title'] ?? ($rest['name'] ?? 'Restricted')) : (string)$rest); ?>
+                                    <span class="muted"><?= sanitize(' — Restricted: not supported in YOJAK (no rate docs)'); ?></span>
+                                </li>
                             <?php endforeach; ?>
                         </ul>
                     </div>

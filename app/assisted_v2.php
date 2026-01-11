@@ -931,6 +931,22 @@ function assisted_v2_evaluate_string_forbidden(string $value, string $path, arra
         return null;
     }
 
+    $isRestrictedInfoPath = assisted_v2_is_restricted_info_path($path) || (!empty($context['restrictedInfoPath']));
+    if ($isRestrictedInfoPath) {
+        $hasPricingEvidence = assisted_v2_contains_pricing_numeric_evidence($value);
+        $hasPricingContext = assisted_v2_contains_pricing_context_keyword($value);
+        if ($hasPricingEvidence && $hasPricingContext) {
+            assisted_v2_log_restricted_validation($path, 'blocked', 'BLOCK_FORBIDDEN_PRICING_EVIDENCE');
+            return [
+                'path' => $path,
+                'action' => 'blocked',
+                'snippet' => assisted_v2_redact_snippet($value),
+            ];
+        }
+        assisted_v2_log_restricted_validation($path, 'allowed_restricted', 'RESTRICTED_REFERENCE_ALLOWED');
+        return null;
+    }
+
     $hasCurrency = assisted_v2_contains_currency_amount($value);
     $hasCurrencyMarker = assisted_v2_contains_currency_marker($value);
     $hasNumericRatePattern = assisted_v2_contains_numeric_rate_pattern($value);
@@ -1015,6 +1031,24 @@ function assisted_v2_contains_currency_amount(string $value): bool
     return (bool)preg_match('/(₹|rs\.?|inr)\s*\d[\d,\.]*/i', $value);
 }
 
+function assisted_v2_contains_pricing_numeric_evidence(string $value): bool
+{
+    if (assisted_v2_contains_currency_amount($value)) {
+        return true;
+    }
+    if (assisted_v2_contains_numeric_rate_pattern($value)) {
+        return true;
+    }
+    $hasDigits = (bool)preg_match('/\d/', $value);
+    $hasRateWord = (bool)preg_match('/\b(rate|per|unit rate)\b/i', $value);
+    return $hasDigits && ($hasRateWord || assisted_v2_contains_currency_marker($value));
+}
+
+function assisted_v2_contains_pricing_context_keyword(string $value): bool
+{
+    return (bool)preg_match('/(boq|bill of quant|sor|schedule of rates|quoted rate|price schedule|financial bid amount|financial bid|price bid|commercial bid|rate sheet|quote|quoted)/i', $value);
+}
+
 function assisted_v2_contains_allow_marker(string $value): bool
 {
     return (bool)preg_match('/(emd|tender fee|security deposit|performance guarantee|pg)/i', $value);
@@ -1040,6 +1074,23 @@ function assisted_v2_contains_numeric_rate_pattern(string $value): bool
     return (bool)preg_match('/\d+\s*(per|\/)\s*(unit|sqm|sq\.?m|meter|km|kg|ton|day|month)/i', $value);
 }
 
+function assisted_v2_is_restricted_info_path(string $path): bool
+{
+    $lower = strtolower($path);
+    $targets = [
+        'root.restrictedannexures',
+        'root.lists.restricted',
+        'root.notes',
+        'root.sourcesnippets',
+    ];
+    foreach ($targets as $target) {
+        if ($lower === $target || str_starts_with($lower, $target . '.')) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function assisted_v2_is_restricted_path(string $path): bool
 {
     return str_contains($path, 'restrictedAnnexures');
@@ -1048,10 +1099,11 @@ function assisted_v2_is_restricted_path(string $path): bool
 function assisted_v2_log_restricted_validation(string $path, string $action, string $reasonCode = 'RESTRICTED_REFERENCE_ALLOWED'): void
 {
     assisted_v2_log_event([
-        'event' => 'restricted_validation',
+        'event' => 'V2_VALIDATE',
         'path' => $path,
         'action' => $action,
-        'reason' => $reasonCode,
+        'reasonCode' => $reasonCode,
+        'at' => now_kolkata()->format(DateTime::ATOM),
     ]);
 }
 
