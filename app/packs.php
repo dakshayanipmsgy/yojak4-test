@@ -358,6 +358,28 @@ function pack_apply_schema_defaults(array $pack): array
     if (!isset($pack['fieldOverrides']) || !is_array($pack['fieldOverrides'])) {
         $pack['fieldOverrides'] = [];
     }
+    if (!isset($pack['fieldRegistry']) || !is_array($pack['fieldRegistry'])) {
+        $pack['fieldRegistry'] = [];
+    }
+    if (!isset($pack['fieldMeta']) || !is_array($pack['fieldMeta'])) {
+        $pack['fieldMeta'] = [];
+    }
+    $pack['fieldMeta'] = array_merge(pack_default_field_meta(), $pack['fieldMeta']);
+    $normalizedRegistry = [];
+    foreach ($pack['fieldRegistry'] as $key => $value) {
+        $normalized = pack_normalize_placeholder_key((string)$key);
+        if ($normalized === '') {
+            continue;
+        }
+        $normalizedRegistry[$normalized] = trim((string)$value);
+    }
+    foreach ($pack['fieldOverrides'] as $key => $value) {
+        $normalized = pack_normalize_placeholder_key((string)$key);
+        if ($normalized !== '' && !array_key_exists($normalized, $normalizedRegistry)) {
+            $normalizedRegistry[$normalized] = trim((string)$value);
+        }
+    }
+    $pack['fieldRegistry'] = $normalizedRegistry;
     if (!isset($pack['printPrefs']) || !is_array($pack['printPrefs'])) {
         $pack['printPrefs'] = default_pack_print_prefs();
     } else {
@@ -390,7 +412,9 @@ function pack_tender_context(array $pack): array
 function pack_template_payloads(array $pack, array $contractor): array
 {
     $templates = load_contractor_templates_full($pack['yojId']);
+    $catalog = pack_field_meta_catalog($pack, [], $templates);
     $contextMap = contractor_template_context($contractor, pack_tender_context($pack));
+    $contextMap = array_merge($contextMap, pack_placeholder_value_map($pack, $contractor, $catalog));
     foreach ($contextMap as $key => $value) {
         if (trim((string)$value) === '') {
             $contextMap[$key] = '__________';
@@ -726,6 +750,13 @@ function pack_apply_default_templates(array $pack, array $tender, array $contrac
     }
 
     $contextMap = contractor_template_context($contractor, $tender);
+    $catalog = pack_field_meta_catalog($pack, [], $defaults);
+    $contextMap = array_merge($contextMap, pack_placeholder_value_map($pack, $contractor, $catalog));
+    foreach ($contextMap as $key => $value) {
+        if (trim((string)$value) === '') {
+            $contextMap[$key] = '__________';
+        }
+    }
     $now = now_kolkata()->format(DateTime::ATOM);
     $docs = $pack['generatedDocs'] ?? [];
 
@@ -786,8 +817,8 @@ function pack_annexure_template_library(): array
         'information_sheet' => [
             'type' => 'info_sheet',
             'title' => 'Bidder Information Sheet',
-            'body' => "Name of Bidder/Firm: {{contractor_firm_name}}\nType of Firm: {{contractor_firm_type}}\nAddress: {{contractor_address}}\nGST: {{contractor_gst}} | PAN: {{contractor_pan}}\nAuthorized Signatory: {{authorized_signatory}} ({{designation}})\nEmail: {{contractor_email}} | Mobile: {{contractor_mobile}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{contractor_firm_type}}','{{contractor_address}}','{{contractor_gst}}','{{contractor_pan}}','{{authorized_signatory}}','{{designation}}','{{contractor_email}}','{{contractor_mobile}}'],
+            'body' => "Name of Bidder/Firm: {{contractor_firm_name}}\nType of Firm: {{contractor_firm_type}}\nAddress: {{contractor_address}}\nGST: {{contractor_gst}} | PAN: {{contractor_pan}}\nAuthorized Signatory: {{authorized_signatory}} ({{designation}})\nOffice Phone: {{contact.office_phone}} | Residence Phone: {{contact.residence_phone}}\nEmail: {{contact.email}} | Mobile: {{contact.mobile}} | Fax: {{contact.fax}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{contractor_firm_type}}','{{contractor_address}}','{{contractor_gst}}','{{contractor_pan}}','{{authorized_signatory}}','{{designation}}','{{contact.office_phone}}','{{contact.residence_phone}}','{{contact.email}}','{{contact.mobile}}','{{contact.fax}}'],
             'createdAt' => $now,
         ],
         'declaration_general' => [
@@ -807,15 +838,15 @@ function pack_annexure_template_library(): array
         'turnover_certificate' => [
             'type' => 'turnover_certificate',
             'title' => 'Annual Turnover Certificate',
-            'body' => "This is to certify that {{contractor_firm_name}} has achieved the following turnovers (audited):\nFY ____ : ₹ __________\nFY ____ : ₹ __________\nFY ____ : ₹ __________\n\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{date}}','{{place}}'],
+            'body' => "This is to certify that {{contractor_firm_name}} has achieved the following turnovers (audited):\n{{turnover_details}}\n\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{turnover_details}}','{{date}}','{{place}}'],
             'createdAt' => $now,
         ],
         'net_worth_certificate' => [
             'type' => 'net_worth_certificate',
             'title' => 'Net Worth Certificate',
-            'body' => "Certified that the Net Worth of {{contractor_firm_name}} as on ____ is ₹ __________ (in words: __________).\n\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{date}}','{{place}}'],
+            'body' => "Certified that the Net Worth of {{contractor_firm_name}} as on {{net_worth_as_on}} is ₹ {{net_worth_amount}} (in words: {{net_worth_in_words}}).\n\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
+            'placeholders' => ['{{contractor_firm_name}}','{{net_worth_as_on}}','{{net_worth_amount}}','{{net_worth_in_words}}','{{date}}','{{place}}'],
             'createdAt' => $now,
         ],
         'msme_undertaking' => [
@@ -921,7 +952,10 @@ function pack_generate_annexures(array $pack, array $contractor, string $context
             'title' => $matched['title'] ?? $label,
             'type' => $matched['type'] ?? 'other',
             'bodyTemplate' => $matched['body'] ?? '',
+            'renderTemplate' => $matched['body'] ?? '',
             'placeholders' => $matched['placeholders'] ?? [],
+            'requiredFields' => $matched['requiredFields'] ?? [],
+            'tables' => $matched['tables'] ?? [],
             'createdAt' => $matched['createdAt'] ?? now_kolkata()->format(DateTime::ATOM),
         ];
     }
@@ -1019,26 +1053,136 @@ function pack_upsert_offline_tender(array $tender, array $normalized, array $con
     return $pack;
 }
 
-function pack_editable_field_catalog(): array
+function pack_default_field_meta(): array
 {
     return [
-        'contractor_firm_name' => ['label' => 'Contractor firm name', 'group' => 'Other', 'max' => 160, 'type' => 'text'],
-        'contractor_address' => ['label' => 'Contractor address', 'group' => 'Other', 'max' => 400, 'type' => 'textarea'],
-        'contractor_gst' => ['label' => 'GST number', 'group' => 'Other', 'max' => 80, 'type' => 'text'],
-        'contractor_pan' => ['label' => 'PAN number', 'group' => 'Other', 'max' => 80, 'type' => 'text'],
+        'contractor_firm_name' => ['label' => 'Contractor firm name', 'group' => 'Contractor Contact', 'max' => 160, 'type' => 'text'],
+        'contractor_firm_type' => ['label' => 'Firm type', 'group' => 'Contractor Contact', 'max' => 80, 'type' => 'text'],
+        'contractor_address' => ['label' => 'Contractor address', 'group' => 'Contractor Contact', 'max' => 400, 'type' => 'textarea'],
+        'contractor_gst' => ['label' => 'GST number', 'group' => 'Contractor Contact', 'max' => 80, 'type' => 'text'],
+        'contractor_pan' => ['label' => 'PAN number', 'group' => 'Contractor Contact', 'max' => 80, 'type' => 'text'],
+        'contact.office_phone' => ['label' => 'Office phone', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
+        'contact.residence_phone' => ['label' => 'Residence phone', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
+        'contact.mobile' => ['label' => 'Mobile', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
+        'contact.fax' => ['label' => 'Fax', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
+        'contact.email' => ['label' => 'Email', 'group' => 'Contractor Contact', 'max' => 120, 'type' => 'text'],
+        'bank.account_no' => ['label' => 'Bank account number', 'group' => 'Bank Details', 'max' => 60, 'type' => 'text'],
+        'bank.ifsc' => ['label' => 'IFSC', 'group' => 'Bank Details', 'max' => 20, 'type' => 'text'],
+        'bank.bank_name' => ['label' => 'Bank name', 'group' => 'Bank Details', 'max' => 120, 'type' => 'text'],
+        'bank.branch' => ['label' => 'Bank branch', 'group' => 'Bank Details', 'max' => 120, 'type' => 'text'],
         'authorized_signatory' => ['label' => 'Authorized signatory', 'group' => 'Signatory', 'max' => 160, 'type' => 'text'],
         'designation' => ['label' => 'Signatory designation', 'group' => 'Signatory', 'max' => 120, 'type' => 'text'],
-        'tender_title' => ['label' => 'Tender title', 'group' => 'Tender details', 'max' => 200, 'type' => 'text'],
-        'tender_number' => ['label' => 'Tender number', 'group' => 'Tender details', 'max' => 120, 'type' => 'text'],
-        'department_name' => ['label' => 'Department name', 'group' => 'Tender details', 'max' => 200, 'type' => 'text'],
-        'submission_deadline' => ['label' => 'Submission deadline', 'group' => 'Tender details', 'max' => 120, 'type' => 'text'],
-        'emd_text' => ['label' => 'EMD details', 'group' => 'Tender details', 'max' => 240, 'type' => 'textarea'],
-        'fee_text' => ['label' => 'Tender fee details', 'group' => 'Tender details', 'max' => 240, 'type' => 'textarea'],
-        'place' => ['label' => 'Place', 'group' => 'Other', 'max' => 120, 'type' => 'text'],
-        'date' => ['label' => 'Date', 'group' => 'Other', 'max' => 40, 'type' => 'date'],
-        'officer_name' => ['label' => 'Officer name', 'group' => 'Office/Authority details', 'max' => 160, 'type' => 'text'],
-        'office_address' => ['label' => 'Office address', 'group' => 'Office/Authority details', 'max' => 400, 'type' => 'textarea'],
+        'place' => ['label' => 'Place', 'group' => 'Signatory', 'max' => 120, 'type' => 'text'],
+        'date' => ['label' => 'Date', 'group' => 'Signatory', 'max' => 40, 'type' => 'date'],
+        'tender_title' => ['label' => 'Tender title', 'group' => 'Tender Meta', 'max' => 200, 'type' => 'text', 'readOnly' => true],
+        'tender_number' => ['label' => 'Tender number', 'group' => 'Tender Meta', 'max' => 120, 'type' => 'text', 'readOnly' => true],
+        'department_name' => ['label' => 'Department name', 'group' => 'Tender Meta', 'max' => 200, 'type' => 'text', 'readOnly' => true],
+        'submission_deadline' => ['label' => 'Submission deadline', 'group' => 'Tender Meta', 'max' => 120, 'type' => 'text', 'readOnly' => true],
+        'emd_text' => ['label' => 'EMD details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
+        'fee_text' => ['label' => 'Tender fee details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
+        'sd_text' => ['label' => 'Security deposit details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
+        'pg_text' => ['label' => 'Performance guarantee details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
+        'officer_name' => ['label' => 'Officer name', 'group' => 'Tender Meta', 'max' => 160, 'type' => 'text', 'readOnly' => true],
+        'office_address' => ['label' => 'Office address', 'group' => 'Tender Meta', 'max' => 400, 'type' => 'textarea', 'readOnly' => true],
+        'warranty_years' => ['label' => 'Warranty (years)', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
+        'installation_timeline_days' => ['label' => 'Installation timeline (days)', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
+        'local_content_percent' => ['label' => 'Local content (%)', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
+        'company.core_expertise' => ['label' => 'Core expertise', 'group' => 'Other', 'max' => 240, 'type' => 'textarea'],
+        'company.year_established' => ['label' => 'Year of establishment', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
+        'company.key_licenses' => ['label' => 'Key licenses', 'group' => 'Other', 'max' => 240, 'type' => 'textarea'],
+        'experience_summary_table' => ['label' => 'Experience summary table', 'group' => 'Other', 'max' => 1500, 'type' => 'textarea'],
+        'manpower_list_table' => ['label' => 'Manpower list', 'group' => 'Other', 'max' => 1500, 'type' => 'textarea'],
+        'equipment_list_table' => ['label' => 'Equipment list', 'group' => 'Other', 'max' => 1500, 'type' => 'textarea'],
+        'turnover_details' => ['label' => 'Turnover details', 'group' => 'Other', 'max' => 800, 'type' => 'textarea'],
+        'net_worth_as_on' => ['label' => 'Net worth as on', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
+        'net_worth_amount' => ['label' => 'Net worth amount', 'group' => 'Other', 'max' => 80, 'type' => 'text'],
+        'net_worth_in_words' => ['label' => 'Net worth (in words)', 'group' => 'Other', 'max' => 120, 'type' => 'text'],
+        'compliance.SolarArrayCapacity' => ['label' => 'Solar Array Capacity meets tender spec', 'group' => 'Compliance Table', 'max' => 10, 'type' => 'choice', 'choices' => ['yes', 'no', 'na']],
+        'compliance.SolarModules' => ['label' => 'Solar Modules comply', 'group' => 'Compliance Table', 'max' => 10, 'type' => 'choice', 'choices' => ['yes', 'no', 'na']],
     ];
+}
+
+function pack_editable_field_catalog(): array
+{
+    return pack_default_field_meta();
+}
+
+function pack_field_aliases(): array
+{
+    return [
+        'contractor_email' => 'contact.email',
+        'email' => 'contact.email',
+        'contractor_mobile' => 'contact.mobile',
+        'mobile' => 'contact.mobile',
+        'office_phone' => 'contact.office_phone',
+        'residence_phone' => 'contact.residence_phone',
+        'fax' => 'contact.fax',
+        'bank_name' => 'bank.bank_name',
+        'bank_branch' => 'bank.branch',
+        'bank_account' => 'bank.account_no',
+        'account_no' => 'bank.account_no',
+        'ifsc' => 'bank.ifsc',
+    ];
+}
+
+function pack_field_meta_catalog(array $pack, array $annexureTemplates = [], array $contractorTemplates = []): array
+{
+    $meta = pack_default_field_meta();
+    if (isset($pack['fieldMeta']) && is_array($pack['fieldMeta'])) {
+        $meta = array_merge($meta, $pack['fieldMeta']);
+    }
+
+    $register = static function (array $spec) use (&$meta): void {
+        $key = pack_normalize_placeholder_key((string)($spec['key'] ?? ''));
+        if ($key === '') {
+            return;
+        }
+        if (!isset($meta[$key])) {
+            $meta[$key] = [
+                'label' => $spec['label'] ?? $key,
+                'group' => $spec['group'] ?? 'Other',
+                'max' => (int)($spec['maxLen'] ?? 200),
+                'type' => $spec['type'] ?? 'text',
+            ];
+        }
+        if (!empty($spec['choices']) && empty($meta[$key]['choices'])) {
+            $meta[$key]['choices'] = array_values(array_unique(array_map('strval', $spec['choices'])));
+        }
+    };
+
+    foreach ($annexureTemplates as $tpl) {
+        foreach ((array)($tpl['requiredFields'] ?? []) as $spec) {
+            if (is_array($spec)) {
+                $register($spec);
+            }
+        }
+        foreach ((array)($tpl['tables'] ?? []) as $table) {
+            foreach ((array)($table['rows'] ?? []) as $row) {
+                if (is_array($row)) {
+                    $register($row);
+                }
+            }
+        }
+    }
+
+    foreach ($contractorTemplates as $tpl) {
+        if (!is_array($tpl)) {
+            continue;
+        }
+        $placeholders = pack_extract_placeholders_from_template($tpl);
+        foreach ($placeholders as $key) {
+            if (!isset($meta[$key])) {
+                $meta[$key] = [
+                    'label' => ucwords(str_replace(['.', '_'], ' ', $key)),
+                    'group' => 'Other',
+                    'max' => 200,
+                    'type' => 'text',
+                ];
+            }
+        }
+    }
+
+    return $meta;
 }
 
 function pack_normalize_placeholder_key(string $raw): string
@@ -1046,7 +1190,9 @@ function pack_normalize_placeholder_key(string $raw): string
     $key = trim($raw);
     $key = preg_replace('/^{+\s*/', '', $key);
     $key = preg_replace('/\s*}+$/', '', $key);
-    return strtolower(trim($key));
+    $key = strtolower(trim($key));
+    $aliases = pack_field_aliases();
+    return $aliases[$key] ?? $key;
 }
 
 function pack_placeholder_base_values(array $pack, array $contractor): array
@@ -1056,6 +1202,10 @@ function pack_placeholder_base_values(array $pack, array $contractor): array
         $placeDefault = $contractor['district'] ?? '';
     }
     $fees = is_array($pack['fees'] ?? null) ? $pack['fees'] : [];
+    $officePhone = $contractor['officePhone'] ?? ($contractor['office_phone'] ?? '');
+    $residencePhone = $contractor['residencePhone'] ?? ($contractor['residence_phone'] ?? '');
+    $fax = $contractor['fax'] ?? '';
+    $bankBranch = $contractor['bankBranch'] ?? ($contractor['bank_branch'] ?? '');
 
     return [
         'contractor_firm_name' => $contractor['firmName'] ?? ($contractor['name'] ?? ''),
@@ -1065,6 +1215,15 @@ function pack_placeholder_base_values(array $pack, array $contractor): array
         'contractor_pan' => $contractor['panNumber'] ?? '',
         'authorized_signatory' => $contractor['authorizedSignatoryName'] ?? ($contractor['name'] ?? ''),
         'designation' => $contractor['authorizedSignatoryDesignation'] ?? '',
+        'contact.office_phone' => $officePhone,
+        'contact.residence_phone' => $residencePhone,
+        'contact.mobile' => $contractor['mobile'] ?? '',
+        'contact.fax' => $fax,
+        'contact.email' => $contractor['email'] ?? '',
+        'bank.account_no' => $contractor['bankAccount'] ?? '',
+        'bank.ifsc' => $contractor['ifsc'] ?? '',
+        'bank.bank_name' => $contractor['bankName'] ?? '',
+        'bank.branch' => $bankBranch,
         'tender_title' => $pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender'),
         'tender_number' => $pack['tenderNumber'] ?? '',
         'department_name' => $pack['departmentName'] ?? ($pack['deptName'] ?? ($pack['sourceTender']['deptName'] ?? '')),
@@ -1079,6 +1238,19 @@ function pack_placeholder_base_values(array $pack, array $contractor): array
         'pg_text' => $fees['pgText'] ?? '',
         'officer_name' => $pack['officerName'] ?? '',
         'office_address' => $pack['officeAddress'] ?? '',
+        'warranty_years' => $pack['warrantyYears'] ?? '',
+        'installation_timeline_days' => $pack['installationTimelineDays'] ?? '',
+        'local_content_percent' => $pack['localContentPercent'] ?? '',
+        'company.core_expertise' => $contractor['coreExpertise'] ?? '',
+        'company.year_established' => $contractor['yearEstablished'] ?? '',
+        'company.key_licenses' => $contractor['keyLicenses'] ?? '',
+        'experience_summary_table' => '',
+        'manpower_list_table' => '',
+        'equipment_list_table' => '',
+        'turnover_details' => '',
+        'net_worth_as_on' => '',
+        'net_worth_amount' => '',
+        'net_worth_in_words' => '',
         'annexure_title' => '',
         'annexure_code' => '',
     ];
@@ -1087,55 +1259,62 @@ function pack_placeholder_base_values(array $pack, array $contractor): array
 function pack_resolve_field_value(string $key, array $pack, array $contractor, bool $useOverrides = true): string
 {
     $key = pack_normalize_placeholder_key($key);
-    $overrides = is_array($pack['fieldOverrides'] ?? null) ? $pack['fieldOverrides'] : [];
-    if ($useOverrides && array_key_exists($key, $overrides)) {
-        return trim((string)$overrides[$key]);
+    $registry = is_array($pack['fieldRegistry'] ?? null) ? $pack['fieldRegistry'] : [];
+    if ($useOverrides && array_key_exists($key, $registry)) {
+        $value = trim((string)$registry[$key]);
+        if ($value !== '') {
+            return $value;
+        }
     }
     $base = pack_placeholder_base_values($pack, $contractor);
     return trim((string)($base[$key] ?? ''));
 }
 
-function pack_placeholder_value_map(array $pack, array $contractor): array
+function pack_placeholder_value_map(array $pack, array $contractor, ?array $catalog = null): array
 {
     $prefill = static function ($value, int $minLength = 20): string {
         $trim = trim((string)$value);
         return $trim === '' ? str_repeat('_', $minLength) : $trim;
     };
 
-    $base = pack_placeholder_base_values($pack, $contractor);
-    $overrides = is_array($pack['fieldOverrides'] ?? null) ? $pack['fieldOverrides'] : [];
-    foreach ($overrides as $key => $value) {
-        $key = pack_normalize_placeholder_key((string)$key);
-        if (array_key_exists($key, $base)) {
-            $base[$key] = trim((string)$value);
-        }
+    $map = [];
+    $catalog = $catalog ?? pack_field_meta_catalog($pack);
+    foreach (array_keys($catalog) as $key) {
+        $value = pack_resolve_field_value($key, $pack, $contractor, true);
+        $map['{{' . $key . '}}'] = $prefill($value, 6);
     }
 
-    return [
-        '{{contractor_firm_name}}' => $prefill($base['contractor_firm_name'] ?? ''),
-        '{{contractor_firm_type}}' => $prefill($base['contractor_firm_type'] ?? '', 5),
-        '{{contractor_address}}' => $prefill($base['contractor_address'] ?? ''),
-        '{{contractor_gst}}' => $prefill($base['contractor_gst'] ?? '', 5),
-        '{{contractor_pan}}' => $prefill($base['contractor_pan'] ?? '', 5),
-        '{{authorized_signatory}}' => $prefill($base['authorized_signatory'] ?? '', 5),
-        '{{designation}}' => $prefill($base['designation'] ?? '', 5),
-        '{{tender_title}}' => $prefill($base['tender_title'] ?? '', 6),
-        '{{tender_number}}' => $prefill($base['tender_number'] ?? '', 6),
-        '{{department_name}}' => $prefill($base['department_name'] ?? '', 6),
-        '{{place}}' => $prefill($base['place'] ?? '', 6),
-        '{{date}}' => $prefill($base['date'] ?? '', 8),
-        '{{contractor_email}}' => $prefill($base['contractor_email'] ?? '', 6),
-        '{{contractor_mobile}}' => $prefill($base['contractor_mobile'] ?? '', 6),
-        '{{submission_deadline}}' => $prefill($base['submission_deadline'] ?? '', 6),
-        '{{emd_text}}' => $prefill($base['emd_text'] ?? '', 8),
-        '{{fee_text}}' => $prefill($base['fee_text'] ?? '', 8),
-        '{{sd_text}}' => $prefill($base['sd_text'] ?? '', 8),
-        '{{pg_text}}' => $prefill($base['pg_text'] ?? '', 8),
-        '{{officer_name}}' => $prefill($base['officer_name'] ?? '', 6),
-        '{{office_address}}' => $prefill($base['office_address'] ?? '', 8),
-        '{{annexure_title}}' => '',
-        '{{annexure_code}}' => '',
-    ];
+    $aliases = pack_field_aliases();
+    foreach ($aliases as $alias => $canonical) {
+        $value = pack_resolve_field_value($canonical, $pack, $contractor, true);
+        $map['{{' . $alias . '}}'] = $prefill($value, 6);
+    }
+
+    $map['{{annexure_title}}'] = '';
+    $map['{{annexure_code}}'] = '';
+
+    return $map;
+}
+
+function pack_seed_field_registry(array $pack, array $contractor, array $annexureTemplates = [], array $contractorTemplates = []): array
+{
+    $registry = is_array($pack['fieldRegistry'] ?? null) ? $pack['fieldRegistry'] : [];
+    $catalog = pack_field_meta_catalog($pack, $annexureTemplates, $contractorTemplates);
+    $base = pack_placeholder_base_values($pack, $contractor);
+
+    foreach (array_keys($catalog) as $key) {
+        $normalized = pack_normalize_placeholder_key($key);
+        if ($normalized === '') {
+            continue;
+        }
+        if (array_key_exists($normalized, $registry)) {
+            continue;
+        }
+        $registry[$normalized] = trim((string)($base[$normalized] ?? ''));
+    }
+
+    $pack['fieldRegistry'] = $registry;
+    return $pack;
 }
 
 function pack_placeholder_suggestion(string $key, array $pack, array $contractor): string
@@ -1157,12 +1336,12 @@ function pack_placeholder_suggestion(string $key, array $pack, array $contractor
 function pack_extract_placeholders_from_template(array $template, array &$errors = []): array
 {
     $keys = [];
-    $body = $template['bodyTemplate'] ?? '';
+    $body = $template['renderTemplate'] ?? ($template['bodyTemplate'] ?? ($template['body'] ?? ''));
     if ($body !== '' && !is_string($body)) {
         $errors[] = 'invalid_body_template';
     } elseif (is_string($body)) {
         $matches = [];
-        $matched = preg_match_all('/{{\s*([a-z0-9_]+)\s*}}/i', $body, $matches);
+        $matched = preg_match_all('/{{\s*([a-z0-9_.]+)\s*}}/i', $body, $matches);
         if ($matched === false) {
             $errors[] = 'placeholder_parse_failed';
         } elseif (!empty($matches[1])) {
@@ -1190,39 +1369,76 @@ function pack_extract_placeholders_from_template(array $template, array &$errors
     return array_values(array_unique($keys));
 }
 
-function pack_collect_pack_fields(array $pack, array $contractor, array $annexureTemplates): array
+function pack_collect_pack_fields(array $pack, array $contractor, array $annexureTemplates, array $contractorTemplates = []): array
 {
-    $catalog = pack_editable_field_catalog();
-    $allowedKeys = array_keys($catalog);
-    $detected = [];
     $errors = [];
+    $catalog = pack_field_meta_catalog($pack, $annexureTemplates, $contractorTemplates);
+    $required = [];
 
     foreach ($annexureTemplates as $tpl) {
         if (!is_array($tpl)) {
             $errors[] = 'invalid_template';
             continue;
         }
+        foreach ((array)($tpl['requiredFields'] ?? []) as $spec) {
+            if (is_array($spec)) {
+                $key = pack_normalize_placeholder_key((string)($spec['key'] ?? ''));
+                if ($key !== '') {
+                    $required[$key] = true;
+                }
+            }
+        }
+        foreach ((array)($tpl['tables'] ?? []) as $table) {
+            foreach ((array)($table['rows'] ?? []) as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $key = pack_normalize_placeholder_key((string)($row['key'] ?? ''));
+                if ($key !== '') {
+                    $required[$key] = true;
+                }
+            }
+        }
         $found = pack_extract_placeholders_from_template($tpl, $errors);
         foreach ($found as $key) {
-            if (in_array($key, $allowedKeys, true)) {
-                $detected[$key] = true;
-            }
+            $required[$key] = true;
+        }
+    }
+
+    foreach ($contractorTemplates as $tpl) {
+        if (!is_array($tpl)) {
+            continue;
+        }
+        $found = pack_extract_placeholders_from_template($tpl, $errors);
+        foreach ($found as $key) {
+            $required[$key] = true;
+        }
+    }
+
+    if (!$required) {
+        foreach (array_keys($catalog) as $key) {
+            $required[$key] = true;
         }
     }
 
     $fields = [];
-    foreach (array_keys($detected) as $key) {
+    foreach (array_keys($required) as $key) {
+        if (!isset($catalog[$key])) {
+            continue;
+        }
         $value = pack_resolve_field_value($key, $pack, $contractor, true);
-        $override = trim((string)($pack['fieldOverrides'][$key] ?? ''));
+        $override = trim((string)($pack['fieldRegistry'][$key] ?? ''));
         $fields[] = [
             'key' => $key,
             'label' => $catalog[$key]['label'],
             'group' => $catalog[$key]['group'],
             'type' => $catalog[$key]['type'],
-            'max' => $catalog[$key]['max'],
+            'max' => $catalog[$key]['max'] ?? 200,
+            'choices' => $catalog[$key]['choices'] ?? [],
+            'readOnly' => !empty($catalog[$key]['readOnly']),
             'value' => $value,
             'override' => $override,
-            'missing' => $value === '',
+            'missing' => trim((string)$value) === '',
             'suggestion' => pack_placeholder_suggestion($key, $pack, $contractor),
         ];
     }
@@ -1231,7 +1447,7 @@ function pack_collect_pack_fields(array $pack, array $contractor, array $annexur
     foreach ($fields as $field) {
         $groups[$field['group']][] = $field;
     }
-    $order = ['Tender details', 'Signatory', 'Office/Authority details', 'Other'];
+    $order = ['Contractor Contact', 'Bank Details', 'Signatory', 'Tender Meta', 'Compliance Table', 'Financial Manual Entry', 'Other'];
     uksort($groups, static function ($a, $b) use ($order) {
         $posA = array_search($a, $order, true);
         $posB = array_search($b, $order, true);
@@ -1243,21 +1459,31 @@ function pack_collect_pack_fields(array $pack, array $contractor, array $annexur
         return $posA <=> $posB;
     });
 
+    $filled = 0;
+    foreach ($fields as $field) {
+        if (!$field['missing']) {
+            $filled++;
+        }
+    }
+
     return [
         'fields' => $fields,
         'groups' => $groups,
         'errors' => array_values(array_unique($errors)),
+        'total' => count($fields),
+        'filled' => $filled,
     ];
 }
 
-function pack_annexure_placeholder_context(array $pack, array $contractor): array
+function pack_annexure_placeholder_context(array $pack, array $contractor, array $annexureTemplates = []): array
 {
-    return pack_placeholder_value_map($pack, $contractor);
+    $catalog = pack_field_meta_catalog($pack, $annexureTemplates);
+    return pack_placeholder_value_map($pack, $contractor, $catalog);
 }
 
 function pack_fill_annexure_body(array $template, array $context): string
 {
-    $body = (string)($template['bodyTemplate'] ?? '');
+    $body = (string)($template['renderTemplate'] ?? ($template['bodyTemplate'] ?? ''));
     if (!str_contains($body, '{{authorized_signatory}}') && stripos($body, 'authorized signatory') === false) {
         $body .= "\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\n{{contractor_firm_name}}\nPlace: {{place}}\nDate: {{date}}";
     }
@@ -1265,6 +1491,89 @@ function pack_fill_annexure_body(array $template, array $context): string
         $body = str_replace($key, $value, $body);
     }
     return $body;
+}
+
+function pack_render_compliance_tables(array $template, array $pack, array $contractor): string
+{
+    $tables = $template['tables'] ?? [];
+    if (!is_array($tables) || !$tables) {
+        return '';
+    }
+
+    $lines = [];
+    foreach ($tables as $table) {
+        if (!is_array($table)) {
+            continue;
+        }
+        $title = trim((string)($table['title'] ?? 'Compliance'));
+        if ($title !== '') {
+            $lines[] = $title;
+        }
+        foreach ((array)($table['rows'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $key = pack_normalize_placeholder_key((string)($row['key'] ?? ''));
+            if ($key === '') {
+                continue;
+            }
+            $label = trim((string)($row['label'] ?? $key));
+            $value = strtolower(pack_resolve_field_value($key, $pack, $contractor, true));
+            $yes = $value === 'yes' ? '[x]' : '[ ]';
+            $no = $value === 'no' ? '[x]' : '[ ]';
+            $na = $value === 'na' ? '[x]' : '[ ]';
+            $lines[] = '- ' . $label . '  Yes ' . $yes . '  No ' . $no . '  N/A ' . $na;
+        }
+        $lines[] = '';
+    }
+
+    return $lines ? "\n\n" . trim(implode("\n", $lines)) : '';
+}
+
+function pack_financial_manual_templates(array $pack): array
+{
+    $restricted = $pack['restrictedAnnexures'] ?? [];
+    if (!$restricted) {
+        return [];
+    }
+
+    $templates = [];
+    $seen = [];
+    foreach ($restricted as $entry) {
+        $label = is_array($entry) ? ($entry['title'] ?? ($entry['name'] ?? 'Financial Bid')) : (string)$entry;
+        $label = trim($label);
+        if ($label === '' || isset($seen[$label])) {
+            continue;
+        }
+        $seen[$label] = true;
+        $code = 'Financial-Manual';
+        if (preg_match('/annexure\s*-?\s*([0-9a-z]+)/i', $label, $matches)) {
+            $code = 'Annexure-' . strtoupper($matches[1]) . '-Manual';
+        }
+        $body = "Financial/Commercial Bid (Manual Entry)\n"
+            . "YOJAK does not calculate or suggest rates. Fill this table manually.\n\n"
+            . "Item | Description | Qty | Unit | Rate (manual) | Amount (manual)\n"
+            . "-------------------------------------------------------------------\n"
+            . "1    | ___________ | ___ | ___  | _____________ | ________________\n"
+            . "2    | ___________ | ___ | ___  | _____________ | ________________\n"
+            . "3    | ___________ | ___ | ___  | _____________ | ________________\n"
+            . "Total: ______________________________";
+
+        $templates[] = [
+            'annexId' => 'FIN-' . strtoupper(substr(hash('sha256', $label), 0, 8)),
+            'annexureCode' => $code,
+            'title' => $label . ' (Manual Entry)',
+            'type' => 'financial_manual',
+            'bodyTemplate' => $body,
+            'renderTemplate' => $body,
+            'placeholders' => [],
+            'requiredFields' => [],
+            'tables' => [],
+            'isManualFinancial' => true,
+        ];
+    }
+
+    return $templates;
 }
 
 function pack_stats(array $pack): array
@@ -1430,6 +1739,10 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     if (!$annexureTemplates && !empty($pack['packId']) && !empty($pack['yojId'])) {
         $annexureTemplates = load_pack_annexures($pack['yojId'], $pack['packId'], detect_pack_context($pack['packId']));
     }
+    $financialManualTemplates = pack_financial_manual_templates($pack);
+    if ($financialManualTemplates) {
+        $annexureTemplates = array_values(array_merge($annexureTemplates, $financialManualTemplates));
+    }
     $options = array_merge([
         'includeSnippets' => true,
         'includeRestricted' => true,
@@ -1549,7 +1862,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
                         $restrictedLabel = pack_is_restricted_annexure_label($label);
                         $html .= '<li><strong>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</strong>';
                         if ($restrictedLabel) {
-                            $html .= '<div class="muted" style="color:#f85149;">Not supported in YOJAK (financial/price annexure).</div>';
+                            $html .= '<div class="muted" style="color:#f85149;">Financial/price annexure — manual entry template included.</div>';
                         }
                         if ($notes !== '') {
                             $html .= '<div class="muted">' . htmlspecialchars($notes, ENT_QUOTES, 'UTF-8') . '</div>';
@@ -1569,7 +1882,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             }
         }
 
-        $annexureContext = pack_annexure_placeholder_context($pack, $contractor);
+        $annexureContext = pack_annexure_placeholder_context($pack, $contractor, $annexureTemplates);
         if ($annexureTemplates) {
             $html .= '<div class="subsection"><h3>Generated Annexure Templates</h3>';
             foreach ($annexureTemplates as $idx => $tpl) {
@@ -1577,6 +1890,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
                 $context['{{annexure_title}}'] = $tpl['title'] ?? '';
                 $context['{{annexure_code}}'] = $tpl['annexureCode'] ?? '';
                 $body = pack_fill_annexure_body($tpl, $context);
+                $body .= pack_render_compliance_tables($tpl, $pack, $contractor);
                 $html .= '<div class="template-block' . ($idx > 0 ? ' page-break' : '') . '">';
                 $html .= '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">';
                 $html .= '<div><div class="muted">' . htmlspecialchars($tpl['annexureCode'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</div><h3 style="margin:4px 0 6px 0;">' . htmlspecialchars($tpl['title'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</h3></div>';
@@ -1591,7 +1905,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         }
 
         if ($showCatalog && $options['includeRestricted'] && $restricted) {
-            $html .= '<div class="warning"><strong>Restricted Annexures</strong><p>Financial/Price annexures referenced — Not supported in YOJAK.</p><ul>';
+            $html .= '<div class="warning"><strong>Financial/Price Annexures</strong><p>Manual entry formats are included. YOJAK does not calculate or suggest rates.</p><ul>';
             foreach ($restricted as $rest) {
                 $html .= '<li>' . htmlspecialchars(is_array($rest) ? ($rest['name'] ?? $rest['title'] ?? 'Restricted') : (string)$rest, ENT_QUOTES, 'UTF-8') . '</li>';
             }
