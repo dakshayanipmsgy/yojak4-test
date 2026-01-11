@@ -30,53 +30,87 @@ safe_page(function () {
         return;
     }
 
-    $catalog = pack_editable_field_catalog();
+    $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
+    $contractorTemplates = load_contractor_templates_full($yojId);
+    $catalog = pack_field_meta_catalog($pack, $annexureTemplates, $contractorTemplates);
     $updatedCount = 0;
+    $errors = [];
     foreach ($fields as $key => $value) {
         $normalized = pack_normalize_placeholder_key((string)$key);
         if (!isset($catalog[$normalized])) {
             continue;
         }
-        $max = (int)$catalog[$normalized]['max'];
+        if (!empty($catalog[$normalized]['readOnly'])) {
+            continue;
+        }
+        $max = (int)($catalog[$normalized]['max'] ?? 0);
         $clean = trim(strip_tags((string)$value));
         if ($max > 0 && function_exists('mb_substr')) {
             $clean = mb_substr($clean, 0, $max);
         } elseif ($max > 0) {
             $clean = substr($clean, 0, $max);
         }
-        $existing = trim((string)($pack['fieldOverrides'][$normalized] ?? ''));
+        if ($clean !== '' && $normalized === 'contact.email' && !filter_var($clean, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Invalid email for ' . $catalog[$normalized]['label'];
+            continue;
+        }
+        if ($clean !== '' && $normalized === 'bank.ifsc' && !preg_match('/^[A-Z]{4}0[A-Z0-9]{6}$/i', $clean)) {
+            $errors[] = 'Invalid IFSC format';
+            continue;
+        }
+        if (($catalog[$normalized]['type'] ?? '') === 'choice') {
+            $choices = array_map('strtolower', $catalog[$normalized]['choices'] ?? []);
+            $choice = strtolower($clean);
+            if ($clean !== '' && !in_array($choice, $choices, true)) {
+                $errors[] = 'Invalid choice for ' . $catalog[$normalized]['label'];
+                continue;
+            }
+            $clean = $choice;
+        }
+
+        $existing = trim((string)($pack['fieldRegistry'][$normalized] ?? ''));
         if ($clean === '') {
             if ($existing !== '') {
-                unset($pack['fieldOverrides'][$normalized]);
+                unset($pack['fieldRegistry'][$normalized]);
                 $updatedCount++;
             }
             continue;
         }
         if ($existing !== $clean) {
-            $pack['fieldOverrides'][$normalized] = $clean;
+            $pack['fieldRegistry'][$normalized] = $clean;
             $updatedCount++;
         }
+    }
+
+    if ($errors) {
+        set_flash('error', implode(' ', array_slice($errors, 0, 3)));
+        redirect('/contractor/pack_view.php?packId=' . urlencode($packId) . '#field-registry');
+        return;
     }
 
     if ($updatedCount > 0) {
         $pack['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
         $pack['audit'][] = [
             'at' => now_kolkata()->format(DateTime::ATOM),
-            'event' => 'FIELDS_UPDATED',
+            'event' => 'PACK_FIELDS_UPDATED',
             'yojId' => $yojId,
-            'countUpdated' => $updatedCount,
+            'fieldsUpdatedCount' => $updatedCount,
         ];
         save_pack($pack, $context);
     }
 
     pack_log([
         'at' => now_kolkata()->format(DateTime::ATOM),
-        'event' => 'PACK_FIELDS_SAVE',
+        'event' => 'PACK_FIELDS_UPDATED',
         'yojId' => $yojId,
         'packId' => $packId,
-        'countUpdated' => $updatedCount,
+        'fieldsUpdatedCount' => $updatedCount,
     ]);
 
     set_flash('success', $updatedCount > 0 ? 'Pack fields saved.' : 'No changes applied.');
-    redirect('/contractor/pack_view.php?packId=' . urlencode($packId) . '#fill-missing');
+    if (($_POST['after'] ?? '') === 'print') {
+        redirect('/contractor/pack_print.php?packId=' . urlencode($packId) . '&doc=full&letterhead=1');
+        return;
+    }
+    redirect('/contractor/pack_view.php?packId=' . urlencode($packId) . '#field-registry');
 });

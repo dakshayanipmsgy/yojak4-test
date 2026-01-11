@@ -50,6 +50,9 @@ function contractor_profile_defaults(): array
     return [
         'yojId' => null,
         'mobile' => null,
+        'officePhone' => null,
+        'residencePhone' => null,
+        'fax' => null,
         'firmName' => null,
         'firmType' => null,
         'addressLine1' => null,
@@ -63,6 +66,7 @@ function contractor_profile_defaults(): array
         'gstNumber' => null,
         'panNumber' => null,
         'bankName' => null,
+        'bankBranch' => null,
         'bankAccount' => null,
         'ifsc' => null,
         'placeDefault' => null,

@@ -608,8 +608,11 @@ function assisted_v2_replace_pack_annexures(array $pack, array $templates, strin
             'annexureCode' => $code,
             'title' => trim((string)($tpl['title'] ?? 'Annexure')),
             'type' => trim((string)($tpl['type'] ?? 'other')),
-            'bodyTemplate' => (string)($tpl['body'] ?? ''),
+            'bodyTemplate' => (string)($tpl['body'] ?? ($tpl['renderTemplate'] ?? '')),
+            'renderTemplate' => (string)($tpl['renderTemplate'] ?? ($tpl['body'] ?? '')),
             'placeholders' => is_array($tpl['placeholders'] ?? null) ? array_values($tpl['placeholders']) : [],
+            'requiredFields' => is_array($tpl['requiredFields'] ?? null) ? array_values($tpl['requiredFields']) : [],
+            'tables' => is_array($tpl['tables'] ?? null) ? array_values($tpl['tables']) : [],
             'createdAt' => now_kolkata()->format(DateTime::ATOM),
         ];
         $index[] = [
@@ -789,7 +792,10 @@ function assisted_v2_normalize_payload(array $payload): array
             'title' => $title ?? 'Annexure',
             'type' => assisted_v2_clean_string($tpl['type'] ?? '') ?? 'other',
             'body' => (string)($tpl['body'] ?? ''),
+            'renderTemplate' => (string)($tpl['renderTemplate'] ?? ($tpl['body'] ?? '')),
             'placeholders' => is_array($tpl['placeholders'] ?? null) ? array_values($tpl['placeholders']) : [],
+            'requiredFields' => is_array($tpl['requiredFields'] ?? null) ? array_values($tpl['requiredFields']) : [],
+            'tables' => is_array($tpl['tables'] ?? null) ? array_values($tpl['tables']) : [],
         ];
     }
 

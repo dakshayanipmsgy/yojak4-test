@@ -19,6 +19,7 @@ safe_page(function () {
         render_error_page('Pack not found.');
         return;
     }
+    $contractor = load_contractor($yojId) ?? [];
 
     $docs = $_POST['docs'] ?? [];
     if (!is_array($docs)) {
@@ -44,6 +45,8 @@ safe_page(function () {
 
     $tenderTitle = $pack['title'] ?? 'Tender';
     $sourceId = $pack['sourceTender']['id'] ?? '';
+    $dateValue = pack_resolve_field_value('date', $pack, $contractor, true);
+    $dateValue = $dateValue !== '' ? htmlspecialchars($dateValue) : '__________';
 
     foreach ($selected as $type) {
         $docId = 'DOC-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10));
@@ -53,14 +56,14 @@ safe_page(function () {
         $body = '';
         if ($type === 'cover') {
             $body = '<h1>Cover Letter</h1>'
-                . '<p>Date: __________</p>'
+                . '<p>Date: ' . $dateValue . '</p>'
                 . '<p>Subject: Submission of tender documents for ' . htmlspecialchars($tenderTitle) . ' (' . htmlspecialchars($sourceId) . ')</p>'
                 . '<p>Dear Sir/Madam,</p>'
                 . '<p>We hereby submit the enclosed documents as part of the tender pack. All documents are true and correct to the best of our knowledge.</p>'
                 . '<p>Regards,<br>Authorized Signatory</p>';
         } elseif ($type === 'undertaking') {
             $body = '<h1>Undertaking / Declaration</h1>'
-                . '<p>Date: __________</p>'
+                . '<p>Date: ' . $dateValue . '</p>'
                 . '<p>We undertake that the information and documents provided in this tender pack for ' . htmlspecialchars($tenderTitle) . ' are authentic and valid.</p>'
                 . '<p>We agree to abide by all terms and conditions of the tender.</p>'
                 . '<p>Authorized Signatory</p>';

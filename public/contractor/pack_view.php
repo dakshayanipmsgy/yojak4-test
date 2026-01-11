@@ -20,16 +20,15 @@ safe_page(function () {
     $missingIds = pack_missing_checklist_item_ids($pack, $attachments);
     $suggestions = pack_vault_suggestions($pack, $vaultFiles, $attachments);
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
-    $packFieldsInfo = pack_collect_pack_fields($pack, $contractor, $annexureTemplates);
-    $missingFieldGroups = [];
-    foreach ($packFieldsInfo['groups'] as $group => $fields) {
-        foreach ($fields as $field) {
-            if (!$field['missing']) {
-                continue;
-            }
-            $missingFieldGroups[$group][] = $field;
-        }
+    $financialManualTemplates = pack_financial_manual_templates($pack);
+    $annexureTemplatesList = array_values(array_merge($annexureTemplates, $financialManualTemplates));
+    $contractorTemplates = load_contractor_templates_full($yojId);
+    $seededPack = pack_seed_field_registry($pack, $contractor, $annexureTemplates, $contractorTemplates);
+    if (($seededPack['fieldRegistry'] ?? []) !== ($pack['fieldRegistry'] ?? [])) {
+        $pack = $seededPack;
+        save_pack($pack, $context);
     }
+    $packFieldsInfo = pack_collect_pack_fields($pack, $contractor, $annexureTemplates, $contractorTemplates);
     if ($packFieldsInfo['errors']) {
         pack_log([
             'at' => now_kolkata()->format(DateTime::ATOM),
@@ -45,7 +44,7 @@ safe_page(function () {
     $title = get_app_config()['appName'] . ' | ' . ($pack['title'] ?? 'Tender Pack');
     $signedToken = pack_signed_token($pack['packId'], $yojId);
 
-    render_layout($title, function () use ($pack, $progress, $stats, $signedToken, $contractor, $suggestions, $attachments, $missingIds, $annexureTemplates, $packFieldsInfo, $missingFieldGroups) {
+    render_layout($title, function () use ($pack, $progress, $stats, $signedToken, $contractor, $suggestions, $attachments, $missingIds, $annexureTemplates, $annexureTemplatesList, $packFieldsInfo) {
         ?>
         <div class="card" style="display:grid; gap:10px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
@@ -95,95 +94,99 @@ safe_page(function () {
             </div>
         </div>
 
-        <div class="card" style="margin-top:12px; display:grid; gap:12px;" id="fill-missing">
+        <div class="card" style="margin-top:12px; display:grid; gap:12px;" id="field-registry">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
                 <div>
-                    <h3 style="margin:0;"><?= sanitize('Fill Missing Details'); ?></h3>
-                    <p class="muted" style="margin:4px 0 0;"><?= sanitize('All missing placeholders across annexures are listed here. Fill once to update every template.'); ?></p>
+                    <h3 style="margin:0;"><?= sanitize('Field Registry'); ?></h3>
+                    <p class="muted" style="margin:4px 0 0;"><?= sanitize('Fill every required detail once. Values flow into every annexure and template.'); ?></p>
                 </div>
-                <button class="btn secondary" type="button" onclick="const dlg=document.getElementById('edit-pack-fields-dialog'); if (dlg){dlg.showModal();}"><?= sanitize('Edit Pack Fields'); ?></button>
+                <div class="pill"><?= sanitize(($packFieldsInfo['filled'] ?? 0) . ' / ' . ($packFieldsInfo['total'] ?? 0) . ' filled'); ?></div>
             </div>
             <?php if ($packFieldsInfo['errors']): ?>
                 <div class="flash" style="background:#201012;border:1px solid #f85149;">
                     <?= sanitize('Some fields could not be detected from templates. You can still edit known fields below.'); ?>
                 </div>
             <?php endif; ?>
-            <?php if ($missingFieldGroups): ?>
+            <?php if ($packFieldsInfo['fields']): ?>
+                <?php
+                $complianceFields = $packFieldsInfo['groups']['Compliance Table'] ?? [];
+                $nonComplianceGroups = $packFieldsInfo['groups'];
+                unset($nonComplianceGroups['Compliance Table']);
+                ?>
+                <?php if ($complianceFields): ?>
+                    <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:10px;">
+                        <strong><?= sanitize('Compliance Table'); ?></strong>
+                        <div style="display:grid; gap:8px;">
+                            <?php foreach ($complianceFields as $field): ?>
+                                <?php if ($field['type'] !== 'choice') { continue; } ?>
+                                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid #1f6feb33; padding:8px 10px; border-radius:10px;">
+                                    <div>
+                                        <div style="font-weight:600;"><?= sanitize($field['label']); ?></div>
+                                        <div class="muted" style="font-size:12px;"><?= sanitize('Current: ' . ($field['value'] !== '' ? strtoupper($field['value']) : 'Not set')); ?></div>
+                                    </div>
+                                    <form method="post" action="/contractor/pack_field_toggle.php" style="display:flex; gap:6px; flex-wrap:wrap;">
+                                        <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                        <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
+                                        <input type="hidden" name="key" value="<?= sanitize($field['key']); ?>">
+                                        <?php foreach (['yes' => 'Yes', 'no' => 'No', 'na' => 'N/A'] as $choiceValue => $choiceLabel): ?>
+                                            <?php $active = strtolower($field['value']) === $choiceValue; ?>
+                                            <button class="btn <?= $active ? '' : 'secondary'; ?>" type="submit" name="value" value="<?= sanitize($choiceValue); ?>"><?= sanitize($choiceLabel); ?></button>
+                                        <?php endforeach; ?>
+                                    </form>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
                 <form method="post" action="/contractor/pack_fields_save.php" style="display:grid; gap:12px;">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                     <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
-                    <?php foreach ($missingFieldGroups as $group => $fields): ?>
+                    <?php foreach ($nonComplianceGroups as $group => $fields): ?>
                         <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:8px;">
                             <strong><?= sanitize($group); ?></strong>
                             <div style="display:grid; gap:8px;">
                                 <?php foreach ($fields as $field): ?>
+                                    <?php if ($field['type'] === 'choice') { continue; } ?>
+                                    <?php
+                                    $inputValue = $field['override'] !== '' ? $field['override'] : ($field['value'] !== '' ? $field['value'] : $field['suggestion']);
+                                    ?>
                                     <label class="field" style="margin:0;">
                                         <span class="muted" style="font-size:12px;"><?= sanitize($field['label']); ?></span>
                                         <?php if ($field['type'] === 'textarea'): ?>
-                                            <textarea name="fields[<?= sanitize($field['key']); ?>]" rows="3" maxlength="<?= (int)$field['max']; ?>"><?= sanitize($field['suggestion']); ?></textarea>
+                                            <textarea name="fields[<?= sanitize($field['key']); ?>]" rows="3" maxlength="<?= (int)$field['max']; ?>" <?= $field['readOnly'] ? 'disabled' : ''; ?>><?= sanitize($field['readOnly'] ? $field['value'] : $inputValue); ?></textarea>
                                         <?php else: ?>
                                             <input type="<?= $field['type'] === 'date' ? 'date' : 'text'; ?>"
                                                    name="fields[<?= sanitize($field['key']); ?>]"
-                                                   value="<?= sanitize($field['suggestion']); ?>"
-                                                   maxlength="<?= (int)$field['max']; ?>">
+                                                   value="<?= sanitize($field['readOnly'] ? $field['value'] : $inputValue); ?>"
+                                                   maxlength="<?= (int)$field['max']; ?>"
+                                                   <?= $field['readOnly'] ? 'disabled' : ''; ?>>
+                                        <?php endif; ?>
+                                        <?php if ($field['readOnly']): ?>
+                                            <div class="muted" style="font-size:11px;"><?= sanitize('Prefilled from tender metadata.'); ?></div>
                                         <?php endif; ?>
                                     </label>
                                 <?php endforeach; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
-                    <div class="buttons" style="gap:8px;">
-                        <button class="btn" type="submit"><?= sanitize('Save missing details'); ?></button>
-                        <span class="muted" style="font-size:12px;"><?= sanitize('Saved values update pack field overrides.'); ?></span>
+                    <?php if (!empty($pack['restrictedAnnexures'])): ?>
+                        <div style="border:1px dashed #f85149;border-radius:12px;padding:10px;display:grid;gap:6px;">
+                            <strong><?= sanitize('Financial Manual Entry'); ?></strong>
+                            <div class="muted"><?= sanitize('Financial/Commercial/Price formats will be printed as manual-entry templates. YOJAK does not calculate or suggest rates.'); ?></div>
+                        </div>
+                    <?php endif; ?>
+                    <div class="buttons" style="gap:8px; flex-wrap:wrap;">
+                        <button class="btn" type="submit"><?= sanitize('Save & Continue'); ?></button>
+                        <button class="btn secondary" type="submit" name="after" value="print"><?= sanitize('Save & Print Full Pack'); ?></button>
+                        <span class="muted" style="font-size:12px;"><?= sanitize('Saved values update the pack Field Registry.'); ?></span>
                     </div>
                 </form>
             <?php else: ?>
                 <div class="flash" style="background:#0f1625;border:1px solid #2ea043;">
-                    <?= sanitize($packFieldsInfo['fields'] ? 'All fields complete ✅' : 'Generate annexure formats to detect missing fields.'); ?>
+                    <?= sanitize('Generate annexure formats to detect field requirements.'); ?>
                 </div>
             <?php endif; ?>
         </div>
-
-        <dialog id="edit-pack-fields-dialog" style="max-width:720px;width:90%;background:#0f1520;border:1px solid #30363d;border-radius:16px;color:var(--text);">
-            <form method="post" action="/contractor/pack_fields_save.php" style="display:grid; gap:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-                    <h3 style="margin:0;"><?= sanitize('Edit Pack Fields'); ?></h3>
-                    <button class="btn secondary" type="button" onclick="this.closest('dialog').close()"><?= sanitize('Close'); ?></button>
-                </div>
-                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
-                <?php if ($packFieldsInfo['groups']): ?>
-                    <?php foreach ($packFieldsInfo['groups'] as $group => $fields): ?>
-                        <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:8px;">
-                            <strong><?= sanitize($group); ?></strong>
-                            <div style="display:grid; gap:8px;">
-                                <?php foreach ($fields as $field): ?>
-                                    <label class="field" style="margin:0;">
-                                        <span class="muted" style="font-size:12px;"><?= sanitize($field['label']); ?></span>
-                                        <?php if ($field['type'] === 'textarea'): ?>
-                                            <textarea name="fields[<?= sanitize($field['key']); ?>]" rows="3" maxlength="<?= (int)$field['max']; ?>"><?= sanitize($field['override']); ?></textarea>
-                                        <?php else: ?>
-                                            <input type="<?= $field['type'] === 'date' ? 'date' : 'text'; ?>"
-                                                   name="fields[<?= sanitize($field['key']); ?>]"
-                                                   value="<?= sanitize($field['override']); ?>"
-                                                   maxlength="<?= (int)$field['max']; ?>">
-                                        <?php endif; ?>
-                                        <?php if ($field['value'] !== ''): ?>
-                                            <div class="muted" style="font-size:11px;"><?= sanitize('Current value: ' . $field['value']); ?></div>
-                                        <?php endif; ?>
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                    <div class="buttons" style="gap:8px;">
-                        <button class="btn" type="submit"><?= sanitize('Save pack fields'); ?></button>
-                    </div>
-                <?php else: ?>
-                    <p class="muted" style="margin:0;"><?= sanitize('Generate annexure formats to edit pack fields.'); ?></p>
-                <?php endif; ?>
-            </form>
-        </dialog>
 
         <form id="status-form" method="post" action="/contractor/pack_mark_status.php"></form>
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-top:12px;">
@@ -415,7 +418,7 @@ safe_page(function () {
             <div class="card" style="display:grid; gap:12px;">
                 <div>
                     <h3 style="margin:0;"><?= sanitize('Annexures & Formats'); ?></h3>
-                    <p class="muted" style="margin:0;">Generate printable annexure templates from NIB list. Financial annexures stay restricted.</p>
+                    <p class="muted" style="margin:0;">Generate printable annexure templates from NIB list. Financial annexures are manual-entry formats.</p>
                 </div>
                 <div class="flash" style="display:grid;gap:6px;background:#0f1625;border:1px solid #1f6feb;">
                     <strong><?= sanitize('Steps'); ?></strong>
@@ -437,9 +440,9 @@ safe_page(function () {
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     <span class="pill"><?= sanitize(count($pack['annexureList'] ?? []) . ' annexures detected'); ?></span>
-                    <span class="pill"><?= sanitize(count($annexureTemplates) . ' templates generated'); ?></span>
+                    <span class="pill"><?= sanitize(count($annexureTemplatesList) . ' templates generated'); ?></span>
                     <?php if (!empty($pack['restrictedAnnexures'])): ?>
-                        <span class="pill" style="border-color:#f85149;color:#ffb3b8;"><?= sanitize('Restricted financial annexures present'); ?></span>
+                        <span class="pill" style="border-color:#f85149;color:#ffb3b8;"><?= sanitize('Financial manual-entry annexures present'); ?></span>
                     <?php endif; ?>
                 </div>
                 <div style="display:grid;gap:6px;">
@@ -451,7 +454,7 @@ safe_page(function () {
                                 <div>
                                     <strong><?= sanitize($label); ?></strong>
                                     <?php if (pack_is_restricted_annexure_label($label)): ?>
-                                        <div class="muted" style="color:#ffb3b8;"><?= sanitize('Restricted: not supported in YOJAK (no rate docs)'); ?></div>
+                                        <div class="muted" style="color:#ffb3b8;"><?= sanitize('Financial manual entry format included (no rate automation).'); ?></div>
                                     <?php endif; ?>
                                 </div>
                                 <span class="pill"><?= sanitize('Annexure'); ?></span>
@@ -464,18 +467,22 @@ safe_page(function () {
                         <p class="muted" style="margin:0;"><?= sanitize('No annexures detected yet.'); ?></p>
                     <?php endif; ?>
                 </div>
-                <?php if ($annexureTemplates): ?>
+                <?php if ($annexureTemplatesList): ?>
                     <div>
                         <h4 style="margin:0 0 6px 0;"><?= sanitize('Generated templates'); ?></h4>
                         <div style="display:grid;gap:6px;">
-                            <?php foreach ($annexureTemplates as $tpl): ?>
+                            <?php foreach ($annexureTemplatesList as $tpl): ?>
                                 <div style="border:1px solid #30363d;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
                                     <div>
                                         <strong><?= sanitize(($tpl['annexureCode'] ?? 'Annexure') . ' • ' . ($tpl['title'] ?? 'Template')); ?></strong>
                                         <div class="muted" style="margin-top:4px;"><?= sanitize($tpl['type'] ?? 'Annexure'); ?></div>
                                     </div>
                                     <div class="buttons" style="gap:6px;">
-                                        <a class="btn secondary" href="/contractor/annexure_preview.php?packId=<?= sanitize($pack['packId']); ?>&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&letterhead=1" data-print-base="/contractor/annexure_preview.php?packId=<?= sanitize($pack['packId']); ?>&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
+                                        <?php if (!empty($tpl['isManualFinancial'])): ?>
+                                            <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1&letterhead=1" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
+                                        <?php else: ?>
+                                            <a class="btn secondary" href="/contractor/annexure_preview.php?packId=<?= sanitize($pack['packId']); ?>&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&letterhead=1" data-print-base="/contractor/annexure_preview.php?packId=<?= sanitize($pack['packId']); ?>&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
+                                        <?php endif; ?>
                                         <a class="btn" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1" target="_blank" rel="noopener"><?= sanitize('Print'); ?></a>
                                     </div>
                                 </div>
@@ -485,13 +492,13 @@ safe_page(function () {
                 <?php endif; ?>
                 <?php if (!empty($pack['restrictedAnnexures'])): ?>
                     <div class="flash" style="background:#201012;border:1px solid #f85149;">
-                        <strong><?= sanitize('Restricted (Financial/Price references)'); ?></strong>
-                        <p class="muted" style="margin:6px 0 0;"><?= sanitize('YOJAK will not ask for rates. These items are shown only for awareness.'); ?></p>
+                        <strong><?= sanitize('Financial/Price Annexures (Manual Entry)'); ?></strong>
+                        <p class="muted" style="margin:6px 0 0;"><?= sanitize('YOJAK will not calculate or suggest rates. Manual entry formats are provided for print.'); ?></p>
                         <ul style="margin:6px 0 0 16px; padding:0;">
                             <?php foreach ($pack['restrictedAnnexures'] as $rest): ?>
                                 <li>
                                     <?= sanitize(is_array($rest) ? ($rest['title'] ?? ($rest['name'] ?? 'Restricted')) : (string)$rest); ?>
-                                    <span class="muted"><?= sanitize(' — Restricted: not supported in YOJAK (no rate docs)'); ?></span>
+                                    <span class="muted"><?= sanitize(' — Financial manual entry format included.'); ?></span>
                                 </li>
                             <?php endforeach; ?>
                         </ul>
