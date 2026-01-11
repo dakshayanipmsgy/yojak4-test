@@ -116,6 +116,7 @@ safe_page(function () {
                 $complianceFields = $packFieldsInfo['groups']['Compliance Table'] ?? [];
                 $nonComplianceGroups = $packFieldsInfo['groups'];
                 unset($nonComplianceGroups['Compliance Table']);
+                unset($nonComplianceGroups['Financial Manual Entry']);
                 ?>
                 <?php if ($complianceFields): ?>
                     <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:10px;">
@@ -151,14 +152,19 @@ safe_page(function () {
                                 <?php
                                 $columns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
                                 if (!$columns) { continue; }
+                                $isFinancialManual = strtolower(trim((string)($tpl['templateKind'] ?? $tpl['type'] ?? ''))) === 'financial_manual';
+                                $tableId = pack_normalize_placeholder_key((string)($table['tableId'] ?? $table['title'] ?? 'table'));
                                 ?>
                                 <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:8px;">
                                     <div>
                                         <strong><?= sanitize(($tpl['annexureCode'] ?? 'Annexure') . ' • ' . ($tpl['title'] ?? 'Table')); ?></strong>
                                         <div class="muted" style="font-size:12px;"><?= sanitize($table['title'] ?? 'Table'); ?></div>
+                                        <?php if ($isFinancialManual): ?>
+                                            <div class="muted" style="font-size:12px;"><?= sanitize('Rates are entered for printing only. They are not saved on the platform.'); ?></div>
+                                        <?php endif; ?>
                                     </div>
                                     <div style="overflow:auto;">
-                                        <table style="min-width:640px;">
+                                        <table style="min-width:640px;" <?= $isFinancialManual ? 'class="financial-manual-table"' : ''; ?>>
                                             <thead>
                                             <tr>
                                                 <?php foreach ($columns as $column): ?>
@@ -169,6 +175,8 @@ safe_page(function () {
                                             <tbody>
                                             <?php foreach ((array)($table['rows'] ?? []) as $row): ?>
                                                 <?php if (!is_array($row)) { continue; } ?>
+                                                <?php $rowId = pack_normalize_placeholder_key((string)($row['rowId'] ?? 'row')); ?>
+                                                <?php $qtyValue = (string)($row['qty'] ?? ($row['cells']['qty'] ?? '')); ?>
                                                 <tr>
                                                     <?php foreach ($columns as $column): ?>
                                                         <?php
@@ -176,6 +184,22 @@ safe_page(function () {
                                                         if ($colKey === '') {
                                                             echo '<td></td>';
                                                             continue;
+                                                        }
+                                                        if ($isFinancialManual) {
+                                                            $cellValue = (string)($row[$colKey] ?? ($row['cells'][$colKey] ?? ''));
+                                                            if (in_array($colKey, ['item_description', 'qty', 'unit'], true)) {
+                                                                echo '<td>' . sanitize($cellValue) . '</td>';
+                                                                continue;
+                                                            }
+                                                            if ($colKey === 'rate') {
+                                                                $rateKey = 'rate:' . $tableId . ':' . $rowId;
+                                                                echo '<td><input class="financial-rate" type="number" step="0.01" inputmode="decimal" data-rate-key="' . sanitize($rateKey) . '" data-qty="' . sanitize(trim($qtyValue)) . '"></td>';
+                                                                continue;
+                                                            }
+                                                            if ($colKey === 'amount') {
+                                                                echo '<td><span class="financial-amount"></span></td>';
+                                                                continue;
+                                                            }
                                                         }
                                                         if (!empty($column['readOnly'])) {
                                                             $cell = (string)($row[$colKey] ?? ($row['cells'][$colKey] ?? ''));
@@ -710,6 +734,57 @@ safe_page(function () {
                     select.addEventListener('change', updateLinks);
                     updateLinks();
                 }
+            })();
+            (() => {
+                const rateInputs = Array.from(document.querySelectorAll('.financial-rate'));
+                if (!rateInputs.length) {
+                    return;
+                }
+                const storageKey = 'yojak_pack_rates_<?= sanitize($pack['packId']); ?>';
+                let stored = {};
+                try {
+                    stored = JSON.parse(window.localStorage.getItem(storageKey) || '{}') || {};
+                } catch (err) {
+                    stored = {};
+                }
+                const updateAmount = (input) => {
+                    const qty = parseFloat(input.dataset.qty || '');
+                    const rate = parseFloat(input.value || '');
+                    const amountCell = input.closest('tr')?.querySelector('.financial-amount');
+                    if (!amountCell) {
+                        return;
+                    }
+                    if (Number.isFinite(qty) && Number.isFinite(rate)) {
+                        amountCell.textContent = (qty * rate).toFixed(2);
+                    } else {
+                        amountCell.textContent = '';
+                    }
+                };
+                const persist = () => {
+                    const next = {};
+                    rateInputs.forEach((input) => {
+                        const key = input.dataset.rateKey || '';
+                        if (key && input.value !== '') {
+                            next[key] = input.value;
+                        }
+                    });
+                    try {
+                        window.localStorage.setItem(storageKey, JSON.stringify(next));
+                    } catch (err) {
+                        // ignore storage errors
+                    }
+                };
+                rateInputs.forEach((input) => {
+                    const key = input.dataset.rateKey || '';
+                    if (key && stored[key]) {
+                        input.value = stored[key];
+                    }
+                    updateAmount(input);
+                    input.addEventListener('input', () => {
+                        updateAmount(input);
+                        persist();
+                    });
+                });
             })();
         </script>
         <?php

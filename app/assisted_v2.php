@@ -10,40 +10,30 @@ const ASSISTED_V2_PROMPT_PATH = DATA_PATH . '/assisted_v2/prompt.txt';
 function assisted_v2_prompt_seed(): string
 {
     return <<<'PROMPT'
-You are generating a YOJAK Assisted Pack v2 payload from an uploaded tender PDF (NIB/NIT/etc.).
+You are creating a YOJAK Assisted Pack v2 payload from an uploaded tender PDF.
 
-OUTPUT MUST BE ONLY strict JSON (no markdown, no commentary, no backticks).
+OUTPUT MUST BE ONLY strict JSON. No markdown. No commentary.
 
-IMPORTANT RULES:
-- YOJAK is NOT a bidding portal. Do NOT output item-wise BOQ rates, quoted rates, price calculations, L1 amounts, or rate analysis.
-- You MAY include tender fee / EMD / security deposit / performance guarantee text (non-bid amounts).
-- If the tender requires a Commercial/Financial/Price Bid submission, include a FINANCIAL MANUAL-ENTRY TEMPLATE (blank table). Do NOT fill rates.
+CRITICAL RULES:
+- Do NOT include BOQ unit rates, quoted rates, price calculations, L1 amounts.
+- You MAY include tender fee / EMD / SD / PG text (non-bid amounts).
+- If the tender contains a Commercial/Financial/Price Bid format, produce a FINANCIAL MANUAL table template:
+  - Prefill ITEM DESCRIPTION, QTY, UNIT if present in the PDF.
+  - Leave RATE blank.
+  - AMOUNT must be derivable as QTY × RATE (do not compute; just define columns).
 
-YOJAK NEEDS “FILLABLE” DOCUMENTS:
-- Every blank or line that would normally be written by hand must be represented as a FIELD with a key and label.
-- Every Yes/No compliance row must be represented as a CHOICE field (yes/no/na).
-- Every table that bidders must fill must be represented as a TABLE spec with columns and rows.
-- In the printable document body, use placeholders like {{field:key}} ONLY.
-- Do not leave raw underscores ______ in the body; instead define the field and use {{field:key}}.
+FILLABLE OUTPUT REQUIRED:
+- Every blank line must be a field key.
+- Every compliance Yes/No row must be a choice field (yes/no/na).
+- Every table must include columns + rows and rowIds.
+- Use placeholders ONLY as {{field:<key>}} and {{table:<tableId>}}.
 
-FINAL JSON SHAPE (exact keys):
+FINAL JSON SHAPE:
 {
-  "meta": {
-    "documentType": "NIB",
-    "tenderTitle": "",
-    "tenderNumber": "",
-    "issuingAuthority": "",
-    "departmentName": "",
-    "location": ""
-  },
-  "dates": {
-    "nitPublishDate": null,
-    "preBidMeetingDate": null,
-    "submissionDeadline": null,
-    "openingDate": null
-  },
-  "duration": { "completionMonths": null, "bidValidityDays": null },
-  "fees": { "tenderFeeText": null, "emdText": null, "sdText": null, "pgText": null },
+  "meta": { "documentType":"NIB", "tenderTitle":"", "tenderNumber":"", "issuingAuthority":"", "departmentName":"", "location":"" },
+  "dates": { "nitPublishDate":null, "preBidMeetingDate":null, "submissionDeadline":null, "openingDate":null },
+  "duration": { "completionMonths":null, "bidValidityDays":null },
+  "fees": { "tenderFeeText":null, "emdText":null, "sdText":null, "pgText":null },
 
   "eligibilityDocs": [],
   "annexures": [],
@@ -51,35 +41,45 @@ FINAL JSON SHAPE (exact keys):
   "restrictedAnnexures": [],
 
   "fieldCatalog": [
-    { "key": "place", "label": "Place", "type": "text" },
-    { "key": "date", "label": "Date", "type": "date" }
+    { "key":"firm.name","label":"Firm Name","type":"text" },
+    { "key":"firm.address","label":"Firm Address","type":"textarea" },
+    { "key":"tax.gst","label":"GST","type":"text" },
+    { "key":"tax.pan","label":"PAN","type":"text" },
+    { "key":"signatory.name","label":"Authorized Signatory Name","type":"text" },
+    { "key":"signatory.designation","label":"Designation","type":"text" },
+    { "key":"contact.office_phone","label":"Office Phone","type":"phone" },
+    { "key":"contact.residence_phone","label":"Residence Phone","type":"phone" },
+    { "key":"bank.account_no","label":"Bank Account No","type":"text" },
+    { "key":"bank.ifsc","label":"IFSC","type":"ifsc" },
+    { "key":"place","label":"Place","type":"text" },
+    { "key":"date","label":"Date","type":"date" }
   ],
 
   "checklist": [
-    { "title": "", "category": "Eligibility|Fees|Forms|Technical|Submission|Declarations|Other", "required": true, "notes": "", "snippet": "" }
+    { "title":"","category":"Eligibility|Fees|Forms|Technical|Submission|Declarations|Other","required":true,"notes":"","snippet":"" }
   ],
 
   "annexureTemplates": [
     {
-      "annexureCode": "Annexure-1",
-      "title": "",
-      "templateKind": "standard|compliance|table_form|financial_manual",
-      "requiredFieldKeys": ["place","date"],
-      "tables": [
+      "annexureCode":"TECH-BID",
+      "title":"Technical Bid Format",
+      "templateKind":"standard|compliance|table_form|financial_manual",
+      "requiredFieldKeys":["firm.name","firm.address","tax.gst","tax.pan","place","date","signatory.name","signatory.designation"],
+      "tables":[
         {
-          "tableId": "compliance_table",
-          "title": "Technical Compliance",
-          "columns": [
-            { "key": "parameter", "label": "Parameter", "type": "text", "readOnly": true },
-            { "key": "value", "label": "Compliance", "type": "choice", "choices": ["yes","no","na"] }
+          "tableId":"tech_compliance",
+          "title":"Technical Compliance",
+          "columns":[
+            { "key":"parameter","label":"Parameter","type":"text","readOnly":true },
+            { "key":"compliance","label":"Compliance","type":"choice","choices":["yes","no","na"] }
           ],
-          "rows": [
-            { "rowId": "r1", "parameter": "Solar Modules meet spec", "valueFieldKey": "compliance.solar_modules" }
+          "rows":[
+            { "rowId":"c1","parameter":"Solar modules comply","valueFieldKey":"table.tech_compliance.c1.compliance" }
           ]
         }
       ],
-      "body": "Printable body text with placeholders only, e.g. Place: {{field:place}} Date: {{field:date}}",
-      "notes": ""
+      "body":"... Place: {{field:place}} Date: {{field:date}} ... {{table:tech_compliance}} ...",
+      "notes":""
     }
   ],
 
@@ -87,25 +87,13 @@ FINAL JSON SHAPE (exact keys):
   "sourceSnippets": []
 }
 
-FIELD TYPES allowed: text, textarea, date, number, choice, phone, email, ifsc.
-- Use key naming like:
-  contact.office_phone, contact.residence_phone, bank.account_no, bank.ifsc, signatory.name, signatory.designation,
-  compliance.<something>, financial.<something>
-
-TABLE RULES:
-- For bidder-filled tables (e.g., Commercial/Financial bid), use templateKind="financial_manual" and include a table with columns like:
-  item_description, qty, unit, rate, amount, remarks
-- Do NOT fill rate/amount values; they must be blank and linked to field keys.
-- For any table row, provide rowId and for each fillable column provide valueFieldKey like table.<tableId>.<rowId>.<columnKey>.
-
-BODY RULES:
-- Do NOT include raw {{contractor_firm_name}} style placeholders.
-- Use ONLY {{field:<key>}} placeholders that exist in fieldCatalog or are referenced by table valueFieldKey.
-- If you need a blank line for handwriting, define a field key and put it in the body as {{field:key}}.
-
-CHECKLIST:
-- Provide 15–30 items if possible.
-- snippet must be an exact short quote from PDF (<=160 chars) or "".
+FINANCIAL MANUAL TABLE TEMPLATE REQUIREMENT (if present in PDF):
+- Create an annexureTemplate with templateKind="financial_manual" containing a tableId like "financial_bid"
+- Columns should include:
+  item_description (readOnly), qty (readOnly), unit (readOnly), rate (fillable number), amount (computed)
+- Rows should include rowId and prefilled item_description/qty/unit if PDF has them.
+- rate field key must be: table.financial_bid.<rowId>.rate
+- amount field key can be: table.financial_bid.<rowId>.amount (but YOJAK will compute it from qty×rate)
 
 Now read the uploaded PDF and output ONLY the JSON.
 PROMPT;
@@ -994,6 +982,35 @@ function assisted_v2_normalize_template_tables(array $tables, array &$catalogMap
         $columns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
         $rows = is_array($table['rows'] ?? null) ? $table['rows'] : [];
         $normalizedRows = [];
+        $readOnlyColumns = [];
+        foreach ($columns as $column) {
+            if (!is_array($column)) {
+                continue;
+            }
+            $colKey = pack_normalize_placeholder_key((string)($column['key'] ?? ''));
+            if (!in_array($colKey, ['item_description', 'qty', 'unit'], true)) {
+                continue;
+            }
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $value = trim((string)($row[$colKey] ?? ''));
+                if ($value !== '') {
+                    $readOnlyColumns[$colKey] = true;
+                    break;
+                }
+            }
+        }
+        foreach ($columns as $idx => $column) {
+            if (!is_array($column)) {
+                continue;
+            }
+            $colKey = pack_normalize_placeholder_key((string)($column['key'] ?? ''));
+            if (isset($readOnlyColumns[$colKey])) {
+                $columns[$idx]['readOnly'] = true;
+            }
+        }
 
         foreach ($rows as $rowIndex => $row) {
             if (!is_array($row)) {
@@ -1014,6 +1031,9 @@ function assisted_v2_normalize_template_tables(array $tables, array &$catalogMap
                     continue;
                 }
                 if (!empty($column['readOnly'])) {
+                    if (isset($fieldKeys[$colKey])) {
+                        unset($fieldKeys[$colKey]);
+                    }
                     continue;
                 }
                 $fieldKey = assisted_v2_table_cell_field_key($row, $colKey);
@@ -1391,6 +1411,78 @@ function assisted_v2_payload_summary(array $payload): array
     ];
 }
 
+function assisted_v2_preview_bundle(array $payload, array $tender, array $contractor): array
+{
+    $meta = $payload['meta'] ?? [];
+    $dates = $payload['dates'] ?? [];
+    $pack = [
+        'title' => $meta['tenderTitle'] ?? ($tender['title'] ?? 'Tender Pack'),
+        'tenderTitle' => $meta['tenderTitle'] ?? ($tender['title'] ?? 'Tender Pack'),
+        'tenderNumber' => $meta['tenderNumber'] ?? ($tender['tenderNumber'] ?? ''),
+        'departmentName' => $meta['departmentName'] ?? ($meta['issuingAuthority'] ?? ($tender['departmentName'] ?? '')),
+        'deptName' => $meta['departmentName'] ?? ($meta['issuingAuthority'] ?? ($tender['departmentName'] ?? '')),
+        'dates' => [
+            'submission' => $dates['submissionDeadline'] ?? '',
+            'opening' => $dates['openingDate'] ?? '',
+        ],
+        'submissionDeadline' => $dates['submissionDeadline'] ?? '',
+        'openingDate' => $dates['openingDate'] ?? '',
+        'fees' => $payload['fees'] ?? [],
+        'fieldRegistry' => [],
+    ];
+    $annexures = $payload['annexureTemplates'] ?? [];
+    $catalog = pack_field_meta_catalog($pack, $annexures);
+    $previewKeys = [];
+    foreach ((array)($payload['fieldCatalog'] ?? []) as $entry) {
+        if (is_array($entry) && isset($entry['key'])) {
+            $previewKeys[] = pack_normalize_placeholder_key((string)$entry['key']);
+        }
+    }
+    foreach ($annexures as $tpl) {
+        if (!is_array($tpl)) {
+            continue;
+        }
+        foreach ((array)($tpl['requiredFieldKeys'] ?? []) as $key) {
+            $previewKeys[] = pack_normalize_placeholder_key((string)$key);
+        }
+    }
+    $previewKeys = array_values(array_filter(array_unique($previewKeys)));
+    $fields = [];
+    foreach ($previewKeys as $key) {
+        $metaInfo = $catalog[$key] ?? ['label' => $key];
+        $value = pack_resolve_field_value($key, $pack, $contractor, true);
+        $fields[] = [
+            'key' => $key,
+            'label' => $metaInfo['label'] ?? $key,
+            'value' => $value,
+            'missing' => trim((string)$value) === '',
+        ];
+    }
+    $tables = [];
+    foreach ($annexures as $tpl) {
+        if (!is_array($tpl)) {
+            continue;
+        }
+        foreach ((array)($tpl['tables'] ?? []) as $table) {
+            if (!is_array($table)) {
+                continue;
+            }
+            $tables[] = [
+                'templateTitle' => $tpl['title'] ?? 'Annexure',
+                'templateKind' => $tpl['templateKind'] ?? $tpl['type'] ?? '',
+                'tableTitle' => $table['title'] ?? ($table['tableId'] ?? 'Table'),
+                'columns' => $table['columns'] ?? [],
+                'rows' => $table['rows'] ?? [],
+            ];
+        }
+    }
+
+    return [
+        'fields' => $fields,
+        'tables' => $tables,
+    ];
+}
+
 function assisted_v2_detect_forbidden_pricing(array $payload, string $path = 'root', array $context = []): array
 {
     $findings = [];
@@ -1466,6 +1558,7 @@ function assisted_v2_evaluate_string_forbidden(string $value, string $path, arra
     $hasAllowMarker = assisted_v2_contains_allow_marker($value);
     $hasBlockMarker = assisted_v2_contains_block_marker($value);
     $hasExplicitPricingPhrase = assisted_v2_contains_explicit_pricing_phrase($value);
+    $hasPricingEvidence = $hasCurrency || $hasCurrencyMarker || $hasNumericRatePattern;
 
     $isRestrictedPath = !empty($context['restrictedPath']);
     $isChecklistItem = !empty($context['checklistItem']);
@@ -1477,7 +1570,7 @@ function assisted_v2_evaluate_string_forbidden(string $value, string $path, arra
     }
 
     if ($isRestrictedPath) {
-        if ($hasBlockMarker || ($hasCurrency && $hasNumericRatePattern)) {
+        if (($hasBlockMarker && $hasPricingEvidence) || ($hasCurrency && $hasNumericRatePattern)) {
             assisted_v2_log_restricted_validation($path, 'blocked', 'RESTRICTED_PRICING_BLOCKED');
             return [
                 'path' => $path,
@@ -1490,7 +1583,7 @@ function assisted_v2_evaluate_string_forbidden(string $value, string $path, arra
     }
 
     if ($allowsCurrency) {
-        if ($hasBlockMarker || ($hasCurrency && $hasNumericRatePattern && $hasExplicitPricingPhrase)) {
+        if (($hasBlockMarker && $hasPricingEvidence) || ($hasCurrency && $hasNumericRatePattern && $hasExplicitPricingPhrase)) {
             assisted_v2_log_restricted_validation($path, 'blocked', 'RESTRICTED_PRICING_BLOCKED');
             return [
                 'path' => $path,
@@ -1504,7 +1597,7 @@ function assisted_v2_evaluate_string_forbidden(string $value, string $path, arra
         }
     }
 
-    if ($hasBlockMarker || ($hasCurrency && $hasNumericRatePattern && !$hasAllowMarker)) {
+    if (($hasBlockMarker && $hasPricingEvidence) || ($hasCurrency && $hasNumericRatePattern && !$hasAllowMarker)) {
         assisted_v2_log_restricted_validation($path, 'blocked', 'RESTRICTED_PRICING_BLOCKED');
         return [
             'path' => $path,

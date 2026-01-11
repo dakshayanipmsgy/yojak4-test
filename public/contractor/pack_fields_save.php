@@ -33,11 +33,15 @@ safe_page(function () {
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
     $contractorTemplates = load_contractor_templates_full($yojId);
     $catalog = pack_field_meta_catalog($pack, $annexureTemplates, $contractorTemplates);
+    $financialBlocked = array_flip(pack_financial_manual_field_keys($annexureTemplates));
     $updatedCount = 0;
     $errors = [];
     foreach ($fields as $key => $value) {
         $normalized = pack_normalize_placeholder_key((string)$key);
         if (!isset($catalog[$normalized])) {
+            continue;
+        }
+        if (isset($financialBlocked[$normalized])) {
             continue;
         }
         if (!empty($catalog[$normalized]['readOnly'])) {
