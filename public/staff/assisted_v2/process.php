@@ -36,9 +36,11 @@ safe_page(function () {
     $draftSummary = $draftPayload ? assisted_v2_payload_summary($draftPayload) : null;
     $draftStats = $request['draftStats'] ?? [];
     $draftWarnings = $request['draftWarnings'] ?? [];
+    $contractorProfile = $contractorId !== '' ? (load_contractor($contractorId) ?? []) : [];
+    $previewBundle = $draftPayload ? assisted_v2_preview_bundle($draftPayload, $tender ?? [], $contractorProfile) : null;
 
     $title = get_app_config()['appName'] . ' | Assisted Pack v2';
-    render_layout($title, function () use ($request, $tender, $templatesIndex, $promptText, $draftSummary, $draftPayload, $draftStats, $draftWarnings) {
+    render_layout($title, function () use ($request, $tender, $templatesIndex, $promptText, $draftSummary, $draftPayload, $draftStats, $draftWarnings, $previewBundle) {
         $pdfPath = $request['source']['tenderPdfPath'] ?? '';
         ?>
         <div class="card" style="display:grid;gap:12px;">
@@ -150,6 +152,52 @@ safe_page(function () {
                                 <?php endforeach; ?>
                             </ul>
                         </div>
+                    <?php endif; ?>
+                    <?php if ($previewBundle): ?>
+                        <div class="flash" style="background:#0b111a;border:1px solid #1f6feb33;">
+                            <strong><?= sanitize('Resolved field preview'); ?></strong>
+                            <div style="display:grid;gap:6px;margin-top:6px;max-height:220px;overflow:auto;">
+                                <?php foreach ($previewBundle['fields'] as $field): ?>
+                                    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px dashed #30363d;padding-bottom:4px;">
+                                        <span class="muted"><?= sanitize($field['label'] . ' (' . $field['key'] . ')'); ?></span>
+                                        <span><?= sanitize($field['value'] !== '' ? $field['value'] : '____'); ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php if (!empty($previewBundle['tables'])): ?>
+                            <div class="flash" style="background:#0b111a;border:1px solid #1f6feb33;">
+                                <strong><?= sanitize('Table structure preview'); ?></strong>
+                                <div style="display:grid;gap:10px;margin-top:8px;">
+                                    <?php foreach ($previewBundle['tables'] as $table): ?>
+                                        <div style="border:1px solid #30363d;border-radius:10px;padding:8px;">
+                                            <div style="font-weight:600;"><?= sanitize($table['templateTitle'] ?? 'Annexure'); ?></div>
+                                            <div class="muted" style="font-size:12px;"><?= sanitize(($table['templateKind'] ?? '') . ' • ' . ($table['tableTitle'] ?? 'Table')); ?></div>
+                                            <div style="overflow:auto;margin-top:6px;">
+                                                <table style="min-width:520px;">
+                                                    <thead><tr>
+                                                        <?php foreach ($table['columns'] as $col): ?>
+                                                            <th><?= sanitize($col['label'] ?? $col['key'] ?? ''); ?></th>
+                                                        <?php endforeach; ?>
+                                                    </tr></thead>
+                                                    <tbody>
+                                                        <?php foreach ($table['rows'] as $row): ?>
+                                                            <?php if (!is_array($row)) { continue; } ?>
+                                                            <tr>
+                                                                <?php foreach ($table['columns'] as $col): ?>
+                                                                    <?php $colKey = pack_normalize_placeholder_key((string)($col['key'] ?? '')); ?>
+                                                                    <td><?= sanitize((string)($row[$colKey] ?? '')); ?></td>
+                                                                <?php endforeach; ?>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <form method="post" action="/staff/assisted_v2/deliver.php" style="display:grid;gap:8px;">
                         <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
