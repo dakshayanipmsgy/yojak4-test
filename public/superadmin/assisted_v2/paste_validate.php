@@ -23,7 +23,7 @@ safe_page(function () {
             'event' => 'paste_validated',
             'reqId' => $reqId,
             'status' => 'invalid',
-            'errors' => $validation['errors'],
+            'errorsCount' => count($validation['errors'] ?? []),
             'actor' => assisted_v2_actor_label($actor),
         ]);
         set_flash('error', implode(' ', $validation['errors']));
@@ -44,6 +44,10 @@ safe_page(function () {
         'actor' => assisted_v2_actor_label($actor),
     ]);
 
-    set_flash('success', 'Payload validated. Preview updated.');
+    $warningMessage = '';
+    if (!empty($validation['warnings'])) {
+        $warningMessage = ' Warnings: ' . implode(' ', $validation['warnings']);
+    }
+    set_flash('success', 'Payload validated. Preview updated.' . $warningMessage);
     redirect('/superadmin/assisted_v2/process.php?reqId=' . urlencode($reqId));
 });

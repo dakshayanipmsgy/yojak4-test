@@ -10,14 +10,23 @@ const ASSISTED_V2_PROMPT_PATH = DATA_PATH . '/assisted_v2/prompt.txt';
 function assisted_v2_prompt_seed(): string
 {
     return <<<'PROMPT'
-You are preparing a YOJAK Assisted Pack payload from a tender NIB/NIT PDF. Output MUST be ONLY strict JSON (no markdown, no commentary).
+You are generating a YOJAK Assisted Pack v2 payload from an uploaded tender PDF (NIB/NIT/etc.).
 
-RULES:
-- Do NOT include BOQ/unit rates/quoted rates/financial bid amounts/L1 values.
-- You MAY include Tender Fee / EMD / Security Deposit / Performance Guarantee (non-bid fees), even with currency.
-- If tender mentions “Price Bid/Financial Bid/BOQ/SOR”, list it only in restrictedAnnexures (title only) and DO NOT generate any pricing templates.
+OUTPUT MUST BE ONLY strict JSON (no markdown, no commentary, no backticks).
 
-OUTPUT JSON EXACT SHAPE:
+IMPORTANT RULES:
+- YOJAK is NOT a bidding portal. Do NOT output item-wise BOQ rates, quoted rates, price calculations, L1 amounts, or rate analysis.
+- You MAY include tender fee / EMD / security deposit / performance guarantee text (non-bid amounts).
+- If the tender requires a Commercial/Financial/Price Bid submission, include a FINANCIAL MANUAL-ENTRY TEMPLATE (blank table). Do NOT fill rates.
+
+YOJAK NEEDS “FILLABLE” DOCUMENTS:
+- Every blank or line that would normally be written by hand must be represented as a FIELD with a key and label.
+- Every Yes/No compliance row must be represented as a CHOICE field (yes/no/na).
+- Every table that bidders must fill must be represented as a TABLE spec with columns and rows.
+- In the printable document body, use placeholders like {{field:key}} ONLY.
+- Do not leave raw underscores ______ in the body; instead define the field and use {{field:key}}.
+
+FINAL JSON SHAPE (exact keys):
 {
   "meta": {
     "documentType": "NIB",
@@ -41,6 +50,11 @@ OUTPUT JSON EXACT SHAPE:
   "formats": [],
   "restrictedAnnexures": [],
 
+  "fieldCatalog": [
+    { "key": "place", "label": "Place", "type": "text" },
+    { "key": "date", "label": "Date", "type": "date" }
+  ],
+
   "checklist": [
     { "title": "", "category": "Eligibility|Fees|Forms|Technical|Submission|Declarations|Other", "required": true, "notes": "", "snippet": "" }
   ],
@@ -49,9 +63,23 @@ OUTPUT JSON EXACT SHAPE:
     {
       "annexureCode": "Annexure-1",
       "title": "",
-      "type": "cover_letter|declaration|poa|turnover_certificate|net_worth_certificate|info_sheet|undertaking|other",
-      "body": "",
-      "placeholders": ["{{contractor_firm_name}}","{{contractor_address}}","{{contractor_gst}}","{{contractor_pan}}","{{authorized_signatory}}","{{designation}}","{{tender_title}}","{{tender_number}}","{{department_name}}","{{place}}","{{date}}","{{submission_deadline}}","{{emd_text}}","{{fee_text}}"]
+      "templateKind": "standard|compliance|table_form|financial_manual",
+      "requiredFieldKeys": ["place","date"],
+      "tables": [
+        {
+          "tableId": "compliance_table",
+          "title": "Technical Compliance",
+          "columns": [
+            { "key": "parameter", "label": "Parameter", "type": "text", "readOnly": true },
+            { "key": "value", "label": "Compliance", "type": "choice", "choices": ["yes","no","na"] }
+          ],
+          "rows": [
+            { "rowId": "r1", "parameter": "Solar Modules meet spec", "valueFieldKey": "compliance.solar_modules" }
+          ]
+        }
+      ],
+      "body": "Printable body text with placeholders only, e.g. Place: {{field:place}} Date: {{field:date}}",
+      "notes": ""
     }
   ],
 
@@ -59,14 +87,24 @@ OUTPUT JSON EXACT SHAPE:
   "sourceSnippets": []
 }
 
+FIELD TYPES allowed: text, textarea, date, number, choice, phone, email, ifsc.
+- Use key naming like:
+  contact.office_phone, contact.residence_phone, bank.account_no, bank.ifsc, signatory.name, signatory.designation,
+  compliance.<something>, financial.<something>
+
+TABLE RULES:
+- For bidder-filled tables (e.g., Commercial/Financial bid), use templateKind="financial_manual" and include a table with columns like:
+  item_description, qty, unit, rate, amount, remarks
+- Do NOT fill rate/amount values; they must be blank and linked to field keys.
+
+BODY RULES:
+- Do NOT include raw {{contractor_firm_name}} style placeholders.
+- Use ONLY {{field:<key>}} placeholders that exist in fieldCatalog or are referenced by table valueFieldKey.
+- If you need a blank line for handwriting, define a field key and put it in the body as {{field:key}}.
+
 CHECKLIST:
 - Provide 15–30 items if possible.
-- snippet should be an exact short quote from the PDF (max 160 chars) or "".
-
-ANNEXURE TEMPLATES:
-- Generate full printable bodies (English) for annexures referenced in the tender:
-  Covering letters, declarations, PoA, turnover/net worth certificates, MSME undertaking, bidder info sheet, etc.
-- Use placeholders; leave blanks where unknown. Do not include pricing/rates templates.
+- snippet must be an exact short quote from PDF (<=160 chars) or "".
 
 Now read the uploaded PDF and output ONLY the JSON.
 PROMPT;
@@ -553,6 +591,11 @@ function assisted_v2_build_pack_from_payload(array $payload, array $tender, arra
     $pack['completionMonths'] = $duration['completionMonths'] ?? null;
     $pack['bidValidityDays'] = $duration['bidValidityDays'] ?? null;
     $pack['fees'] = $payload['fees'] ?? [];
+    $fieldMeta = assisted_v2_field_meta_from_catalog($payload['fieldCatalog'] ?? []);
+    if (!isset($pack['fieldMeta']) || !is_array($pack['fieldMeta'])) {
+        $pack['fieldMeta'] = [];
+    }
+    $pack['fieldMeta'] = array_merge($pack['fieldMeta'], $fieldMeta);
 
     $pack['checklist'] = assisted_v2_checklist_for_pack($payload['checklist'] ?? []);
     $pack['items'] = pack_items_from_checklist($pack['checklist']);
@@ -566,6 +609,7 @@ function assisted_v2_build_pack_from_payload(array $payload, array $tender, arra
 
     $pack = pack_apply_schema_defaults($pack);
     assisted_v2_replace_pack_annexures($pack, $payload['annexureTemplates'] ?? [], $context);
+    $pack = pack_seed_field_registry($pack, $contractor, $payload['annexureTemplates'] ?? []);
     save_pack($pack, $context);
 
     pack_log([
@@ -607,12 +651,15 @@ function assisted_v2_replace_pack_annexures(array $pack, array $templates, strin
             'annexId' => $annexId,
             'annexureCode' => $code,
             'title' => trim((string)($tpl['title'] ?? 'Annexure')),
-            'type' => trim((string)($tpl['type'] ?? 'other')),
+            'type' => trim((string)($tpl['type'] ?? ($tpl['templateKind'] ?? 'standard'))),
+            'templateKind' => trim((string)($tpl['templateKind'] ?? ($tpl['type'] ?? 'standard'))),
             'bodyTemplate' => (string)($tpl['body'] ?? ($tpl['renderTemplate'] ?? '')),
             'renderTemplate' => (string)($tpl['renderTemplate'] ?? ($tpl['body'] ?? '')),
             'placeholders' => is_array($tpl['placeholders'] ?? null) ? array_values($tpl['placeholders']) : [],
             'requiredFields' => is_array($tpl['requiredFields'] ?? null) ? array_values($tpl['requiredFields']) : [],
+            'requiredFieldKeys' => is_array($tpl['requiredFieldKeys'] ?? null) ? array_values($tpl['requiredFieldKeys']) : [],
             'tables' => is_array($tpl['tables'] ?? null) ? array_values($tpl['tables']) : [],
+            'notes' => trim((string)($tpl['notes'] ?? '')),
             'createdAt' => now_kolkata()->format(DateTime::ATOM),
         ];
         $index[] = [
@@ -721,11 +768,151 @@ function assisted_v2_normalize_fees(array $fees): array
     ];
 }
 
+function assisted_v2_normalize_field_catalog(array $fieldCatalog, array &$warnings = []): array
+{
+    $allowedTypes = ['text', 'textarea', 'date', 'number', 'choice', 'phone', 'email', 'ifsc'];
+    $normalized = [];
+    $seen = [];
+
+    foreach ($fieldCatalog as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        $key = pack_normalize_placeholder_key((string)($entry['key'] ?? ''));
+        if ($key === '') {
+            $warnings[] = 'Field catalog entry missing key.';
+            continue;
+        }
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $type = strtolower(trim((string)($entry['type'] ?? 'text')));
+        if (!in_array($type, $allowedTypes, true)) {
+            $warnings[] = 'Invalid field type for ' . $key . '. Defaulted to text.';
+            $type = 'text';
+        }
+        $label = assisted_v2_clean_string($entry['label'] ?? '') ?? ucwords(str_replace(['.', '_'], ' ', $key));
+        $normalizedEntry = [
+            'key' => $key,
+            'label' => $label,
+            'type' => $type,
+        ];
+        if ($type === 'choice') {
+            $choices = $entry['choices'] ?? ['yes', 'no', 'na'];
+            if (!is_array($choices) || !$choices) {
+                $choices = ['yes', 'no', 'na'];
+            }
+            $normalizedEntry['choices'] = array_values(array_unique(array_map('strval', $choices)));
+        }
+        $normalized[] = $normalizedEntry;
+    }
+
+    return $normalized;
+}
+
+function assisted_v2_field_meta_from_catalog(array $fieldCatalog): array
+{
+    $meta = [];
+    foreach ($fieldCatalog as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        $key = pack_normalize_placeholder_key((string)($entry['key'] ?? ''));
+        if ($key === '') {
+            continue;
+        }
+        $meta[$key] = [
+            'label' => $entry['label'] ?? ucwords(str_replace(['.', '_'], ' ', $key)),
+            'group' => $entry['group'] ?? 'Other',
+            'max' => (int)($entry['max'] ?? 200),
+            'type' => $entry['type'] ?? 'text',
+        ];
+        if (!empty($entry['choices'])) {
+            $meta[$key]['choices'] = array_values(array_unique(array_map('strval', $entry['choices'])));
+        }
+    }
+    return $meta;
+}
+
+function assisted_v2_extract_field_placeholders(string $body, array &$errors = []): array
+{
+    $keys = [];
+    if (trim($body) === '') {
+        return $keys;
+    }
+    $matches = [];
+    $matched = preg_match_all('/{{\s*([^}]+)\s*}}/i', $body, $matches);
+    if ($matched === false) {
+        $errors[] = 'Failed to parse placeholders in annexure body.';
+        return $keys;
+    }
+    foreach ($matches[1] as $raw) {
+        $raw = trim((string)$raw);
+        if (stripos($raw, 'field:') === 0) {
+            $key = pack_normalize_placeholder_key(substr($raw, 6));
+            if ($key !== '') {
+                $keys[] = $key;
+            }
+            continue;
+        }
+        $suggested = pack_normalize_placeholder_key($raw);
+        $errors[] = 'Unknown placeholder {{' . $raw . '}}. Use {{field:' . ($suggested !== '' ? $suggested : 'key') . '}} instead.';
+    }
+    return array_values(array_unique($keys));
+}
+
+function assisted_v2_extract_table_field_keys(array $tables, array &$errors = []): array
+{
+    $keys = [];
+    foreach ($tables as $table) {
+        if (!is_array($table)) {
+            continue;
+        }
+        $columns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
+        foreach ((array)($table['rows'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            foreach ($columns as $column) {
+                if (!is_array($column)) {
+                    continue;
+                }
+                $colKey = pack_normalize_placeholder_key((string)($column['key'] ?? ''));
+                if ($colKey === '') {
+                    continue;
+                }
+                $fieldKey = '';
+                if (isset($row['fieldKeys']) && is_array($row['fieldKeys'])) {
+                    $fieldKey = (string)($row['fieldKeys'][$colKey] ?? '');
+                }
+                if ($fieldKey === '' && isset($row[$colKey . 'FieldKey'])) {
+                    $fieldKey = (string)$row[$colKey . 'FieldKey'];
+                }
+                if ($fieldKey === '' && $colKey === 'value' && isset($row['valueFieldKey'])) {
+                    $fieldKey = (string)$row['valueFieldKey'];
+                }
+                $fieldKey = pack_normalize_placeholder_key($fieldKey);
+                if ($fieldKey !== '') {
+                    $keys[] = $fieldKey;
+                } elseif (empty($column['readOnly'])) {
+                    $tableId = trim((string)($table['tableId'] ?? $table['title'] ?? 'table'));
+                    $rowId = trim((string)($row['rowId'] ?? 'row'));
+                    $errors[] = 'Missing field key for ' . $tableId . ':' . $rowId . ':' . $colKey . '.';
+                }
+            }
+        }
+    }
+    return array_values(array_unique($keys));
+}
+
 function assisted_v2_normalize_payload(array $payload): array
 {
     $meta = $payload['meta'] ?? [];
     $dates = $payload['dates'] ?? [];
     $duration = $payload['duration'] ?? [];
+    $warnings = [];
+    $fieldCatalog = assisted_v2_normalize_field_catalog((array)($payload['fieldCatalog'] ?? []), $warnings);
     $normalized = [
         'meta' => [
             'documentType' => assisted_v2_clean_string($meta['documentType'] ?? 'NIB') ?? 'NIB',
@@ -750,6 +937,7 @@ function assisted_v2_normalize_payload(array $payload): array
         'annexures' => assisted_v2_normalize_string_list($payload['annexures'] ?? []),
         'formats' => assisted_v2_normalize_formats($payload['formats'] ?? []),
         'restrictedAnnexures' => assisted_v2_normalize_string_list($payload['restrictedAnnexures'] ?? []),
+        'fieldCatalog' => $fieldCatalog,
         'checklist' => [],
         'annexureTemplates' => [],
         'notes' => assisted_v2_normalize_string_list($payload['notes'] ?? []),
@@ -787,15 +975,29 @@ function assisted_v2_normalize_payload(array $payload): array
         if ($title === null && $code === null) {
             continue;
         }
+        $body = (string)($tpl['body'] ?? '');
+        $bodyPlaceholders = assisted_v2_extract_field_placeholders($body);
+        $requiredKeys = [];
+        foreach ((array)($tpl['requiredFieldKeys'] ?? $tpl['requiredFields'] ?? []) as $key) {
+            $normalizedKey = pack_normalize_placeholder_key((string)$key);
+            if ($normalizedKey !== '') {
+                $requiredKeys[] = $normalizedKey;
+            }
+        }
+        $tableKeys = assisted_v2_extract_table_field_keys((array)($tpl['tables'] ?? []));
+        $requiredKeys = array_values(array_unique(array_merge($requiredKeys, $bodyPlaceholders, $tableKeys)));
         $normalized['annexureTemplates'][] = [
             'annexureCode' => $code ?? '',
             'title' => $title ?? 'Annexure',
-            'type' => assisted_v2_clean_string($tpl['type'] ?? '') ?? 'other',
-            'body' => (string)($tpl['body'] ?? ''),
+            'type' => assisted_v2_clean_string($tpl['templateKind'] ?? $tpl['type'] ?? '') ?? 'standard',
+            'templateKind' => assisted_v2_clean_string($tpl['templateKind'] ?? $tpl['type'] ?? '') ?? 'standard',
+            'body' => $body,
             'renderTemplate' => (string)($tpl['renderTemplate'] ?? ($tpl['body'] ?? '')),
             'placeholders' => is_array($tpl['placeholders'] ?? null) ? array_values($tpl['placeholders']) : [],
-            'requiredFields' => is_array($tpl['requiredFields'] ?? null) ? array_values($tpl['requiredFields']) : [],
+            'requiredFieldKeys' => $requiredKeys,
+            'requiredFields' => array_map(static fn($key) => ['key' => $key], $requiredKeys),
             'tables' => is_array($tpl['tables'] ?? null) ? array_values($tpl['tables']) : [],
+            'notes' => assisted_v2_clean_string($tpl['notes'] ?? '') ?? '',
         ];
     }
 
@@ -803,6 +1005,9 @@ function assisted_v2_normalize_payload(array $payload): array
     $normalized['annexures'] = $safeAnnexures;
     $normalized['formats'] = $safeFormats;
     $normalized['restrictedAnnexures'] = array_values(array_unique(array_merge($normalized['restrictedAnnexures'], $restricted)));
+    if ($warnings) {
+        $normalized['warnings'] = array_values(array_unique($warnings));
+    }
     return $normalized;
 }
 
@@ -833,8 +1038,9 @@ function assisted_v2_split_restricted_annexures(array $annexures, array $formats
 function assisted_v2_validate_payload(array $payload): array
 {
     $errors = [];
+    $warnings = [];
     $requiredKeys = [
-        'meta', 'dates', 'duration', 'fees', 'eligibilityDocs', 'annexures', 'formats',
+        'meta', 'dates', 'duration', 'fees', 'eligibilityDocs', 'annexures', 'formats', 'fieldCatalog',
         'restrictedAnnexures', 'checklist', 'annexureTemplates', 'notes', 'sourceSnippets',
     ];
     foreach ($requiredKeys as $key) {
@@ -843,6 +1049,59 @@ function assisted_v2_validate_payload(array $payload): array
         }
     }
     $normalized = assisted_v2_normalize_payload($payload);
+    if (!empty($normalized['warnings']) && is_array($normalized['warnings'])) {
+        $warnings = array_merge($warnings, $normalized['warnings']);
+        unset($normalized['warnings']);
+    }
+
+    $fieldCatalog = $normalized['fieldCatalog'] ?? [];
+    $fieldMeta = assisted_v2_field_meta_from_catalog($fieldCatalog);
+    $missingFieldKeys = [];
+    foreach ((array)($normalized['annexureTemplates'] ?? []) as $tpl) {
+        $body = (string)($tpl['body'] ?? '');
+        $placeholderErrors = [];
+        $bodyKeys = assisted_v2_extract_field_placeholders($body, $placeholderErrors);
+        if ($placeholderErrors) {
+            $errors = array_merge($errors, $placeholderErrors);
+        }
+        $tableErrors = [];
+        $tableKeys = assisted_v2_extract_table_field_keys((array)($tpl['tables'] ?? []), $tableErrors);
+        if ($tableErrors) {
+            $errors = array_merge($errors, $tableErrors);
+        }
+        $requiredKeys = [];
+        foreach ((array)($tpl['requiredFieldKeys'] ?? []) as $key) {
+            $normalizedKey = pack_normalize_placeholder_key((string)$key);
+            if ($normalizedKey !== '') {
+                $requiredKeys[] = $normalizedKey;
+            }
+        }
+        $allKeys = array_values(array_unique(array_merge($requiredKeys, $bodyKeys, $tableKeys)));
+        foreach ($allKeys as $key) {
+            if (!isset($fieldMeta[$key])) {
+                $missingFieldKeys[$key] = true;
+                $fieldMeta[$key] = [
+                    'label' => ucwords(str_replace(['.', '_'], ' ', $key)),
+                    'group' => 'Other',
+                    'max' => 200,
+                    'type' => 'text',
+                ];
+            }
+        }
+    }
+    if ($missingFieldKeys) {
+        $missingList = implode(', ', array_keys($missingFieldKeys));
+        $warnings[] = 'Missing field definitions auto-added: ' . $missingList . '.';
+        foreach (array_keys($missingFieldKeys) as $key) {
+            $fieldCatalog[] = [
+                'key' => $key,
+                'label' => ucwords(str_replace(['.', '_'], ' ', $key)),
+                'type' => 'text',
+            ];
+        }
+        $normalized['fieldCatalog'] = $fieldCatalog;
+    }
+
     $forbiddenFindings = assisted_v2_detect_forbidden_pricing($normalized);
     foreach ($forbiddenFindings as $finding) {
         if (($finding['action'] ?? '') === 'blocked') {
@@ -852,6 +1111,7 @@ function assisted_v2_validate_payload(array $payload): array
     return [
         'ok' => !$errors,
         'errors' => $errors,
+        'warnings' => array_values(array_unique($warnings)),
         'normalized' => $normalized,
         'findings' => $forbiddenFindings,
     ];
@@ -871,6 +1131,7 @@ function assisted_v2_parse_json_payload(string $input): array
         return [
             'ok' => false,
             'errors' => ['Paste JSON payload from external AI.'],
+            'warnings' => [],
             'normalized' => null,
             'findings' => [],
         ];
@@ -880,6 +1141,7 @@ function assisted_v2_parse_json_payload(string $input): array
         return [
             'ok' => false,
             'errors' => ['Invalid JSON. Please paste the exact payload.'],
+            'warnings' => [],
             'normalized' => null,
             'findings' => [],
         ];
@@ -895,6 +1157,7 @@ function assisted_v2_payload_summary(array $payload): array
         'annexureCount' => count($payload['annexures'] ?? []),
         'formatCount' => count($payload['formats'] ?? []),
         'restrictedCount' => count($payload['restrictedAnnexures'] ?? []),
+        'fieldCatalogCount' => count($payload['fieldCatalog'] ?? []),
     ];
 }
 

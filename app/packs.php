@@ -1125,6 +1125,59 @@ function pack_field_aliases(): array
     ];
 }
 
+function pack_table_cell_field_key(array $row, string $columnKey): string
+{
+    $fieldKey = '';
+    if (isset($row['fieldKeys']) && is_array($row['fieldKeys'])) {
+        $fieldKey = (string)($row['fieldKeys'][$columnKey] ?? '');
+    }
+    if ($fieldKey === '' && isset($row[$columnKey . 'FieldKey'])) {
+        $fieldKey = (string)$row[$columnKey . 'FieldKey'];
+    }
+    if ($fieldKey === '' && $columnKey === 'value' && isset($row['valueFieldKey'])) {
+        $fieldKey = (string)$row['valueFieldKey'];
+    }
+    return pack_normalize_placeholder_key($fieldKey);
+}
+
+function pack_table_field_keys(array $table): array
+{
+    $keys = [];
+    $columns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
+    foreach ((array)($table['rows'] ?? []) as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        foreach ($columns as $column) {
+            if (!is_array($column)) {
+                continue;
+            }
+            $colKey = pack_normalize_placeholder_key((string)($column['key'] ?? ''));
+            if ($colKey === '') {
+                continue;
+            }
+            $fieldKey = pack_table_cell_field_key($row, $colKey);
+            if ($fieldKey !== '') {
+                $keys[] = $fieldKey;
+            }
+        }
+    }
+    return array_values(array_unique($keys));
+}
+
+function pack_template_group_label(array $template, array $table = []): string
+{
+    $templateKind = strtolower(trim((string)($template['templateKind'] ?? $template['type'] ?? '')));
+    if ($templateKind === 'financial_manual') {
+        return 'Financial Manual Entry';
+    }
+    if ($templateKind === 'compliance') {
+        return 'Compliance Table';
+    }
+    $title = trim((string)($table['title'] ?? ''));
+    return $title !== '' ? $title : 'Other';
+}
+
 function pack_field_meta_catalog(array $pack, array $annexureTemplates = [], array $contractorTemplates = []): array
 {
     $meta = pack_default_field_meta();
@@ -1151,15 +1204,44 @@ function pack_field_meta_catalog(array $pack, array $annexureTemplates = [], arr
     };
 
     foreach ($annexureTemplates as $tpl) {
+        foreach ((array)($tpl['requiredFieldKeys'] ?? []) as $key) {
+            if (is_string($key)) {
+                $register(['key' => $key]);
+            }
+        }
         foreach ((array)($tpl['requiredFields'] ?? []) as $spec) {
             if (is_array($spec)) {
                 $register($spec);
             }
         }
         foreach ((array)($tpl['tables'] ?? []) as $table) {
+            $group = pack_template_group_label($tpl, $table);
+            $columns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
             foreach ((array)($table['rows'] ?? []) as $row) {
-                if (is_array($row)) {
-                    $register($row);
+                if (!is_array($row)) {
+                    continue;
+                }
+                foreach ($columns as $column) {
+                    if (!is_array($column)) {
+                        continue;
+                    }
+                    $colKey = pack_normalize_placeholder_key((string)($column['key'] ?? ''));
+                    if ($colKey === '' || !empty($column['readOnly'])) {
+                        continue;
+                    }
+                    $fieldKey = pack_table_cell_field_key($row, $colKey);
+                    if ($fieldKey === '') {
+                        continue;
+                    }
+                    $labelPrefix = trim((string)($table['title'] ?? $tpl['title'] ?? 'Table'));
+                    $labelSuffix = trim((string)($column['label'] ?? $colKey));
+                    $register([
+                        'key' => $fieldKey,
+                        'label' => trim($labelPrefix . ' - ' . $labelSuffix),
+                        'group' => $group,
+                        'type' => $column['type'] ?? 'text',
+                        'choices' => $column['choices'] ?? [],
+                    ]);
                 }
             }
         }
@@ -1282,12 +1364,14 @@ function pack_placeholder_value_map(array $pack, array $contractor, ?array $cata
     foreach (array_keys($catalog) as $key) {
         $value = pack_resolve_field_value($key, $pack, $contractor, true);
         $map['{{' . $key . '}}'] = $prefill($value, 6);
+        $map['{{field:' . $key . '}}'] = $prefill($value, 6);
     }
 
     $aliases = pack_field_aliases();
     foreach ($aliases as $alias => $canonical) {
         $value = pack_resolve_field_value($canonical, $pack, $contractor, true);
         $map['{{' . $alias . '}}'] = $prefill($value, 6);
+        $map['{{field:' . $alias . '}}'] = $prefill($value, 6);
     }
 
     $map['{{annexure_title}}'] = '';
@@ -1341,7 +1425,7 @@ function pack_extract_placeholders_from_template(array $template, array &$errors
         $errors[] = 'invalid_body_template';
     } elseif (is_string($body)) {
         $matches = [];
-        $matched = preg_match_all('/{{\s*([a-z0-9_.]+)\s*}}/i', $body, $matches);
+        $matched = preg_match_all('/{{\s*(?:field:)?([a-z0-9_.]+)\s*}}/i', $body, $matches);
         if ($matched === false) {
             $errors[] = 'placeholder_parse_failed';
         } elseif (!empty($matches[1])) {
@@ -1380,6 +1464,12 @@ function pack_collect_pack_fields(array $pack, array $contractor, array $annexur
             $errors[] = 'invalid_template';
             continue;
         }
+        foreach ((array)($tpl['requiredFieldKeys'] ?? []) as $key) {
+            $normalized = pack_normalize_placeholder_key((string)$key);
+            if ($normalized !== '') {
+                $required[$normalized] = true;
+            }
+        }
         foreach ((array)($tpl['requiredFields'] ?? []) as $spec) {
             if (is_array($spec)) {
                 $key = pack_normalize_placeholder_key((string)($spec['key'] ?? ''));
@@ -1389,14 +1479,8 @@ function pack_collect_pack_fields(array $pack, array $contractor, array $annexur
             }
         }
         foreach ((array)($tpl['tables'] ?? []) as $table) {
-            foreach ((array)($table['rows'] ?? []) as $row) {
-                if (!is_array($row)) {
-                    continue;
-                }
-                $key = pack_normalize_placeholder_key((string)($row['key'] ?? ''));
-                if ($key !== '') {
-                    $required[$key] = true;
-                }
+            foreach (pack_table_field_keys((array)$table) as $key) {
+                $required[$key] = true;
             }
         }
         $found = pack_extract_placeholders_from_template($tpl, $errors);
@@ -1481,53 +1565,128 @@ function pack_annexure_placeholder_context(array $pack, array $contractor, array
     return pack_placeholder_value_map($pack, $contractor, $catalog);
 }
 
-function pack_fill_annexure_body(array $template, array $context): string
+function pack_field_blank_text(array $meta, string $key): string
 {
-    $body = (string)($template['renderTemplate'] ?? ($template['bodyTemplate'] ?? ''));
-    if (!str_contains($body, '{{authorized_signatory}}') && stripos($body, 'authorized signatory') === false) {
-        $body .= "\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\n{{contractor_firm_name}}\nPlace: {{place}}\nDate: {{date}}";
-    }
-    foreach ($context as $key => $value) {
-        $body = str_replace($key, $value, $body);
-    }
-    return $body;
+    $max = (int)($meta[$key]['max'] ?? 12);
+    $min = 6;
+    $length = max($min, min(24, $max > 0 ? $max : $min));
+    return str_repeat('_', $length);
 }
 
-function pack_render_compliance_tables(array $template, array $pack, array $contractor): string
+function pack_render_field_value_html(string $key, array $pack, array $contractor, array $catalog, string $packId): string
+{
+    $key = pack_normalize_placeholder_key($key);
+    $value = pack_resolve_field_value($key, $pack, $contractor, true);
+    $meta = $catalog[$key] ?? ['type' => 'text'];
+    $type = strtolower((string)($meta['type'] ?? 'text'));
+    if ($type === 'choice') {
+        $normalized = strtolower(trim($value));
+        if ($normalized === '') {
+            return '<span class="choice-empty">☐ Yes ☐ No ☐ N/A</span>';
+        }
+        return '<span class="field-value">' . htmlspecialchars(ucwords($normalized), ENT_QUOTES, 'UTF-8') . '</span>';
+    }
+    if (trim($value) === '') {
+        $blank = pack_field_blank_text($catalog, $key);
+        $href = '/contractor/pack_view.php?packId=' . urlencode($packId) . '#field-registry';
+        return '<a class="field-blank" href="' . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '" title="Fill ' . htmlspecialchars($meta['label'] ?? $key, ENT_QUOTES, 'UTF-8') . '">' . $blank . '</a>';
+    }
+    return '<span class="field-value">' . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '</span>';
+}
+
+function pack_render_annexure_body_html(array $template, array $pack, array $contractor, array $catalog): string
+{
+    $body = (string)($template['renderTemplate'] ?? ($template['bodyTemplate'] ?? ''));
+    $body = str_replace(
+        ['{{annexure_title}}', '{{annexure_code}}'],
+        [(string)($template['title'] ?? ''), (string)($template['annexureCode'] ?? '')],
+        $body
+    );
+    $body = preg_replace_callback('/{{\s*(?!field:)([a-z0-9_.]+)\s*}}/i', static function (array $match) use ($catalog): string {
+        $key = pack_normalize_placeholder_key($match[1] ?? '');
+        if ($key !== '' && isset($catalog[$key])) {
+            return '{{field:' . $key . '}}';
+        }
+        return $match[0];
+    }, $body) ?? $body;
+    if (!str_contains($body, '{{field:authorized_signatory}}') && stripos($body, 'authorized signatory') === false) {
+        $body .= "\n\nAuthorized Signatory\n{{field:authorized_signatory}}\n{{field:designation}}\n{{field:contractor_firm_name}}\nPlace: {{field:place}}\nDate: {{field:date}}";
+    }
+    $parts = preg_split('/{{\s*field:([a-z0-9_.]+)\s*}}/i', $body, -1, PREG_SPLIT_DELIM_CAPTURE);
+    if ($parts === false) {
+        return htmlspecialchars($body, ENT_QUOTES, 'UTF-8');
+    }
+    $packId = (string)($pack['packId'] ?? '');
+    $html = '';
+    foreach ($parts as $index => $chunk) {
+        if ($index % 2 === 0) {
+            $html .= htmlspecialchars($chunk, ENT_QUOTES, 'UTF-8');
+            continue;
+        }
+        $html .= pack_render_field_value_html($chunk, $pack, $contractor, $catalog, $packId);
+    }
+    return $html;
+}
+
+function pack_render_template_tables_html(array $template, array $pack, array $contractor, array $catalog): string
 {
     $tables = $template['tables'] ?? [];
     if (!is_array($tables) || !$tables) {
         return '';
     }
-
-    $lines = [];
+    $html = '';
     foreach ($tables as $table) {
         if (!is_array($table)) {
             continue;
         }
-        $title = trim((string)($table['title'] ?? 'Compliance'));
-        if ($title !== '') {
-            $lines[] = $title;
+        $title = trim((string)($table['title'] ?? ''));
+        $columns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
+        if (!$columns) {
+            continue;
         }
+        $html .= '<div class="template-table">';
+        if ($title !== '') {
+            $html .= '<div class="table-title">' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</div>';
+        }
+        $html .= '<table class="annexure-table"><thead><tr>';
+        foreach ($columns as $column) {
+            $label = $column['label'] ?? $column['key'] ?? '';
+            $html .= '<th>' . htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') . '</th>';
+        }
+        $html .= '</tr></thead><tbody>';
         foreach ((array)($table['rows'] ?? []) as $row) {
             if (!is_array($row)) {
                 continue;
             }
-            $key = pack_normalize_placeholder_key((string)($row['key'] ?? ''));
-            if ($key === '') {
-                continue;
+            $html .= '<tr>';
+            foreach ($columns as $column) {
+                $colKey = pack_normalize_placeholder_key((string)($column['key'] ?? ''));
+                $cell = '';
+                if ($colKey === '') {
+                    $html .= '<td></td>';
+                    continue;
+                }
+                if (!empty($column['readOnly'])) {
+                    $cell = (string)($row[$colKey] ?? ($row['cells'][$colKey] ?? ''));
+                    $cell = htmlspecialchars(trim($cell), ENT_QUOTES, 'UTF-8');
+                } else {
+                    $fieldKey = pack_table_cell_field_key($row, $colKey);
+                    if ($fieldKey !== '') {
+                        $cell = pack_render_field_value_html($fieldKey, $pack, $contractor, $catalog, (string)($pack['packId'] ?? ''));
+                    } elseif (isset($row[$colKey])) {
+                        $cell = htmlspecialchars(trim((string)$row[$colKey]), ENT_QUOTES, 'UTF-8');
+                    }
+                }
+                if ($cell === '') {
+                    $cell = '<span class="field-blank">' . pack_field_blank_text($catalog, $colKey) . '</span>';
+                }
+                $html .= '<td>' . $cell . '</td>';
             }
-            $label = trim((string)($row['label'] ?? $key));
-            $value = strtolower(pack_resolve_field_value($key, $pack, $contractor, true));
-            $yes = $value === 'yes' ? '[x]' : '[ ]';
-            $no = $value === 'no' ? '[x]' : '[ ]';
-            $na = $value === 'na' ? '[x]' : '[ ]';
-            $lines[] = '- ' . $label . '  Yes ' . $yes . '  No ' . $no . '  N/A ' . $na;
+            $html .= '</tr>';
         }
-        $lines[] = '';
+        $html .= '</tbody></table></div>';
     }
-
-    return $lines ? "\n\n" . trim(implode("\n", $lines)) : '';
+    return $html;
 }
 
 function pack_financial_manual_templates(array $pack): array
@@ -1551,24 +1710,48 @@ function pack_financial_manual_templates(array $pack): array
             $code = 'Annexure-' . strtoupper($matches[1]) . '-Manual';
         }
         $body = "Financial/Commercial Bid (Manual Entry)\n"
-            . "YOJAK does not calculate or suggest rates. Fill this table manually.\n\n"
-            . "Item | Description | Qty | Unit | Rate (manual) | Amount (manual)\n"
-            . "-------------------------------------------------------------------\n"
-            . "1    | ___________ | ___ | ___  | _____________ | ________________\n"
-            . "2    | ___________ | ___ | ___  | _____________ | ________________\n"
-            . "3    | ___________ | ___ | ___  | _____________ | ________________\n"
-            . "Total: ______________________________";
+            . "YOJAK does not calculate or suggest rates. Fill this table manually.\n";
+        $rows = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $rows[] = [
+                'rowId' => 'r' . $i,
+                'fieldKeys' => [
+                    'item_description' => 'financial.row' . $i . '.item_description',
+                    'qty' => 'financial.row' . $i . '.qty',
+                    'unit' => 'financial.row' . $i . '.unit',
+                    'rate' => 'financial.row' . $i . '.rate',
+                    'amount' => 'financial.row' . $i . '.amount',
+                    'remarks' => 'financial.row' . $i . '.remarks',
+                ],
+            ];
+        }
 
         $templates[] = [
             'annexId' => 'FIN-' . strtoupper(substr(hash('sha256', $label), 0, 8)),
             'annexureCode' => $code,
             'title' => $label . ' (Manual Entry)',
             'type' => 'financial_manual',
+            'templateKind' => 'financial_manual',
             'bodyTemplate' => $body,
             'renderTemplate' => $body,
             'placeholders' => [],
             'requiredFields' => [],
-            'tables' => [],
+            'requiredFieldKeys' => [],
+            'tables' => [
+                [
+                    'tableId' => 'financial_manual',
+                    'title' => 'Manual Entry Table',
+                    'columns' => [
+                        ['key' => 'item_description', 'label' => 'Item Description', 'type' => 'text'],
+                        ['key' => 'qty', 'label' => 'Qty', 'type' => 'number'],
+                        ['key' => 'unit', 'label' => 'Unit', 'type' => 'text'],
+                        ['key' => 'rate', 'label' => 'Rate (manual)', 'type' => 'number'],
+                        ['key' => 'amount', 'label' => 'Amount (manual)', 'type' => 'number'],
+                        ['key' => 'remarks', 'label' => 'Remarks', 'type' => 'text'],
+                    ],
+                    'rows' => $rows,
+                ],
+            ],
             'isManualFinancial' => true,
         ];
     }
@@ -1882,21 +2065,19 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             }
         }
 
-        $annexureContext = pack_annexure_placeholder_context($pack, $contractor, $annexureTemplates);
+        $catalog = pack_field_meta_catalog($pack, $annexureTemplates);
         if ($annexureTemplates) {
             $html .= '<div class="subsection"><h3>Generated Annexure Templates</h3>';
             foreach ($annexureTemplates as $idx => $tpl) {
-                $context = $annexureContext;
-                $context['{{annexure_title}}'] = $tpl['title'] ?? '';
-                $context['{{annexure_code}}'] = $tpl['annexureCode'] ?? '';
-                $body = pack_fill_annexure_body($tpl, $context);
-                $body .= pack_render_compliance_tables($tpl, $pack, $contractor);
+                $bodyHtml = pack_render_annexure_body_html($tpl, $pack, $contractor, $catalog);
+                $tablesHtml = pack_render_template_tables_html($tpl, $pack, $contractor, $catalog);
                 $html .= '<div class="template-block' . ($idx > 0 ? ' page-break' : '') . '">';
                 $html .= '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">';
                 $html .= '<div><div class="muted">' . htmlspecialchars($tpl['annexureCode'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</div><h3 style="margin:4px 0 6px 0;">' . htmlspecialchars($tpl['title'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</h3></div>';
                 $html .= '<span class="pill">' . htmlspecialchars(ucwords(str_replace('_', ' ', $tpl['type'] ?? 'other')), ENT_QUOTES, 'UTF-8') . '</span>';
                 $html .= '</div>';
-                $html .= '<pre>' . htmlspecialchars($body, ENT_QUOTES, 'UTF-8') . '</pre>';
+                $html .= '<div class="template-body">' . $bodyHtml . '</div>';
+                $html .= $tablesHtml;
                 $html .= '</div>';
             }
             $html .= '</div>';
@@ -2049,7 +2230,13 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .subsection{margin-top:10px;}
     .warning{border:1px solid #f85149;padding:10px;border-radius:10px;background:#211015;}
     .template-block{background:#0b111a;border:1px solid #1f6feb33;border-radius:12px;padding:14px;margin-top:12px;}
-    pre{white-space:pre-wrap;line-height:1.6;font-family:inherit;}
+    .template-body{white-space:pre-wrap;line-height:1.6;font-family:inherit;margin-top:8px;}
+    .annexure-table{table-layout:fixed;word-break:break-word;}
+    .annexure-table th,.annexure-table td{overflow-wrap:anywhere;}
+    .template-table{margin-top:12px;}
+    .table-title{font-weight:600;margin-bottom:6px;}
+    .field-blank{color:#e6edf3;text-decoration:none;border-bottom:1px solid #8b949e;padding:0 2px;}
+    .choice-empty{letter-spacing:0.04em;}
     .card-sm{background:#0b111a;border:1px solid #30363d;border-radius:10px;padding:12px;}
     .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;}
     .large{font-size:18px;font-weight:700;}

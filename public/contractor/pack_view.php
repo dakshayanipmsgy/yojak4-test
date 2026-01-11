@@ -29,6 +29,10 @@ safe_page(function () {
         save_pack($pack, $context);
     }
     $packFieldsInfo = pack_collect_pack_fields($pack, $contractor, $annexureTemplates, $contractorTemplates);
+    $catalog = pack_field_meta_catalog($pack, $annexureTemplates, $contractorTemplates);
+    $tableTemplates = array_values(array_filter($annexureTemplatesList, static function (array $tpl): bool {
+        return !empty($tpl['tables']) && is_array($tpl['tables']);
+    }));
     if ($packFieldsInfo['errors']) {
         pack_log([
             'at' => now_kolkata()->format(DateTime::ATOM),
@@ -44,7 +48,7 @@ safe_page(function () {
     $title = get_app_config()['appName'] . ' | ' . ($pack['title'] ?? 'Tender Pack');
     $signedToken = pack_signed_token($pack['packId'], $yojId);
 
-    render_layout($title, function () use ($pack, $progress, $stats, $signedToken, $contractor, $suggestions, $attachments, $missingIds, $annexureTemplates, $annexureTemplatesList, $packFieldsInfo) {
+    render_layout($title, function () use ($pack, $progress, $stats, $signedToken, $contractor, $suggestions, $attachments, $missingIds, $annexureTemplates, $annexureTemplatesList, $packFieldsInfo, $catalog, $tableTemplates) {
         ?>
         <div class="card" style="display:grid; gap:10px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
@@ -137,6 +141,89 @@ safe_page(function () {
                             <?php endforeach; ?>
                         </div>
                     </div>
+                <?php endif; ?>
+                <?php if ($tableTemplates): ?>
+                    <form method="post" action="/contractor/pack_fields_save.php" style="display:grid; gap:12px;">
+                        <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                        <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
+                        <?php foreach ($tableTemplates as $tpl): ?>
+                            <?php foreach ((array)($tpl['tables'] ?? []) as $table): ?>
+                                <?php
+                                $columns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
+                                if (!$columns) { continue; }
+                                ?>
+                                <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:8px;">
+                                    <div>
+                                        <strong><?= sanitize(($tpl['annexureCode'] ?? 'Annexure') . ' • ' . ($tpl['title'] ?? 'Table')); ?></strong>
+                                        <div class="muted" style="font-size:12px;"><?= sanitize($table['title'] ?? 'Table'); ?></div>
+                                    </div>
+                                    <div style="overflow:auto;">
+                                        <table style="min-width:640px;">
+                                            <thead>
+                                            <tr>
+                                                <?php foreach ($columns as $column): ?>
+                                                    <th><?= sanitize($column['label'] ?? $column['key'] ?? ''); ?></th>
+                                                <?php endforeach; ?>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <?php foreach ((array)($table['rows'] ?? []) as $row): ?>
+                                                <?php if (!is_array($row)) { continue; } ?>
+                                                <tr>
+                                                    <?php foreach ($columns as $column): ?>
+                                                        <?php
+                                                        $colKey = pack_normalize_placeholder_key((string)($column['key'] ?? ''));
+                                                        if ($colKey === '') {
+                                                            echo '<td></td>';
+                                                            continue;
+                                                        }
+                                                        if (!empty($column['readOnly'])) {
+                                                            $cell = (string)($row[$colKey] ?? ($row['cells'][$colKey] ?? ''));
+                                                            echo '<td>' . sanitize($cell) . '</td>';
+                                                            continue;
+                                                        }
+                                                        $fieldKey = pack_table_cell_field_key($row, $colKey);
+                                                        if ($fieldKey === '') {
+                                                            $cell = (string)($row[$colKey] ?? '');
+                                                            echo '<td>' . sanitize($cell) . '</td>';
+                                                            continue;
+                                                        }
+                                                        $meta = $catalog[$fieldKey] ?? [];
+                                                        $type = $meta['type'] ?? ($column['type'] ?? 'text');
+                                                        $choices = $meta['choices'] ?? ($column['choices'] ?? []);
+                                                        $current = pack_resolve_field_value($fieldKey, $pack, $contractor, true);
+                                                        $inputValue = $pack['fieldRegistry'][$fieldKey] ?? $current;
+                                                        ?>
+                                                        <td>
+                                                            <?php if ($type === 'choice' && $choices): ?>
+                                                                <select name="fields[<?= sanitize($fieldKey); ?>]">
+                                                                    <option value=""><?= sanitize('Select'); ?></option>
+                                                                    <?php foreach ($choices as $choice): ?>
+                                                                        <option value="<?= sanitize($choice); ?>" <?= strtolower((string)$inputValue) === strtolower((string)$choice) ? 'selected' : ''; ?>>
+                                                                            <?= sanitize(ucwords((string)$choice)); ?>
+                                                                        </option>
+                                                                    <?php endforeach; ?>
+                                                                </select>
+                                                            <?php else: ?>
+                                                                <input type="<?= $type === 'number' ? 'number' : 'text'; ?>"
+                                                                       name="fields[<?= sanitize($fieldKey); ?>]"
+                                                                       value="<?= sanitize((string)$inputValue); ?>">
+                                                            <?php endif; ?>
+                                                        </td>
+                                                    <?php endforeach; ?>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endforeach; ?>
+                        <div class="buttons" style="gap:8px; flex-wrap:wrap;">
+                            <button class="btn secondary" type="submit"><?= sanitize('Save Table Entries'); ?></button>
+                            <span class="muted" style="font-size:12px;"><?= sanitize('Table entries are stored in the Field Registry.'); ?></span>
+                        </div>
+                    </form>
                 <?php endif; ?>
                 <form method="post" action="/contractor/pack_fields_save.php" style="display:grid; gap:12px;">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
