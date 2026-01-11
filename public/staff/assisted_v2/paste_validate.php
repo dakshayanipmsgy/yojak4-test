@@ -35,6 +35,8 @@ safe_page(function () {
 
     $normalized = $validation['normalized'];
     $request['draftPayload'] = $normalized;
+    $request['draftWarnings'] = $validation['warnings'] ?? [];
+    $request['draftStats'] = $validation['stats'] ?? [];
     assisted_v2_assign_request($request, $actor);
     assisted_v2_append_audit($request, assisted_v2_actor_label($actor), 'PASTE_VALIDATED');
     assisted_v2_save_request($request);
