@@ -96,6 +96,7 @@ TABLE RULES:
 - For bidder-filled tables (e.g., Commercial/Financial bid), use templateKind="financial_manual" and include a table with columns like:
   item_description, qty, unit, rate, amount, remarks
 - Do NOT fill rate/amount values; they must be blank and linked to field keys.
+- For any table row, provide rowId and for each fillable column provide valueFieldKey like table.<tableId>.<rowId>.<columnKey>.
 
 BODY RULES:
 - Do NOT include raw {{contractor_firm_name}} style placeholders.
@@ -835,7 +836,7 @@ function assisted_v2_field_meta_from_catalog(array $fieldCatalog): array
     return $meta;
 }
 
-function assisted_v2_extract_field_placeholders(string $body, array &$errors = []): array
+function assisted_v2_extract_body_placeholders(string $body, array $tableIds, array &$errors = [], array &$tablePlaceholders = []): array
 {
     $keys = [];
     if (trim($body) === '') {
@@ -847,19 +848,88 @@ function assisted_v2_extract_field_placeholders(string $body, array &$errors = [
         $errors[] = 'Failed to parse placeholders in annexure body.';
         return $keys;
     }
+    $tableIds = array_values(array_unique(array_map('strval', $tableIds)));
     foreach ($matches[1] as $raw) {
         $raw = trim((string)$raw);
         if (stripos($raw, 'field:') === 0) {
-            $key = pack_normalize_placeholder_key(substr($raw, 6));
+            $inner = trim(substr($raw, 6));
+            if (stripos($inner, 'table:') === 0) {
+                $tableId = pack_normalize_placeholder_key(substr($inner, 6));
+                if ($tableId === '') {
+                    $errors[] = 'Invalid table placeholder {{' . $raw . '}}.';
+                    continue;
+                }
+                if (!in_array($tableId, $tableIds, true)) {
+                    $errors[] = 'Unknown table placeholder {{' . $raw . '}}.';
+                    continue;
+                }
+                $tablePlaceholders[] = $tableId;
+                continue;
+            }
+            $key = pack_normalize_placeholder_key($inner);
             if ($key !== '') {
                 $keys[] = $key;
             }
             continue;
         }
+        if (stripos($raw, 'table:') === 0) {
+            $tableId = pack_normalize_placeholder_key(substr($raw, 6));
+            if ($tableId === '') {
+                $errors[] = 'Invalid table placeholder {{' . $raw . '}}.';
+                continue;
+            }
+            if (!in_array($tableId, $tableIds, true)) {
+                $errors[] = 'Unknown table placeholder {{' . $raw . '}}.';
+                continue;
+            }
+            $tablePlaceholders[] = $tableId;
+            continue;
+        }
         $suggested = pack_normalize_placeholder_key($raw);
-        $errors[] = 'Unknown placeholder {{' . $raw . '}}. Use {{field:' . ($suggested !== '' ? $suggested : 'key') . '}} instead.';
+        $errors[] = 'Unknown placeholder {{' . $raw . '}}. Use {{field:' . ($suggested !== '' ? $suggested : 'key') . '}} or {{table:<tableId>}} instead.';
     }
     return array_values(array_unique($keys));
+}
+
+function assisted_v2_table_cell_field_key(array $row, string $columnKey): string
+{
+    $fieldKey = '';
+    if (isset($row['fieldKeys']) && is_array($row['fieldKeys'])) {
+        $fieldKey = (string)($row['fieldKeys'][$columnKey] ?? '');
+    }
+    if ($fieldKey === '' && isset($row[$columnKey . 'FieldKey'])) {
+        $fieldKey = (string)$row[$columnKey . 'FieldKey'];
+    }
+    if ($fieldKey === '' && $columnKey === 'value' && isset($row['valueFieldKey'])) {
+        $fieldKey = (string)$row['valueFieldKey'];
+    }
+    return pack_normalize_placeholder_key($fieldKey);
+}
+
+function assisted_v2_table_field_key(string $tableId, string $rowId, string $columnKey): string
+{
+    return 'table.' . $tableId . '.' . $rowId . '.' . $columnKey;
+}
+
+function assisted_v2_canonicalize_table_placeholders(string $body, array &$stats): string
+{
+    if (trim($body) === '') {
+        return $body;
+    }
+    $body = preg_replace_callback('/{{\s*field:\s*table:\s*([a-z0-9_.-]+)\s*}}/i', static function (array $match) use (&$stats): string {
+        $tableId = pack_normalize_placeholder_key($match[1] ?? '');
+        $stats['placeholdersFixed'] = ($stats['placeholdersFixed'] ?? 0) + 1;
+        return '{{table:' . $tableId . '}}';
+    }, $body) ?? $body;
+    $body = preg_replace_callback('/{{\s*table:\s*([a-z0-9_.-]+)\s*}}/i', static function (array $match) use (&$stats): string {
+        $tableId = pack_normalize_placeholder_key($match[1] ?? '');
+        $canonical = '{{table:' . $tableId . '}}';
+        if ($match[0] !== $canonical) {
+            $stats['placeholdersFixed'] = ($stats['placeholdersFixed'] ?? 0) + 1;
+        }
+        return $canonical;
+    }, $body) ?? $body;
+    return $body;
 }
 
 function assisted_v2_extract_table_field_keys(array $tables, array &$errors = []): array
@@ -906,13 +976,112 @@ function assisted_v2_extract_table_field_keys(array $tables, array &$errors = []
     return array_values(array_unique($keys));
 }
 
-function assisted_v2_normalize_payload(array $payload): array
+function assisted_v2_normalize_template_tables(array $tables, array &$catalogMap, array &$warnings, array &$stats): array
+{
+    $allowedTypes = ['text', 'textarea', 'date', 'number', 'choice', 'phone', 'email', 'ifsc'];
+    $normalizedTables = [];
+    $generatedCounts = [];
+
+    foreach ($tables as $tableIndex => $table) {
+        if (!is_array($table)) {
+            continue;
+        }
+        $tableId = pack_normalize_placeholder_key((string)($table['tableId'] ?? $table['id'] ?? $table['title'] ?? ''));
+        if ($tableId === '') {
+            $tableId = 'table' . ($tableIndex + 1);
+        }
+        $table['tableId'] = $tableId;
+        $columns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
+        $rows = is_array($table['rows'] ?? null) ? $table['rows'] : [];
+        $normalizedRows = [];
+
+        foreach ($rows as $rowIndex => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $rowId = pack_normalize_placeholder_key((string)($row['rowId'] ?? ''));
+            if ($rowId === '') {
+                $rowId = 'r' . ($rowIndex + 1);
+            }
+            $row['rowId'] = $rowId;
+            $fieldKeys = is_array($row['fieldKeys'] ?? null) ? $row['fieldKeys'] : [];
+            foreach ($columns as $column) {
+                if (!is_array($column)) {
+                    continue;
+                }
+                $colKey = pack_normalize_placeholder_key((string)($column['key'] ?? ''));
+                if ($colKey === '') {
+                    continue;
+                }
+                if (!empty($column['readOnly'])) {
+                    continue;
+                }
+                $fieldKey = assisted_v2_table_cell_field_key($row, $colKey);
+                if ($fieldKey === '') {
+                    $fieldKey = assisted_v2_table_field_key($tableId, $rowId, $colKey);
+                    $fieldKeys[$colKey] = $fieldKey;
+                    $generatedCounts[$tableId] = ($generatedCounts[$tableId] ?? 0) + 1;
+                    $stats['tableKeysGenerated'] = ($stats['tableKeysGenerated'] ?? 0) + 1;
+                }
+                if (!isset($catalogMap[$fieldKey])) {
+                    $columnLabel = assisted_v2_clean_string($column['label'] ?? $column['key'] ?? $colKey) ?? $colKey;
+                    $rowLabel = assisted_v2_clean_string($row['label'] ?? $row['name'] ?? $row['title'] ?? $row[$colKey] ?? '') ?? $rowId;
+                    $label = trim($columnLabel . ' - ' . $rowLabel);
+                    $type = strtolower(trim((string)($column['type'] ?? 'text')));
+                    if (!in_array($type, $allowedTypes, true)) {
+                        $type = 'text';
+                    }
+                    $catalogMap[$fieldKey] = [
+                        'key' => $fieldKey,
+                        'label' => $label !== '' ? $label : ucwords(str_replace(['.', '_'], ' ', $fieldKey)),
+                        'type' => $type,
+                    ];
+                    if ($type === 'choice') {
+                        $choices = $column['choices'] ?? ['yes', 'no', 'na'];
+                        if (!is_array($choices) || !$choices) {
+                            $choices = ['yes', 'no', 'na'];
+                        }
+                        $catalogMap[$fieldKey]['choices'] = array_values(array_unique(array_map('strval', $choices)));
+                    }
+                } elseif (($catalogMap[$fieldKey]['type'] ?? '') !== 'choice' && strtolower((string)($column['type'] ?? '')) === 'choice') {
+                    $choices = $column['choices'] ?? ['yes', 'no', 'na'];
+                    if (!is_array($choices) || !$choices) {
+                        $choices = ['yes', 'no', 'na'];
+                    }
+                    $catalogMap[$fieldKey]['type'] = 'choice';
+                    $catalogMap[$fieldKey]['choices'] = array_values(array_unique(array_map('strval', $choices)));
+                }
+            }
+            if ($fieldKeys) {
+                $row['fieldKeys'] = $fieldKeys;
+            }
+            $normalizedRows[] = $row;
+        }
+
+        $table['columns'] = $columns;
+        $table['rows'] = $normalizedRows;
+        $normalizedTables[] = $table;
+    }
+
+    foreach ($generatedCounts as $tableId => $count) {
+        $warnings[] = 'Auto-created ' . $count . ' table field keys for ' . $tableId . '.';
+    }
+
+    return $normalizedTables;
+}
+
+function assisted_v2_normalize_payload(array $payload, array &$warnings = [], array &$stats = []): array
 {
     $meta = $payload['meta'] ?? [];
     $dates = $payload['dates'] ?? [];
     $duration = $payload['duration'] ?? [];
-    $warnings = [];
     $fieldCatalog = assisted_v2_normalize_field_catalog((array)($payload['fieldCatalog'] ?? []), $warnings);
+    $catalogMap = [];
+    foreach ($fieldCatalog as $entry) {
+        if (isset($entry['key'])) {
+            $catalogMap[$entry['key']] = $entry;
+        }
+    }
     $normalized = [
         'meta' => [
             'documentType' => assisted_v2_clean_string($meta['documentType'] ?? 'NIB') ?? 'NIB',
@@ -975,8 +1144,8 @@ function assisted_v2_normalize_payload(array $payload): array
         if ($title === null && $code === null) {
             continue;
         }
-        $body = (string)($tpl['body'] ?? '');
-        $bodyPlaceholders = assisted_v2_extract_field_placeholders($body);
+        $body = assisted_v2_canonicalize_table_placeholders((string)($tpl['body'] ?? ''), $stats);
+        $renderTemplate = assisted_v2_canonicalize_table_placeholders((string)($tpl['renderTemplate'] ?? ($tpl['body'] ?? '')), $stats);
         $requiredKeys = [];
         foreach ((array)($tpl['requiredFieldKeys'] ?? $tpl['requiredFields'] ?? []) as $key) {
             $normalizedKey = pack_normalize_placeholder_key((string)$key);
@@ -984,7 +1153,23 @@ function assisted_v2_normalize_payload(array $payload): array
                 $requiredKeys[] = $normalizedKey;
             }
         }
-        $tableKeys = assisted_v2_extract_table_field_keys((array)($tpl['tables'] ?? []));
+        $tables = is_array($tpl['tables'] ?? null) ? array_values($tpl['tables']) : [];
+        $tables = assisted_v2_normalize_template_tables($tables, $catalogMap, $warnings, $stats);
+        $tableIds = [];
+        foreach ($tables as $table) {
+            if (!is_array($table)) {
+                continue;
+            }
+            $tableIds[] = pack_normalize_placeholder_key((string)($table['tableId'] ?? $table['title'] ?? ''));
+        }
+        $tableIds = array_values(array_filter(array_unique($tableIds)));
+        $tableErrors = [];
+        $tablePlaceholders = [];
+        $bodyPlaceholders = assisted_v2_extract_body_placeholders($body, $tableIds, $tableErrors, $tablePlaceholders);
+        if ($tableErrors) {
+            $warnings = array_merge($warnings, $tableErrors);
+        }
+        $tableKeys = assisted_v2_extract_table_field_keys($tables);
         $requiredKeys = array_values(array_unique(array_merge($requiredKeys, $bodyPlaceholders, $tableKeys)));
         $normalized['annexureTemplates'][] = [
             'annexureCode' => $code ?? '',
@@ -992,15 +1177,18 @@ function assisted_v2_normalize_payload(array $payload): array
             'type' => assisted_v2_clean_string($tpl['templateKind'] ?? $tpl['type'] ?? '') ?? 'standard',
             'templateKind' => assisted_v2_clean_string($tpl['templateKind'] ?? $tpl['type'] ?? '') ?? 'standard',
             'body' => $body,
-            'renderTemplate' => (string)($tpl['renderTemplate'] ?? ($tpl['body'] ?? '')),
+            'renderTemplate' => $renderTemplate,
             'placeholders' => is_array($tpl['placeholders'] ?? null) ? array_values($tpl['placeholders']) : [],
             'requiredFieldKeys' => $requiredKeys,
             'requiredFields' => array_map(static fn($key) => ['key' => $key], $requiredKeys),
-            'tables' => is_array($tpl['tables'] ?? null) ? array_values($tpl['tables']) : [],
+            'tables' => $tables,
             'notes' => assisted_v2_clean_string($tpl['notes'] ?? '') ?? '',
         ];
     }
 
+    if ($catalogMap) {
+        $normalized['fieldCatalog'] = array_values($catalogMap);
+    }
     [$safeAnnexures, $safeFormats, $restricted] = assisted_v2_split_restricted_annexures($normalized['annexures'], $normalized['formats']);
     $normalized['annexures'] = $safeAnnexures;
     $normalized['formats'] = $safeFormats;
@@ -1009,6 +1197,26 @@ function assisted_v2_normalize_payload(array $payload): array
         $normalized['warnings'] = array_values(array_unique($warnings));
     }
     return $normalized;
+}
+
+function normalize_assisted_v2_payload(array $payload): array
+{
+    $warnings = [];
+    $stats = [
+        'tableKeysGenerated' => 0,
+        'placeholdersFixed' => 0,
+        'pricingWarnings' => 0,
+    ];
+    $normalized = assisted_v2_normalize_payload($payload, $warnings, $stats);
+    if (!empty($normalized['warnings']) && is_array($normalized['warnings'])) {
+        $warnings = array_merge($warnings, $normalized['warnings']);
+        unset($normalized['warnings']);
+    }
+    return [
+        'payload' => $normalized,
+        'warnings' => array_values(array_unique($warnings)),
+        'stats' => $stats,
+    ];
 }
 
 function assisted_v2_split_restricted_annexures(array $annexures, array $formats): array
@@ -1039,6 +1247,11 @@ function assisted_v2_validate_payload(array $payload): array
 {
     $errors = [];
     $warnings = [];
+    $stats = [
+        'tableKeysGenerated' => 0,
+        'placeholdersFixed' => 0,
+        'pricingWarnings' => 0,
+    ];
     $requiredKeys = [
         'meta', 'dates', 'duration', 'fees', 'eligibilityDocs', 'annexures', 'formats', 'fieldCatalog',
         'restrictedAnnexures', 'checklist', 'annexureTemplates', 'notes', 'sourceSnippets',
@@ -1048,11 +1261,10 @@ function assisted_v2_validate_payload(array $payload): array
             $errors[] = 'Missing key: ' . $key;
         }
     }
-    $normalized = assisted_v2_normalize_payload($payload);
-    if (!empty($normalized['warnings']) && is_array($normalized['warnings'])) {
-        $warnings = array_merge($warnings, $normalized['warnings']);
-        unset($normalized['warnings']);
-    }
+    $normalizedResult = normalize_assisted_v2_payload($payload);
+    $normalized = $normalizedResult['payload'];
+    $warnings = array_merge($warnings, $normalizedResult['warnings']);
+    $stats = array_merge($stats, $normalizedResult['stats']);
 
     $fieldCatalog = $normalized['fieldCatalog'] ?? [];
     $fieldMeta = assisted_v2_field_meta_from_catalog($fieldCatalog);
@@ -1060,7 +1272,14 @@ function assisted_v2_validate_payload(array $payload): array
     foreach ((array)($normalized['annexureTemplates'] ?? []) as $tpl) {
         $body = (string)($tpl['body'] ?? '');
         $placeholderErrors = [];
-        $bodyKeys = assisted_v2_extract_field_placeholders($body, $placeholderErrors);
+        $tableIds = [];
+        foreach ((array)($tpl['tables'] ?? []) as $table) {
+            if (!is_array($table)) {
+                continue;
+            }
+            $tableIds[] = pack_normalize_placeholder_key((string)($table['tableId'] ?? $table['title'] ?? ''));
+        }
+        $bodyKeys = assisted_v2_extract_body_placeholders($body, array_values(array_unique($tableIds)), $placeholderErrors);
         if ($placeholderErrors) {
             $errors = array_merge($errors, $placeholderErrors);
         }
@@ -1103,6 +1322,16 @@ function assisted_v2_validate_payload(array $payload): array
     }
 
     $forbiddenFindings = assisted_v2_detect_forbidden_pricing($normalized);
+    $stats['pricingWarnings'] = count(array_filter($forbiddenFindings, static function (array $finding): bool {
+        return ($finding['action'] ?? '') === 'warned';
+    }));
+    assisted_v2_log_event([
+        'event' => 'V2_NORMALIZE',
+        'tableKeysGenerated' => $stats['tableKeysGenerated'],
+        'placeholdersFixed' => $stats['placeholdersFixed'],
+        'pricingWarnings' => $stats['pricingWarnings'],
+        'at' => now_kolkata()->format(DateTime::ATOM),
+    ]);
     foreach ($forbiddenFindings as $finding) {
         if (($finding['action'] ?? '') === 'blocked') {
             $errors[] = 'Forbidden pricing content detected in ' . ($finding['path'] ?? 'payload') . '.';
@@ -1114,6 +1343,7 @@ function assisted_v2_validate_payload(array $payload): array
         'warnings' => array_values(array_unique($warnings)),
         'normalized' => $normalized,
         'findings' => $forbiddenFindings,
+        'stats' => $stats,
     ];
 }
 
@@ -1197,6 +1427,20 @@ function assisted_v2_evaluate_string_forbidden(string $value, string $path, arra
 {
     $value = trim($value);
     if ($value === '') {
+        return null;
+    }
+
+    if (assisted_v2_is_label_title_allowlist_path($path)) {
+        $hasCurrencyDigits = assisted_v2_contains_currency_with_digits($value);
+        $hasRateContext = assisted_v2_contains_pricing_context_keyword($value) || assisted_v2_contains_numeric_rate_pattern($value);
+        if ($hasCurrencyDigits && $hasRateContext) {
+            assisted_v2_log_restricted_validation($path, 'blocked', 'BLOCK_FORBIDDEN_PRICING_EVIDENCE');
+            return [
+                'path' => $path,
+                'action' => 'blocked',
+                'snippet' => assisted_v2_redact_snippet($value),
+            ];
+        }
         return null;
     }
 
@@ -1300,6 +1544,11 @@ function assisted_v2_contains_currency_amount(string $value): bool
     return (bool)preg_match('/(₹|rs\.?|inr)\s*\d[\d,\.]*/i', $value);
 }
 
+function assisted_v2_contains_currency_with_digits(string $value): bool
+{
+    return (bool)preg_match('/(₹|rs\.?|inr|rupees)[^0-9]*\d/i', $value);
+}
+
 function assisted_v2_contains_pricing_numeric_evidence(string $value): bool
 {
     if (assisted_v2_contains_currency_amount($value)) {
@@ -1331,6 +1580,27 @@ function assisted_v2_contains_block_marker(string $value): bool
 function assisted_v2_contains_explicit_pricing_phrase(string $value): bool
 {
     return (bool)preg_match('/(quoted rate|unit rate|rate per|per unit|financial offer|price offer|bid price|amount quoted|bill of quantities)/i', $value);
+}
+
+function assisted_v2_is_label_title_allowlist_path(string $path): bool
+{
+    $lower = strtolower($path);
+    if (str_starts_with($lower, 'root.annexures') || str_starts_with($lower, 'root.formats') || str_starts_with($lower, 'root.restrictedannexures')) {
+        return true;
+    }
+    if (str_starts_with($lower, 'root.fieldcatalog') && str_ends_with($lower, '.label')) {
+        return true;
+    }
+    if (str_starts_with($lower, 'root.annexuretemplates') && str_ends_with($lower, '.title')) {
+        return true;
+    }
+    if (str_contains($lower, '.tables.') && str_ends_with($lower, '.title')) {
+        return true;
+    }
+    if (str_contains($lower, '.columns.') && str_ends_with($lower, '.label')) {
+        return true;
+    }
+    return false;
 }
 
 function assisted_v2_is_restricted_financial_label(string $lower): bool

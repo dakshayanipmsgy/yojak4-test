@@ -34,9 +34,11 @@ safe_page(function () {
     $promptText = assisted_v2_prompt_text();
     $draftPayload = $request['draftPayload'] ?? null;
     $draftSummary = $draftPayload ? assisted_v2_payload_summary($draftPayload) : null;
+    $draftStats = $request['draftStats'] ?? [];
+    $draftWarnings = $request['draftWarnings'] ?? [];
 
     $title = get_app_config()['appName'] . ' | Assisted Pack v2';
-    render_layout($title, function () use ($request, $tender, $templatesIndex, $promptText, $draftSummary, $draftPayload) {
+    render_layout($title, function () use ($request, $tender, $templatesIndex, $promptText, $draftSummary, $draftPayload, $draftStats, $draftWarnings) {
         $pdfPath = $request['source']['tenderPdfPath'] ?? '';
         ?>
         <div class="card" style="display:grid;gap:12px;">
@@ -106,6 +108,15 @@ safe_page(function () {
                     <button class="btn" type="submit"><?= sanitize('Validate & Preview'); ?></button>
                 </form>
                 <?php if ($draftSummary): ?>
+                    <?php if (!empty($draftStats['tableKeysGenerated']) || !empty($draftStats['placeholdersFixed'])): ?>
+                        <div class="flash" style="background:#0f172a;border:1px solid #38bdf8;">
+                            <strong><?= sanitize('Auto-repairs applied'); ?></strong>
+                            <ul style="margin:6px 0 0 16px;">
+                                <li><?= sanitize('Table placeholders fixed: ' . (int)($draftStats['placeholdersFixed'] ?? 0)); ?></li>
+                                <li><?= sanitize('Table field keys generated: ' . (int)($draftStats['tableKeysGenerated'] ?? 0)); ?></li>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
                     <div class="flash" style="background:#0f1625;border:1px solid #1f6feb;">
                         <strong><?= sanitize('Preview Summary'); ?></strong>
                         <ul style="margin:6px 0 0 16px;">
@@ -130,6 +141,16 @@ safe_page(function () {
                             </div>
                         <?php endif; ?>
                     </div>
+                    <?php if (!empty($draftWarnings)): ?>
+                        <div class="flash" style="background:#111827;border:1px solid #334155;">
+                            <strong><?= sanitize('Normalization notes'); ?></strong>
+                            <ul style="margin:6px 0 0 16px;">
+                                <?php foreach ($draftWarnings as $warning): ?>
+                                    <li><?= sanitize((string)$warning); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
                     <form method="post" action="/staff/assisted_v2/deliver.php" style="display:grid;gap:8px;">
                         <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                         <input type="hidden" name="reqId" value="<?= sanitize($request['reqId'] ?? ''); ?>">
