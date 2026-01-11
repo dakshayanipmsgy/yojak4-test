@@ -374,6 +374,17 @@ safe_page(function () {
                         </div>
                     </div>
                 <?php endif; ?>
+                <?php if (!empty($pack['restrictedAnnexures'])): ?>
+                    <div class="flash" style="background:#201012;border:1px solid #f85149;">
+                        <strong><?= sanitize('Restricted (Financial/Price references)'); ?></strong>
+                        <p class="muted" style="margin:6px 0 0;"><?= sanitize('YOJAK will not ask for rates. These items are shown only for awareness.'); ?></p>
+                        <ul style="margin:6px 0 0 16px; padding:0;">
+                            <?php foreach ($pack['restrictedAnnexures'] as $rest): ?>
+                                <li><?= sanitize(is_array($rest) ? ($rest['title'] ?? ($rest['name'] ?? 'Restricted')) : (string)$rest); ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
             </div>
             <div class="card" style="display:grid; gap:12px;" id="print-center">
                 <div>

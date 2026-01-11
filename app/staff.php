@@ -76,9 +76,9 @@ function generate_employee_id(): string
 function employee_default_permissions(string $role): array
 {
     return match ($role) {
-        'support' => ['tickets', 'stats_view'],
-        'content' => ['content_tools', 'stats_view'],
-        'approvals' => ['reset_approvals', 'stats_view'],
+        'support' => ['tickets', 'stats_view', 'can_process_assisted'],
+        'content' => ['content_tools', 'stats_view', 'can_process_assisted'],
+        'approvals' => ['reset_approvals', 'stats_view', 'can_process_assisted'],
         'auditor' => ['audit_view', 'stats_view'],
         default => [],
     };
@@ -92,6 +92,7 @@ function employee_permission_catalog(): array
         'reset_approvals' => 'Password Reset Approvals',
         'audit_view' => 'Audit Logs (metadata)',
         'stats_view' => 'Platform Stats',
+        'can_process_assisted' => 'Assisted Pack Processing',
     ];
 }
 

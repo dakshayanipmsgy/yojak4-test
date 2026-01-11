@@ -3,31 +3,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../app/bootstrap.php';
 
 safe_page(function () {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        redirect('/contractor/offline_tenders.php');
+    $offtdId = trim((string)($_POST['id'] ?? ($_GET['id'] ?? '')));
+    set_flash('error', 'Assisted Extraction v1 is retired. Use Assisted Pack v2.');
+    if ($offtdId !== '') {
+        redirect('/contractor/offline_tender_view.php?id=' . urlencode($offtdId));
     }
-
-    require_csrf();
-    $user = require_role('contractor');
-    $yojId = $user['yojId'];
-    ensure_offline_tender_env($yojId);
-    ensure_assisted_extraction_env();
-
-    $offtdId = trim($_POST['id'] ?? '');
-    $notes = trim((string)($_POST['notes'] ?? ''));
-    $tender = $offtdId !== '' ? load_offline_tender($yojId, $offtdId) : null;
-
-    if (!$tender || ($tender['yojId'] ?? '') !== $yojId) {
-        render_error_page('Tender not found.');
-        return;
-    }
-
-    try {
-        assisted_create_request($yojId, $offtdId, $notes, $tender);
-        set_flash('success', 'Assisted extraction requested. Our team will review your tender PDF.');
-    } catch (Throwable $e) {
-        set_flash('error', $e->getMessage());
-    }
-
-    redirect('/contractor/offline_tender_view.php?id=' . urlencode($offtdId));
+    redirect('/contractor/offline_tenders.php');
 });
