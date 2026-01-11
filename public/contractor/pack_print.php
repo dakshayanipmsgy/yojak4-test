@@ -5,8 +5,8 @@ require_once __DIR__ . '/../../app/bootstrap.php';
 safe_page(function () {
     $user = require_role('contractor');
     $yojId = $user['yojId'];
-    $packId = trim($_GET['packId'] ?? '');
-    $doc = trim($_GET['doc'] ?? 'index');
+    $packId = trim((string)($_REQUEST['packId'] ?? ''));
+    $doc = trim((string)($_REQUEST['doc'] ?? 'index'));
     $allowedDocs = ['index', 'checklist', 'annexures', 'templates', 'full'];
     if (!in_array($doc, $allowedDocs, true)) {
         $doc = 'index';
@@ -20,13 +20,81 @@ safe_page(function () {
         return;
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        require_csrf();
+        $pageSize = trim((string)($_POST['pageSize'] ?? 'A4'));
+        $orientation = trim((string)($_POST['orientation'] ?? 'portrait'));
+        $letterheadMode = trim((string)($_POST['letterheadMode'] ?? 'use_saved_letterhead'));
+        $includeSnippets = ($_POST['includeSnippets'] ?? '1') !== '0';
+        if (!in_array($pageSize, ['A4', 'Letter', 'Legal'], true)) {
+            $pageSize = 'A4';
+        }
+        if (!in_array($orientation, ['portrait', 'landscape'], true)) {
+            $orientation = 'portrait';
+        }
+        if (!in_array($letterheadMode, ['blank_space', 'use_saved_letterhead'], true)) {
+            $letterheadMode = 'use_saved_letterhead';
+        }
+
+        $pack['printPrefs'] = [
+            'pageSize' => $pageSize,
+            'orientation' => $orientation,
+            'letterheadMode' => $letterheadMode,
+            'includeSnippets' => $includeSnippets,
+        ];
+        $pack['audit'][] = [
+            'at' => now_kolkata()->format(DateTime::ATOM),
+            'event' => 'PRINT_PREFS_UPDATED',
+            'yojId' => $yojId,
+        ];
+        save_pack($pack, $context);
+
+        $redirectParams = [
+            'packId' => $packId,
+            'doc' => $doc,
+        ];
+        $annexId = trim((string)($_POST['annexId'] ?? ''));
+        $tplId = trim((string)($_POST['tplId'] ?? ''));
+        if ($annexId !== '') {
+            $redirectParams['annexId'] = $annexId;
+        }
+        if ($tplId !== '') {
+            $redirectParams['tplId'] = $tplId;
+        }
+        if (!empty($_POST['annexurePreview'])) {
+            $redirectParams['annexurePreview'] = '1';
+        }
+        redirect('/contractor/pack_print.php?' . http_build_query($redirectParams));
+        return;
+    }
+
+    $printPrefs = array_merge(default_pack_print_prefs(), $pack['printPrefs'] ?? []);
+    $pageSize = trim((string)($_GET['pageSize'] ?? $printPrefs['pageSize']));
+    $orientation = trim((string)($_GET['orientation'] ?? $printPrefs['orientation']));
+    $letterheadMode = trim((string)($_GET['letterheadMode'] ?? $printPrefs['letterheadMode']));
+    if (!in_array($pageSize, ['A4', 'Letter', 'Legal'], true)) {
+        $pageSize = 'A4';
+    }
+    if (!in_array($orientation, ['portrait', 'landscape'], true)) {
+        $orientation = 'portrait';
+    }
+    if (!in_array($letterheadMode, ['blank_space', 'use_saved_letterhead'], true)) {
+        $letterheadMode = 'use_saved_letterhead';
+    }
+    if (isset($_GET['letterhead'])) {
+        $letterheadMode = ($_GET['letterhead'] ?? '1') === '0' ? 'blank_space' : 'use_saved_letterhead';
+    }
+
     $contractor = load_contractor($yojId) ?? [];
     $vaultFiles = contractor_vault_index($yojId);
     $options = [
-        'includeSnippets' => ($_GET['snippets'] ?? '1') !== '0',
+        'includeSnippets' => ($_GET['snippets'] ?? ($printPrefs['includeSnippets'] ? '1' : '0')) !== '0',
         'includeRestricted' => ($_GET['restricted'] ?? '1') !== '0',
         'pendingOnly' => ($_GET['pendingOnly'] ?? '') === '1',
-        'useLetterhead' => ($_GET['letterhead'] ?? '1') !== '0',
+        'useLetterhead' => $letterheadMode === 'use_saved_letterhead',
+        'letterheadMode' => $letterheadMode,
+        'pageSize' => $pageSize,
+        'orientation' => $orientation,
         'annexureId' => trim((string)($_GET['annexId'] ?? '')) ?: null,
         'templateId' => trim((string)($_GET['tplId'] ?? '')) ?: null,
         'annexurePreview' => ($_GET['annexurePreview'] ?? '') === '1',
@@ -38,7 +106,9 @@ safe_page(function () {
         'yojId' => $yojId,
         'packId' => $packId,
         'doc' => $doc,
-        'letterhead' => $options['useLetterhead'],
+        'letterhead' => $letterheadMode,
+        'pageSize' => $pageSize,
+        'orientation' => $orientation,
         'annexureId' => $options['annexureId'],
     ]);
     header('Content-Type: text/html; charset=UTF-8');

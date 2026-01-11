@@ -158,6 +158,16 @@ function default_print_settings(): array
     ];
 }
 
+function default_pack_print_prefs(): array
+{
+    return [
+        'pageSize' => 'A4',
+        'orientation' => 'portrait',
+        'letterheadMode' => 'use_saved_letterhead',
+        'includeSnippets' => true,
+    ];
+}
+
 function load_contractor_print_settings(string $yojId): array
 {
     $path = contractor_print_settings_path($yojId);
@@ -344,6 +354,17 @@ function pack_apply_schema_defaults(array $pack): array
     }
     if (!isset($pack['missingChecklistItemIds']) || !is_array($pack['missingChecklistItemIds'])) {
         $pack['missingChecklistItemIds'] = [];
+    }
+    if (!isset($pack['fieldOverrides']) || !is_array($pack['fieldOverrides'])) {
+        $pack['fieldOverrides'] = [];
+    }
+    if (!isset($pack['printPrefs']) || !is_array($pack['printPrefs'])) {
+        $pack['printPrefs'] = default_pack_print_prefs();
+    } else {
+        $pack['printPrefs'] = array_merge(default_pack_print_prefs(), $pack['printPrefs']);
+    }
+    if (!isset($pack['audit']) || !is_array($pack['audit'])) {
+        $pack['audit'] = [];
     }
 
     return $pack;
@@ -998,41 +1019,240 @@ function pack_upsert_offline_tender(array $tender, array $normalized, array $con
     return $pack;
 }
 
-function pack_annexure_placeholder_context(array $pack, array $contractor): array
+function pack_editable_field_catalog(): array
 {
-    $prefill = static function ($value, int $minLength = 8): string {
-        $trim = trim((string)$value);
-        return $trim === '' ? str_repeat('_', $minLength) : $trim;
-    };
+    return [
+        'contractor_firm_name' => ['label' => 'Contractor firm name', 'group' => 'Other', 'max' => 160, 'type' => 'text'],
+        'contractor_address' => ['label' => 'Contractor address', 'group' => 'Other', 'max' => 400, 'type' => 'textarea'],
+        'contractor_gst' => ['label' => 'GST number', 'group' => 'Other', 'max' => 80, 'type' => 'text'],
+        'contractor_pan' => ['label' => 'PAN number', 'group' => 'Other', 'max' => 80, 'type' => 'text'],
+        'authorized_signatory' => ['label' => 'Authorized signatory', 'group' => 'Signatory', 'max' => 160, 'type' => 'text'],
+        'designation' => ['label' => 'Signatory designation', 'group' => 'Signatory', 'max' => 120, 'type' => 'text'],
+        'tender_title' => ['label' => 'Tender title', 'group' => 'Tender details', 'max' => 200, 'type' => 'text'],
+        'tender_number' => ['label' => 'Tender number', 'group' => 'Tender details', 'max' => 120, 'type' => 'text'],
+        'department_name' => ['label' => 'Department name', 'group' => 'Tender details', 'max' => 200, 'type' => 'text'],
+        'submission_deadline' => ['label' => 'Submission deadline', 'group' => 'Tender details', 'max' => 120, 'type' => 'text'],
+        'emd_text' => ['label' => 'EMD details', 'group' => 'Tender details', 'max' => 240, 'type' => 'textarea'],
+        'fee_text' => ['label' => 'Tender fee details', 'group' => 'Tender details', 'max' => 240, 'type' => 'textarea'],
+        'place' => ['label' => 'Place', 'group' => 'Other', 'max' => 120, 'type' => 'text'],
+        'date' => ['label' => 'Date', 'group' => 'Other', 'max' => 40, 'type' => 'date'],
+        'officer_name' => ['label' => 'Officer name', 'group' => 'Office/Authority details', 'max' => 160, 'type' => 'text'],
+        'office_address' => ['label' => 'Office address', 'group' => 'Office/Authority details', 'max' => 400, 'type' => 'textarea'],
+    ];
+}
 
+function pack_normalize_placeholder_key(string $raw): string
+{
+    $key = trim($raw);
+    $key = preg_replace('/^{+\s*/', '', $key);
+    $key = preg_replace('/\s*}+$/', '', $key);
+    return strtolower(trim($key));
+}
+
+function pack_placeholder_base_values(array $pack, array $contractor): array
+{
     $placeDefault = $contractor['placeDefault'] ?? '';
     if ($placeDefault === '') {
         $placeDefault = $contractor['district'] ?? '';
     }
+    $fees = is_array($pack['fees'] ?? null) ? $pack['fees'] : [];
 
     return [
-        '{{contractor_firm_name}}' => $prefill($contractor['firmName'] ?? ($contractor['name'] ?? '')),
-        '{{contractor_firm_type}}' => $prefill($contractor['firmType'] ?? '', 5),
-        '{{contractor_address}}' => $prefill(contractor_profile_address($contractor)),
-        '{{contractor_gst}}' => $prefill($contractor['gstNumber'] ?? '', 5),
-        '{{contractor_pan}}' => $prefill($contractor['panNumber'] ?? '', 5),
-        '{{authorized_signatory}}' => $prefill($contractor['authorizedSignatoryName'] ?? ($contractor['name'] ?? ''), 5),
-        '{{designation}}' => $prefill($contractor['authorizedSignatoryDesignation'] ?? '', 5),
-        '{{tender_title}}' => $prefill($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender'), 6),
-        '{{tender_number}}' => $prefill($pack['tenderNumber'] ?? '', 6),
-        '{{department_name}}' => $prefill($pack['deptName'] ?? ($pack['sourceTender']['deptName'] ?? ''), 6),
-        '{{place}}' => $prefill($placeDefault, 6),
-        '{{date}}' => now_kolkata()->format('d M Y'),
-        '{{contractor_email}}' => $prefill($contractor['email'] ?? '', 6),
-        '{{contractor_mobile}}' => $prefill($contractor['mobile'] ?? '', 6),
-        '{{submission_deadline}}' => $prefill($pack['submissionDeadline'] ?? ($pack['dates']['submission'] ?? ''), 6),
-        '{{emd_text}}' => $prefill($pack['fees']['emdText'] ?? '', 6),
-        '{{fee_text}}' => $prefill($pack['fees']['tenderFeeText'] ?? '', 6),
-        '{{sd_text}}' => $prefill($pack['fees']['sdText'] ?? '', 6),
-        '{{pg_text}}' => $prefill($pack['fees']['pgText'] ?? '', 6),
+        'contractor_firm_name' => $contractor['firmName'] ?? ($contractor['name'] ?? ''),
+        'contractor_firm_type' => $contractor['firmType'] ?? '',
+        'contractor_address' => contractor_profile_address($contractor),
+        'contractor_gst' => $contractor['gstNumber'] ?? '',
+        'contractor_pan' => $contractor['panNumber'] ?? '',
+        'authorized_signatory' => $contractor['authorizedSignatoryName'] ?? ($contractor['name'] ?? ''),
+        'designation' => $contractor['authorizedSignatoryDesignation'] ?? '',
+        'tender_title' => $pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender'),
+        'tender_number' => $pack['tenderNumber'] ?? '',
+        'department_name' => $pack['departmentName'] ?? ($pack['deptName'] ?? ($pack['sourceTender']['deptName'] ?? '')),
+        'place' => $placeDefault,
+        'date' => '',
+        'contractor_email' => $contractor['email'] ?? '',
+        'contractor_mobile' => $contractor['mobile'] ?? '',
+        'submission_deadline' => $pack['submissionDeadline'] ?? ($pack['dates']['submission'] ?? ''),
+        'emd_text' => $fees['emdText'] ?? '',
+        'fee_text' => $fees['tenderFeeText'] ?? '',
+        'sd_text' => $fees['sdText'] ?? '',
+        'pg_text' => $fees['pgText'] ?? '',
+        'officer_name' => $pack['officerName'] ?? '',
+        'office_address' => $pack['officeAddress'] ?? '',
+        'annexure_title' => '',
+        'annexure_code' => '',
+    ];
+}
+
+function pack_resolve_field_value(string $key, array $pack, array $contractor, bool $useOverrides = true): string
+{
+    $key = pack_normalize_placeholder_key($key);
+    $overrides = is_array($pack['fieldOverrides'] ?? null) ? $pack['fieldOverrides'] : [];
+    if ($useOverrides && array_key_exists($key, $overrides)) {
+        return trim((string)$overrides[$key]);
+    }
+    $base = pack_placeholder_base_values($pack, $contractor);
+    return trim((string)($base[$key] ?? ''));
+}
+
+function pack_placeholder_value_map(array $pack, array $contractor): array
+{
+    $prefill = static function ($value, int $minLength = 20): string {
+        $trim = trim((string)$value);
+        return $trim === '' ? str_repeat('_', $minLength) : $trim;
+    };
+
+    $base = pack_placeholder_base_values($pack, $contractor);
+    $overrides = is_array($pack['fieldOverrides'] ?? null) ? $pack['fieldOverrides'] : [];
+    foreach ($overrides as $key => $value) {
+        $key = pack_normalize_placeholder_key((string)$key);
+        if (array_key_exists($key, $base)) {
+            $base[$key] = trim((string)$value);
+        }
+    }
+
+    return [
+        '{{contractor_firm_name}}' => $prefill($base['contractor_firm_name'] ?? ''),
+        '{{contractor_firm_type}}' => $prefill($base['contractor_firm_type'] ?? '', 5),
+        '{{contractor_address}}' => $prefill($base['contractor_address'] ?? ''),
+        '{{contractor_gst}}' => $prefill($base['contractor_gst'] ?? '', 5),
+        '{{contractor_pan}}' => $prefill($base['contractor_pan'] ?? '', 5),
+        '{{authorized_signatory}}' => $prefill($base['authorized_signatory'] ?? '', 5),
+        '{{designation}}' => $prefill($base['designation'] ?? '', 5),
+        '{{tender_title}}' => $prefill($base['tender_title'] ?? '', 6),
+        '{{tender_number}}' => $prefill($base['tender_number'] ?? '', 6),
+        '{{department_name}}' => $prefill($base['department_name'] ?? '', 6),
+        '{{place}}' => $prefill($base['place'] ?? '', 6),
+        '{{date}}' => $prefill($base['date'] ?? '', 8),
+        '{{contractor_email}}' => $prefill($base['contractor_email'] ?? '', 6),
+        '{{contractor_mobile}}' => $prefill($base['contractor_mobile'] ?? '', 6),
+        '{{submission_deadline}}' => $prefill($base['submission_deadline'] ?? '', 6),
+        '{{emd_text}}' => $prefill($base['emd_text'] ?? '', 8),
+        '{{fee_text}}' => $prefill($base['fee_text'] ?? '', 8),
+        '{{sd_text}}' => $prefill($base['sd_text'] ?? '', 8),
+        '{{pg_text}}' => $prefill($base['pg_text'] ?? '', 8),
+        '{{officer_name}}' => $prefill($base['officer_name'] ?? '', 6),
+        '{{office_address}}' => $prefill($base['office_address'] ?? '', 8),
         '{{annexure_title}}' => '',
         '{{annexure_code}}' => '',
     ];
+}
+
+function pack_placeholder_suggestion(string $key, array $pack, array $contractor): string
+{
+    $key = pack_normalize_placeholder_key($key);
+    if ($key === 'date') {
+        return now_kolkata()->format('Y-m-d');
+    }
+    if ($key === 'place') {
+        $place = trim((string)($contractor['placeDefault'] ?? ''));
+        if ($place === '') {
+            $place = trim((string)($contractor['district'] ?? ''));
+        }
+        return $place;
+    }
+    return '';
+}
+
+function pack_extract_placeholders_from_template(array $template, array &$errors = []): array
+{
+    $keys = [];
+    $body = $template['bodyTemplate'] ?? '';
+    if ($body !== '' && !is_string($body)) {
+        $errors[] = 'invalid_body_template';
+    } elseif (is_string($body)) {
+        $matches = [];
+        $matched = preg_match_all('/{{\s*([a-z0-9_]+)\s*}}/i', $body, $matches);
+        if ($matched === false) {
+            $errors[] = 'placeholder_parse_failed';
+        } elseif (!empty($matches[1])) {
+            foreach ($matches[1] as $raw) {
+                $key = pack_normalize_placeholder_key($raw);
+                if ($key !== '') {
+                    $keys[] = $key;
+                }
+            }
+        }
+    }
+    if (array_key_exists('placeholders', $template)) {
+        if (!is_array($template['placeholders'])) {
+            $errors[] = 'invalid_placeholders_list';
+        } else {
+            foreach ($template['placeholders'] as $placeholder) {
+                $key = pack_normalize_placeholder_key((string)$placeholder);
+                if ($key !== '') {
+                    $keys[] = $key;
+                }
+            }
+        }
+    }
+
+    return array_values(array_unique($keys));
+}
+
+function pack_collect_pack_fields(array $pack, array $contractor, array $annexureTemplates): array
+{
+    $catalog = pack_editable_field_catalog();
+    $allowedKeys = array_keys($catalog);
+    $detected = [];
+    $errors = [];
+
+    foreach ($annexureTemplates as $tpl) {
+        if (!is_array($tpl)) {
+            $errors[] = 'invalid_template';
+            continue;
+        }
+        $found = pack_extract_placeholders_from_template($tpl, $errors);
+        foreach ($found as $key) {
+            if (in_array($key, $allowedKeys, true)) {
+                $detected[$key] = true;
+            }
+        }
+    }
+
+    $fields = [];
+    foreach (array_keys($detected) as $key) {
+        $value = pack_resolve_field_value($key, $pack, $contractor, true);
+        $override = trim((string)($pack['fieldOverrides'][$key] ?? ''));
+        $fields[] = [
+            'key' => $key,
+            'label' => $catalog[$key]['label'],
+            'group' => $catalog[$key]['group'],
+            'type' => $catalog[$key]['type'],
+            'max' => $catalog[$key]['max'],
+            'value' => $value,
+            'override' => $override,
+            'missing' => $value === '',
+            'suggestion' => pack_placeholder_suggestion($key, $pack, $contractor),
+        ];
+    }
+
+    $groups = [];
+    foreach ($fields as $field) {
+        $groups[$field['group']][] = $field;
+    }
+    $order = ['Tender details', 'Signatory', 'Office/Authority details', 'Other'];
+    uksort($groups, static function ($a, $b) use ($order) {
+        $posA = array_search($a, $order, true);
+        $posB = array_search($b, $order, true);
+        $posA = $posA === false ? 999 : $posA;
+        $posB = $posB === false ? 999 : $posB;
+        if ($posA === $posB) {
+            return strcmp($a, $b);
+        }
+        return $posA <=> $posB;
+    });
+
+    return [
+        'fields' => $fields,
+        'groups' => $groups,
+        'errors' => array_values(array_unique($errors)),
+    ];
+}
+
+function pack_annexure_placeholder_context(array $pack, array $contractor): array
+{
+    return pack_placeholder_value_map($pack, $contractor);
 }
 
 function pack_fill_annexure_body(array $template, array $context): string
@@ -1215,6 +1435,9 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         'includeRestricted' => true,
         'pendingOnly' => false,
         'useLetterhead' => true,
+        'letterheadMode' => 'use_saved_letterhead',
+        'pageSize' => 'A4',
+        'orientation' => 'portrait',
         'annexureId' => null,
         'templateId' => null,
         'annexurePreview' => false,
@@ -1227,6 +1450,12 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     }
 
     $printedAt = now_kolkata()->format('d M Y, h:i A');
+    $pageSizes = ['A4', 'Letter', 'Legal'];
+    $pageSize = in_array($options['pageSize'], $pageSizes, true) ? $options['pageSize'] : 'A4';
+    $orientation = in_array($options['orientation'], ['portrait', 'landscape'], true) ? $options['orientation'] : 'portrait';
+    $letterheadMode = in_array($options['letterheadMode'], ['blank_space', 'use_saved_letterhead'], true)
+        ? $options['letterheadMode']
+        : 'use_saved_letterhead';
     $prefill = static function ($value, int $minLength = 8): string {
         $trim = trim((string)$value);
         return $trim === '' ? str_repeat('_', $minLength) : htmlspecialchars($trim, ENT_QUOTES, 'UTF-8');
@@ -1492,9 +1721,9 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $sections[] = $render_attachments_plan();
     }
 
-    $styles = '<style>
-    @page{size:A4;margin:18mm;}
-    body{font-family:\'Segoe UI\',Arial,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px;}
+    $styles = "<style>
+    @page{size:{$pageSize} {$orientation};margin:30mm 18mm 20mm;}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px;}
     .page{max-width:960px;margin:0 auto;background:#0f1520;border:1px solid #30363d;border-radius:14px;padding:20px;}
     h1,h2,h3,h4{margin:0 0 8px;}
     .muted{color:#8b949e;}
@@ -1516,20 +1745,27 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid #30363d;font-size:12px;background:#111820;}
     .page-break{page-break-before:always;}
     footer{margin-top:20px;font-size:12px;color:#8b949e;text-align:center;min-height:20mm;}
-    footer .page-number::after{content:"1";}
+    footer .page-number::after{content:'1';}
     .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid #30363d;padding-bottom:10px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
+    .print-settings{background:#0b111a;border:1px solid #30363d;border-radius:12px;padding:12px;margin-bottom:16px;display:grid;gap:10px;}
+    .print-settings .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
+    .print-settings label{display:grid;gap:6px;font-size:12px;color:#8b949e;}
+    .print-settings select,.print-settings input{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:8px;color:#e6edf3;}
+    .print-settings button{background:#1f6feb;border:none;color:#fff;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
+    .print-settings .hint{font-size:12px;color:#8b949e;}
     @media print{
         body{background:#fff;color:#000;}
-        .page{box-shadow:none;border:1px solid #ddd;}
+        .page{box-shadow:none;border:1px solid #ddd;padding:0;}
         a{color:#000;}
+        .print-settings{display:none;}
         footer .page-number::after{content: counter(page);}
     }
-    </style>';
+    </style>";
 
     $printSettings = load_contractor_print_settings($pack['yojId']);
-    $useLetterhead = (bool)($options['useLetterhead'] ?? true);
+    $useLetterhead = $letterheadMode === 'use_saved_letterhead';
     if (!$useLetterhead) {
         $printSettings['headerEnabled'] = false;
         $printSettings['footerEnabled'] = false;
@@ -1562,9 +1798,46 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     }
     $footer = '<footer>' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
 
+    $settingsPanel = '<form class="print-settings" method="post" action="/contractor/pack_print.php">'
+        . '<input type="hidden" name="csrf_token" value="' . htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') . '">'
+        . '<input type="hidden" name="packId" value="' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . '">'
+        . '<input type="hidden" name="doc" value="' . htmlspecialchars($docType, ENT_QUOTES, 'UTF-8') . '">'
+        . '<input type="hidden" name="annexId" value="' . htmlspecialchars((string)($options['annexureId'] ?? ''), ENT_QUOTES, 'UTF-8') . '">'
+        . '<input type="hidden" name="tplId" value="' . htmlspecialchars((string)($options['templateId'] ?? ''), ENT_QUOTES, 'UTF-8') . '">'
+        . '<input type="hidden" name="annexurePreview" value="' . htmlspecialchars(!empty($options['annexurePreview']) ? '1' : '0', ENT_QUOTES, 'UTF-8') . '">'
+        . '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'
+        . '<div><strong>Print settings</strong><div class="hint">In print dialog, keep Scale = 100% for exact sizing.</div></div>'
+        . '<button type="submit">Save settings</button>'
+        . '</div>'
+        . '<div class="grid">'
+        . '<label>Page size'
+        . '<select name="pageSize">'
+        . '<option value="A4"' . ($pageSize === 'A4' ? ' selected' : '') . '>A4</option>'
+        . '<option value="Letter"' . ($pageSize === 'Letter' ? ' selected' : '') . '>Letter</option>'
+        . '<option value="Legal"' . ($pageSize === 'Legal' ? ' selected' : '') . '>Legal</option>'
+        . '</select></label>'
+        . '<label>Orientation'
+        . '<select name="orientation">'
+        . '<option value="portrait"' . ($orientation === 'portrait' ? ' selected' : '') . '>Portrait</option>'
+        . '<option value="landscape"' . ($orientation === 'landscape' ? ' selected' : '') . '>Landscape</option>'
+        . '</select></label>'
+        . '<label>Letterhead mode'
+        . '<select name="letterheadMode">'
+        . '<option value="blank_space"' . ($letterheadMode === 'blank_space' ? ' selected' : '') . '>Leave blank header/footer space</option>'
+        . '<option value="use_saved_letterhead"' . ($letterheadMode === 'use_saved_letterhead' ? ' selected' : '') . '>Use saved letterhead</option>'
+        . '</select></label>'
+        . '<label>Checklist snippets'
+        . '<select name="includeSnippets">'
+        . '<option value="1"' . (!empty($options['includeSnippets']) ? ' selected' : '') . '>Include source snippets</option>'
+        . '<option value="0"' . (empty($options['includeSnippets']) ? ' selected' : '') . '>Hide snippets</option>'
+        . '</select></label>'
+        . '</div>'
+        . '</form>';
+
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
         . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'
-        . $styles . '</head><body><div class="page">' . $header . implode('<hr class="muted" style="border:none;border-top:1px solid #30363d;margin:16px 0;">', $sections) . $footer . '</div></body></html>';
+        . $styles . '</head><body><div class="page">' . $settingsPanel . $header
+        . implode('<hr class="muted" style="border:none;border-top:1px solid #30363d;margin:16px 0;">', $sections) . $footer . '</div></body></html>';
 
     return $html;
 }
