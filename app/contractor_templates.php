@@ -122,7 +122,7 @@ function default_contractor_templates_path(): string
 
 function default_contractor_templates(): array
 {
-    ensure_assisted_extraction_env();
+    ensure_assisted_v2_env();
     $path = default_contractor_templates_path();
     $existing = readJson($path);
     if ($existing) {

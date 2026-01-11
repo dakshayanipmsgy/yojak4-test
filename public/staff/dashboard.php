@@ -10,6 +10,7 @@ safe_page(function () {
         ['key' => 'audit_view', 'title' => 'Audit Logs', 'description' => 'View metadata to monitor activity.', 'link' => '/staff/audit.php'],
         ['key' => 'reset_approvals', 'title' => 'Reset Approvals', 'description' => 'Coordinate password reset approvals.', 'link' => '/superadmin/reset_requests.php'],
         ['key' => 'stats_view', 'title' => 'Platform Stats', 'description' => 'Counts only, no content.', 'link' => '/superadmin/stats.php'],
+        ['key' => 'can_process_assisted', 'title' => 'Assisted Packs v2', 'description' => 'Process contractor assisted pack requests.', 'link' => '/staff/assisted_v2/queue.php'],
     ];
 
     $title = get_app_config()['appName'] . ' | Staff Dashboard';

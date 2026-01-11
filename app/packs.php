@@ -845,7 +845,7 @@ function pack_annexure_generate_id(string $yojId, string $packId, string $contex
 function pack_is_restricted_annexure_label(string $label): bool
 {
     $lower = mb_strtolower($label);
-    return assisted_is_restricted_financial_label($lower) || str_contains($lower, 'financial bid') || str_contains($lower, 'price bid');
+    return assisted_v2_is_restricted_financial_label($lower) || str_contains($lower, 'financial bid') || str_contains($lower, 'price bid');
 }
 
 function pack_generate_annexures(array $pack, array $contractor, string $context = 'tender'): array
@@ -1025,6 +1025,11 @@ function pack_annexure_placeholder_context(array $pack, array $contractor): arra
         '{{date}}' => now_kolkata()->format('d M Y'),
         '{{contractor_email}}' => $prefill($contractor['email'] ?? '', 6),
         '{{contractor_mobile}}' => $prefill($contractor['mobile'] ?? '', 6),
+        '{{submission_deadline}}' => $prefill($pack['submissionDeadline'] ?? ($pack['dates']['submission'] ?? ''), 6),
+        '{{emd_text}}' => $prefill($pack['fees']['emdText'] ?? '', 6),
+        '{{fee_text}}' => $prefill($pack['fees']['tenderFeeText'] ?? '', 6),
+        '{{sd_text}}' => $prefill($pack['fees']['sdText'] ?? '', 6),
+        '{{pg_text}}' => $prefill($pack['fees']['pgText'] ?? '', 6),
         '{{annexure_title}}' => '',
         '{{annexure_code}}' => '',
     ];
@@ -1033,6 +1038,9 @@ function pack_annexure_placeholder_context(array $pack, array $contractor): arra
 function pack_fill_annexure_body(array $template, array $context): string
 {
     $body = (string)($template['bodyTemplate'] ?? '');
+    if (!str_contains($body, '{{authorized_signatory}}') && stripos($body, 'authorized signatory') === false) {
+        $body .= "\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\n{{contractor_firm_name}}\nPlace: {{place}}\nDate: {{date}}";
+    }
     foreach ($context as $key => $value) {
         $body = str_replace($key, $value, $body);
     }
