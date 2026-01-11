@@ -38,7 +38,7 @@ safe_page(function () {
     $offtdId = trim($_GET['id'] ?? '');
     $tender = $offtdId !== '' ? load_offline_tender($yojId, $offtdId) : null;
     $existingPack = $offtdId !== '' ? find_pack_by_source($yojId, 'OFFTD', $offtdId) : null;
-    $assistedRequest = $offtdId !== '' ? assisted_task_for_tender($yojId, $offtdId) : null;
+    $assistedRequest = $offtdId !== '' ? assisted_active_request_for_tender($yojId, $offtdId) : null;
 
     if (!$tender || ($tender['yojId'] ?? '') !== $yojId) {
         render_error_page('Tender not found.');
@@ -193,7 +193,7 @@ safe_page(function () {
                             </ul>
                         <?php endif; ?>
                         <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                            <form method="post" action="/contractor/assisted_extraction_request.php" style="margin:0;">
+                            <form method="post" action="/contractor/offline_tender_request_help.php" style="margin:0;">
                                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                                 <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
                                 <button class="btn secondary" type="submit"><?= sanitize('Request Assisted Extraction'); ?></button>
@@ -259,69 +259,83 @@ safe_page(function () {
         <?php endif; ?>
 
         <?php
-        $assistedStatus = $assistedRequest ? ($assistedRequest['status'] ?? 'none') : 'none';
+        $assistedStatus = $assistedRequest['status'] ?? 'none';
         $assistedDelivered = $assistedStatus === 'delivered';
-        $assistedRestricted = $assistedRequest ? ($assistedRequest['form']['lists']['restrictedAnnexures'] ?? []) : [];
+        $assistedDraft = $assistedRequest['assistantDraft'] ?? [];
         ?>
         <div class="card" style="margin-top:12px;display:grid;gap:10px;">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
                 <div>
                     <h3 style="margin:0;"><?= sanitize('Assisted Extraction'); ?></h3>
-                    <p class="muted" style="margin:4px 0 0;"><?= sanitize('Request a task-based extraction. You can apply the delivered form to your pack and print immediately.'); ?></p>
+                    <p class="muted" style="margin:4px 0 0;"><?= sanitize('Request human-in-the-loop checklist prep when AI cannot parse your NIT.'); ?></p>
                 </div>
                 <span class="pill" style="<?= $assistedDelivered ? 'border-color:#2ea043;color:#8ce99a;' : 'border-color:#f59f00;color:#fcd34d;'; ?>">
                     <?= sanitize('Status: ' . ($assistedStatus === 'none' ? 'Not requested' : ucwords(str_replace('_',' ', $assistedStatus)))); ?>
                 </span>
             </div>
             <?php if (!$assistedRequest): ?>
-                <form method="post" action="/contractor/assisted_extraction_request.php" style="display:grid;gap:8px;">
+                <form method="post" action="/contractor/offline_tender_request_help.php" style="display:grid;gap:8px;">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                     <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
+                    <label class="field">
+                        <span><?= sanitize('Notes for Yojak team (optional, max 500 chars)'); ?></span>
+                        <textarea name="notes" rows="3" maxlength="500" style="resize:vertical;"></textarea>
+                    </label>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                         <button class="btn" type="submit"><?= sanitize('Request Assisted Extraction'); ?></button>
-                        <span class="muted"><?= sanitize('We will prepare your checklist and annexure list for this tender.'); ?></span>
+                        <span class="muted"><?= sanitize('Limit: 3 requests/week per contractor, 1 active per tender.'); ?></span>
                     </div>
                 </form>
             <?php else: ?>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
                     <span class="pill"><?= sanitize('Created: ' . ($assistedRequest['createdAt'] ?? '')); ?></span>
-                    <?php if (!empty($assistedRequest['assignedTo']['name'])): ?>
-                        <span class="pill"><?= sanitize('Assigned: ' . $assistedRequest['assignedTo']['name']); ?></span>
+                    <?php if (!empty($assistedRequest['assignedTo'])): ?>
+                        <span class="pill"><?= sanitize('Assigned: ' . $assistedRequest['assignedTo']); ?></span>
                     <?php endif; ?>
-                    <?php if (!empty($assistedRequest['delivered']['deliveredAt'])): ?>
-                        <span class="pill success"><?= sanitize('Delivered: ' . $assistedRequest['delivered']['deliveredAt']); ?></span>
+                    <?php if (!empty($assistedRequest['deliveredAt'])): ?>
+                        <span class="pill success"><?= sanitize('Delivered: ' . $assistedRequest['deliveredAt']); ?></span>
                     <?php endif; ?>
                 </div>
-                <?php if ($assistedDelivered): ?>
+                <?php if ($assistedDelivered && is_array($assistedDraft)): ?>
                     <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:8px;">
                         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-                            <h4 style="margin:0;"><?= sanitize('Delivered form ready'); ?></h4>
-                            <form method="post" action="/contractor/assisted_extraction_apply.php" style="margin:0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                            <h4 style="margin:0;"><?= sanitize('Delivered checklist'); ?></h4>
+                            <form method="post" action="/contractor/offline_tender_apply_assisted.php" style="margin:0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                                 <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
-                                <input type="hidden" name="taskId" value="<?= sanitize($assistedRequest['taskId'] ?? ''); ?>">
-                                <button class="btn" type="submit"><?= sanitize('Apply to Pack'); ?></button>
+                                <input type="hidden" name="reqId" value="<?= sanitize($assistedRequest['reqId'] ?? ''); ?>">
+                                <button class="btn" type="submit"><?= sanitize('Apply to tender'); ?></button>
                             </form>
                         </div>
-                        <?php if ($existingPack): ?>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                                <a class="pill" href="/contractor/pack_view.php?packId=<?= sanitize($existingPack['packId']); ?>"><?= sanitize('Open Pack'); ?></a>
-                                <a class="pill" href="/contractor/pack_print.php?packId=<?= sanitize($existingPack['packId']); ?>&doc=checklist&letterhead=1"><?= sanitize('Print Checklist'); ?></a>
-                                <a class="pill" href="/contractor/pack_print.php?packId=<?= sanitize($existingPack['packId']); ?>&doc=annexures&letterhead=1"><?= sanitize('Print Annexures'); ?></a>
-                                <a class="pill" href="/contractor/pack_print.php?packId=<?= sanitize($existingPack['packId']); ?>&doc=full&letterhead=1"><?= sanitize('Print Full Pack'); ?></a>
+                        <?php if (!empty($assistedDraft['checklist']) && is_array($assistedDraft['checklist'])): ?>
+                            <div style="display:grid;gap:8px;">
+                                <?php foreach ($assistedDraft['checklist'] as $item): ?>
+                                    <div style="border:1px solid #30363d;border-radius:10px;padding:10px;">
+                                        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                                            <strong><?= sanitize($item['title'] ?? ''); ?></strong>
+                                            <span class="pill" style="<?= !empty($item['required']) ? 'border-color:#2ea043;color:#8ce99a;' : ''; ?>">
+                                                <?= !empty($item['required']) ? sanitize('Required') : sanitize('Optional'); ?>
+                                            </span>
+                                        </div>
+                                        <?php if (!empty($item['description'])): ?>
+                                            <p class="muted" style="margin:6px 0 0;"><?= sanitize($item['description']); ?></p>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
                             </div>
                         <?php else: ?>
-                            <p class="muted" style="margin:0;"><?= sanitize('Apply to pack to generate your checklist, annexure templates, and printables.'); ?></p>
+                            <p class="muted" style="margin:0;"><?= sanitize('No checklist entries found in the delivered draft.'); ?></p>
                         <?php endif; ?>
-                        <?php if (!empty($assistedRestricted) && is_array($assistedRestricted)): ?>
+                        <?php $restrictedAnnexures = $assistedDraft['restrictedAnnexures'] ?? []; ?>
+                        <?php if (!empty($restrictedAnnexures) && is_array($restrictedAnnexures)): ?>
                             <div style="border:1px solid #3a2a18;border-radius:10px;padding:10px;background:#1a1208;display:grid;gap:6px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-                                    <h4 style="margin:0;display:flex;align-items:center;gap:6px;"><?= sanitize('Restricted (Financial annexures)'); ?></h4>
-                                    <span class="pill" style="border-color:#f59f00;color:#fcd34d;"><?= sanitize('Not generated'); ?></span>
+                                    <h4 style="margin:0;display:flex;align-items:center;gap:6px;"><?= sanitize('Restricted (Not supported in YOJAK)'); ?></h4>
+                                    <span class="pill" style="border-color:#f59f00;color:#fcd34d;"><?= sanitize('Financial/pricing annexure'); ?></span>
                                 </div>
-                                <p class="muted" style="margin:0;"><?= sanitize('Financial annexures are referenced. YOJAK does not handle bid rates.'); ?></p>
+                                <p class="muted" style="margin:0;"><?= sanitize('This tender references financial/pricing documents. YOJAK will not ask you to enter rates.'); ?></p>
                                 <ul style="margin:0;padding-left:18px;display:grid;gap:4px;">
-                                    <?php foreach ($assistedRestricted as $annex): ?>
+                                    <?php foreach ($restrictedAnnexures as $annex): ?>
                                         <li style="color:#fcd34d;"><?= sanitize($annex); ?></li>
                                     <?php endforeach; ?>
                                 </ul>
@@ -332,6 +346,27 @@ safe_page(function () {
                     <p class="muted" style="margin:0;"><?= sanitize('Team is working on your request. You will see the checklist here once delivered.'); ?></p>
                 <?php endif; ?>
             <?php endif; ?>
+        </div>
+
+        <div class="card" style="margin-top:12px;display:grid;gap:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                <h3 style="margin:0;"><?= sanitize('What to do next'); ?></h3>
+                <span class="pill"><?= sanitize($assistedDelivered ? 'Checklist delivered' : 'Waiting for delivery'); ?></span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+                <div style="border:1px solid #30363d;border-radius:10px;padding:10px;background:#0f1622;">
+                    <strong><?= sanitize('1) Review checklist'); ?></strong>
+                    <p class="muted" style="margin:6px 0 0;"><?= sanitize('Mark each item as done or pending.'); ?></p>
+                </div>
+                <div style="border:1px solid #30363d;border-radius:10px;padding:10px;background:#0f1622;">
+                    <strong><?= sanitize('2) Generate/Review annexures'); ?></strong>
+                    <p class="muted" style="margin:6px 0 0;"><?= sanitize('Click annexure templates to preview filled details.'); ?></p>
+                </div>
+                <div style="border:1px solid #30363d;border-radius:10px;padding:10px;background:#0f1622;">
+                    <strong><?= sanitize('3) Print submission set'); ?></strong>
+                    <p class="muted" style="margin:6px 0 0;"><?= sanitize('Choose letterhead on/off, then print checklist/annexures/full pack.'); ?></p>
+                </div>
+            </div>
         </div>
 
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-top:12px;" id="assisted-checklist">
@@ -364,7 +399,7 @@ safe_page(function () {
                         <?php endforeach; ?>
                     </div>
                 <?php else: ?>
-                    <p class="muted" style="margin:0;"><?= sanitize('No checklist items available yet. Apply the assisted delivery or add manually.'); ?></p>
+                    <p class="muted" style="margin:0;"><?= sanitize('No checklist items available yet. Apply assisted extraction or add manually.'); ?></p>
                 <?php endif; ?>
             </div>
 
@@ -410,7 +445,7 @@ safe_page(function () {
                                 <?php endif; ?>
                             </div>
                         <?php else: ?>
-                            <p class="muted" style="margin:0;"><?= sanitize('Annexures will be generated automatically after applying the assisted extraction.'); ?></p>
+                            <p class="muted" style="margin:0;"><?= sanitize('Annexures will be generated automatically after applying the assisted payload.'); ?></p>
                         <?php endif; ?>
                         <?php if (!empty($tender['extracted']['restrictedAnnexures'])): ?>
                             <div class="flash" style="background:#1a1208;border:1px solid #3a2a18;">
@@ -425,7 +460,7 @@ safe_page(function () {
                         <?php endif; ?>
                     </div>
                 <?php else: ?>
-                    <p class="muted" style="margin:0;"><?= sanitize('Apply the delivered extraction to auto-create your offline tender pack and annexure templates.'); ?></p>
+                    <p class="muted" style="margin:0;"><?= sanitize('Apply the assisted extraction to auto-create your offline tender pack and annexure templates.'); ?></p>
                 <?php endif; ?>
             </div>
 
@@ -459,7 +494,7 @@ safe_page(function () {
                         <p class="muted" style="margin:0;"><?= sanitize(!empty($printSettings['footerEnabled']) ? 'Footer text enabled.' : 'Footer text disabled (space reserved).'); ?></p>
                     </div>
                 <?php else: ?>
-                    <p class="muted" style="margin:0;"><?= sanitize('Print buttons will appear once the delivery is applied and a pack is created.'); ?></p>
+                    <p class="muted" style="margin:0;"><?= sanitize('Print buttons will appear once the assisted extraction is applied and a pack is created.'); ?></p>
                 <?php endif; ?>
             </div>
         </div>
