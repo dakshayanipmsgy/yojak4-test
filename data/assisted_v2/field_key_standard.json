@@ -1,0 +1,93 @@
+{
+  "canonical": [
+    { "key": "firm.name", "label": "Firm/Company/Dealer Name", "type": "text" },
+    { "key": "firm.type", "label": "Firm Type", "type": "text" },
+    { "key": "firm.address", "label": "Registered Address", "type": "textarea" },
+    { "key": "firm.city", "label": "City", "type": "text" },
+    { "key": "firm.state", "label": "State", "type": "text" },
+    { "key": "firm.pincode", "label": "Pincode", "type": "text" },
+    { "key": "tax.pan", "label": "PAN", "type": "text" },
+    { "key": "tax.gst", "label": "GST", "type": "text" },
+    { "key": "contact.office_phone", "label": "Office Phone", "type": "phone" },
+    { "key": "contact.residence_phone", "label": "Residence Phone", "type": "phone" },
+    { "key": "contact.mobile", "label": "Mobile", "type": "phone" },
+    { "key": "contact.email", "label": "Email", "type": "email" },
+    { "key": "contact.fax", "label": "Fax", "type": "text" },
+    { "key": "bank.bank_name", "label": "Bank Name", "type": "text" },
+    { "key": "bank.branch", "label": "Branch", "type": "text" },
+    { "key": "bank.account_no", "label": "Account No", "type": "text" },
+    { "key": "bank.ifsc", "label": "IFSC", "type": "ifsc" },
+    { "key": "bank.account_holder", "label": "Account Holder", "type": "text" },
+    { "key": "signatory.name", "label": "Authorized Signatory", "type": "text" },
+    { "key": "signatory.designation", "label": "Designation", "type": "text" },
+    { "key": "place", "label": "Place", "type": "text" },
+    { "key": "date", "label": "Date", "type": "date" }
+  ],
+  "aliases": {
+    "firm.name": [
+      "company name",
+      "dealer name",
+      "name of dealer",
+      "name of company",
+      "name of the dealer",
+      "name of the party",
+      "bidder name",
+      "vendor name",
+      "contractor name",
+      "firm name",
+      "agency name",
+      "registered firm name"
+    ],
+    "firm.address": [
+      "registered address",
+      "address",
+      "office address",
+      "firm address",
+      "company address",
+      "registered office address"
+    ],
+    "tax.pan": [
+      "pan",
+      "pan no",
+      "pan number",
+      "pan no of the party",
+      "party pan",
+      "pan/tan",
+      "pan card number"
+    ],
+    "tax.gst": [
+      "gst",
+      "gst no",
+      "gst number",
+      "gstin",
+      "gst registration",
+      "gst registration number"
+    ],
+    "bank.bank_name": ["bank name", "name of bank"],
+    "bank.branch": ["branch", "bank branch", "branch name"],
+    "bank.account_no": [
+      "account no",
+      "account number",
+      "current account no",
+      "a/c no",
+      "current account",
+      "bank account"
+    ],
+    "bank.ifsc": ["ifsc", "ifsc code"],
+    "bank.account_holder": ["account holder", "account holder name", "account name"],
+    "contact.office_phone": ["office phone", "telephone office", "tele no office", "phone office"],
+    "contact.residence_phone": ["residence phone", "telephone residence", "tele no residence", "phone residence"],
+    "contact.mobile": ["mobile", "mobile no", "phone", "contact no", "phone/fax/mobile"],
+    "contact.email": ["email", "e-mail"],
+    "contact.fax": ["fax", "fax no", "fax number"],
+    "signatory.name": [
+      "authorized signatory",
+      "signature of authorized person",
+      "name of authorized person",
+      "signing authority"
+    ],
+    "signatory.designation": ["designation", "capacity", "title"],
+    "place": ["place", "place of signing"],
+    "date": ["date", "date of signing"]
+  }
+}

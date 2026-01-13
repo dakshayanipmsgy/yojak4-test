@@ -165,6 +165,20 @@ safe_page(function () {
                                 <?php endforeach; ?>
                             </div>
                         </div>
+                        <details class="flash" style="background:#0b111a;border:1px dashed #1f6feb33;">
+                            <summary style="cursor:pointer;"><?= sanitize('Profile mapping diagnostics'); ?></summary>
+                            <div style="display:grid;gap:6px;margin-top:8px;max-height:200px;overflow:auto;">
+                                <?php if (!empty($previewBundle['mappingDiagnostics'])): ?>
+                                    <ul style="margin:0 0 0 16px;">
+                                        <?php foreach ($previewBundle['mappingDiagnostics'] as $entry): ?>
+                                            <li class="muted"><?= sanitize((string)$entry); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php else: ?>
+                                    <span class="muted"><?= sanitize('No profile mapping matches detected.'); ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </details>
                         <?php if (!empty($previewBundle['tables'])): ?>
                             <div class="flash" style="background:#0b111a;border:1px solid #1f6feb33;">
                                 <strong><?= sanitize('Table structure preview'); ?></strong>

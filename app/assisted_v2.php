@@ -6,6 +6,7 @@ const ASSISTED_V2_TEMPLATES_DIR = DATA_PATH . '/assisted_v2/templates';
 const ASSISTED_V2_TEMPLATES_INDEX = DATA_PATH . '/assisted_v2/templates/index.json';
 const ASSISTED_V2_LOG = DATA_PATH . '/logs/assisted_v2.log';
 const ASSISTED_V2_PROMPT_PATH = DATA_PATH . '/assisted_v2/prompt.txt';
+const ASSISTED_V2_FIELD_KEY_STANDARD_PATH = DATA_PATH . '/assisted_v2/field_key_standard.json';
 
 function assisted_v2_prompt_seed(): string
 {
@@ -15,6 +16,8 @@ You are creating a YOJAK Assisted Pack v2 payload from an uploaded tender PDF.
 OUTPUT MUST BE ONLY strict JSON. No markdown. No commentary.
 
 CRITICAL RULES:
+- Use ONLY these canonical keys exactly: firm.name, firm.address, tax.pan, tax.gst, contact.office_phone, contact.residence_phone, contact.mobile, contact.email, bank.bank_name, bank.branch, bank.account_no, bank.ifsc, signatory.name, signatory.designation, place, date.
+- Do NOT invent synonyms like company_name/pan_no/dealer_name. Use canonical keys only.
 - Do NOT include BOQ unit rates, quoted rates, price calculations, L1 amounts.
 - You MAY include tender fee / EMD / SD / PG text (non-bid amounts).
 - If the tender contains a Commercial/Financial/Price Bid format, produce a FINANCIAL MANUAL table template:
@@ -49,6 +52,10 @@ FINAL JSON SHAPE:
     { "key":"signatory.designation","label":"Designation","type":"text" },
     { "key":"contact.office_phone","label":"Office Phone","type":"phone" },
     { "key":"contact.residence_phone","label":"Residence Phone","type":"phone" },
+    { "key":"contact.mobile","label":"Mobile","type":"phone" },
+    { "key":"contact.email","label":"Email","type":"email" },
+    { "key":"bank.bank_name","label":"Bank Name","type":"text" },
+    { "key":"bank.branch","label":"Bank Branch","type":"text" },
     { "key":"bank.account_no","label":"Bank Account No","type":"text" },
     { "key":"bank.ifsc","label":"IFSC","type":"ifsc" },
     { "key":"place","label":"Place","type":"text" },
@@ -117,6 +124,10 @@ function ensure_assisted_v2_env(): void
         touch(ASSISTED_V2_LOG);
     }
 
+    if (!file_exists(ASSISTED_V2_FIELD_KEY_STANDARD_PATH)) {
+        writeJsonAtomic(ASSISTED_V2_FIELD_KEY_STANDARD_PATH, assisted_v2_field_key_standard_seed());
+    }
+
     if (!file_exists(ASSISTED_V2_TEMPLATES_INDEX)) {
         writeJsonAtomic(ASSISTED_V2_TEMPLATES_INDEX, [
             'templates' => [],
@@ -133,6 +144,11 @@ function ensure_assisted_v2_env(): void
             fflush($handle);
             flock($handle, LOCK_UN);
             fclose($handle);
+        }
+    } else {
+        $current = file_get_contents(ASSISTED_V2_PROMPT_PATH);
+        if ($current !== false && !str_contains($current, 'Use ONLY these canonical keys exactly')) {
+            file_put_contents(ASSISTED_V2_PROMPT_PATH, assisted_v2_prompt_seed(), LOCK_EX);
         }
     }
 }
@@ -757,7 +773,7 @@ function assisted_v2_normalize_fees(array $fees): array
     ];
 }
 
-function assisted_v2_normalize_field_catalog(array $fieldCatalog, array &$warnings = []): array
+function assisted_v2_normalize_field_catalog(array $fieldCatalog, array &$warnings = [], array &$keyMap = []): array
 {
     $allowedTypes = ['text', 'textarea', 'date', 'number', 'choice', 'phone', 'email', 'ifsc'];
     $normalized = [];
@@ -767,7 +783,9 @@ function assisted_v2_normalize_field_catalog(array $fieldCatalog, array &$warnin
         if (!is_array($entry)) {
             continue;
         }
-        $key = pack_normalize_placeholder_key((string)($entry['key'] ?? ''));
+        $rawKey = (string)($entry['key'] ?? '');
+        $labelInput = assisted_v2_clean_string($entry['label'] ?? '') ?? '';
+        $key = assisted_v2_normalize_catalog_key($rawKey, $labelInput, $warnings, $keyMap);
         if ($key === '') {
             $warnings[] = 'Field catalog entry missing key.';
             continue;
@@ -781,7 +799,10 @@ function assisted_v2_normalize_field_catalog(array $fieldCatalog, array &$warnin
             $warnings[] = 'Invalid field type for ' . $key . '. Defaulted to text.';
             $type = 'text';
         }
-        $label = assisted_v2_clean_string($entry['label'] ?? '') ?? ucwords(str_replace(['.', '_'], ' ', $key));
+        $label = $labelInput !== '' ? $labelInput : assisted_v2_standard_label_for_key($key);
+        if ($label === '') {
+            $label = ucwords(str_replace(['.', '_'], ' ', $key));
+        }
         $normalizedEntry = [
             'key' => $key,
             'label' => $label,
@@ -964,7 +985,7 @@ function assisted_v2_extract_table_field_keys(array $tables, array &$errors = []
     return array_values(array_unique($keys));
 }
 
-function assisted_v2_normalize_template_tables(array $tables, array &$catalogMap, array &$warnings, array &$stats): array
+function assisted_v2_normalize_template_tables(array $tables, array &$catalogMap, array &$warnings, array &$stats, string $templateKind = '', array $keyMap = []): array
 {
     $allowedTypes = ['text', 'textarea', 'date', 'number', 'choice', 'phone', 'email', 'ifsc'];
     $normalizedTables = [];
@@ -977,6 +998,10 @@ function assisted_v2_normalize_template_tables(array $tables, array &$catalogMap
         $tableId = pack_normalize_placeholder_key((string)($table['tableId'] ?? $table['id'] ?? $table['title'] ?? ''));
         if ($tableId === '') {
             $tableId = 'table' . ($tableIndex + 1);
+        }
+        $isFinancialManual = $templateKind === 'financial_manual';
+        if ($isFinancialManual) {
+            $tableId = 'financial_bid';
         }
         $table['tableId'] = $tableId;
         $columns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
@@ -1007,6 +1032,12 @@ function assisted_v2_normalize_template_tables(array $tables, array &$catalogMap
                 continue;
             }
             $colKey = pack_normalize_placeholder_key((string)($column['key'] ?? ''));
+            if ($isFinancialManual && in_array($colKey, ['item_description', 'qty', 'unit', 'amount'], true)) {
+                $columns[$idx]['readOnly'] = true;
+            }
+            if ($isFinancialManual && $colKey === 'rate') {
+                $columns[$idx]['readOnly'] = false;
+            }
             if (isset($readOnlyColumns[$colKey])) {
                 $columns[$idx]['readOnly'] = true;
             }
@@ -1037,11 +1068,18 @@ function assisted_v2_normalize_template_tables(array $tables, array &$catalogMap
                     continue;
                 }
                 $fieldKey = assisted_v2_table_cell_field_key($row, $colKey);
+                if ($fieldKey !== '' && stripos($fieldKey, 'table.') !== 0) {
+                    $fieldKey = assisted_v2_normalize_reference_key($fieldKey, $keyMap);
+                }
                 if ($fieldKey === '') {
                     $fieldKey = assisted_v2_table_field_key($tableId, $rowId, $colKey);
                     $fieldKeys[$colKey] = $fieldKey;
                     $generatedCounts[$tableId] = ($generatedCounts[$tableId] ?? 0) + 1;
                     $stats['tableKeysGenerated'] = ($stats['tableKeysGenerated'] ?? 0) + 1;
+                }
+                if ($isFinancialManual && $colKey === 'rate') {
+                    $fieldKey = 'table.financial_bid.' . $rowId . '.rate';
+                    $fieldKeys[$colKey] = $fieldKey;
                 }
                 if (!isset($catalogMap[$fieldKey])) {
                     $columnLabel = assisted_v2_clean_string($column['label'] ?? $column['key'] ?? $colKey) ?? $colKey;
@@ -1095,7 +1133,8 @@ function assisted_v2_normalize_payload(array $payload, array &$warnings = [], ar
     $meta = $payload['meta'] ?? [];
     $dates = $payload['dates'] ?? [];
     $duration = $payload['duration'] ?? [];
-    $fieldCatalog = assisted_v2_normalize_field_catalog((array)($payload['fieldCatalog'] ?? []), $warnings);
+    $keyMap = [];
+    $fieldCatalog = assisted_v2_normalize_field_catalog((array)($payload['fieldCatalog'] ?? []), $warnings, $keyMap);
     $catalogMap = [];
     foreach ($fieldCatalog as $entry) {
         if (isset($entry['key'])) {
@@ -1164,17 +1203,38 @@ function assisted_v2_normalize_payload(array $payload, array &$warnings = [], ar
         if ($title === null && $code === null) {
             continue;
         }
+        $templateKind = assisted_v2_clean_string($tpl['templateKind'] ?? $tpl['type'] ?? '') ?? 'standard';
         $body = assisted_v2_canonicalize_table_placeholders((string)($tpl['body'] ?? ''), $stats);
         $renderTemplate = assisted_v2_canonicalize_table_placeholders((string)($tpl['renderTemplate'] ?? ($tpl['body'] ?? '')), $stats);
+        $body = assisted_v2_normalize_field_placeholders($body, $keyMap, $stats);
+        $renderTemplate = assisted_v2_normalize_field_placeholders($renderTemplate, $keyMap, $stats);
         $requiredKeys = [];
         foreach ((array)($tpl['requiredFieldKeys'] ?? $tpl['requiredFields'] ?? []) as $key) {
-            $normalizedKey = pack_normalize_placeholder_key((string)$key);
+            $normalizedKey = assisted_v2_normalize_reference_key((string)$key, $keyMap);
             if ($normalizedKey !== '') {
                 $requiredKeys[] = $normalizedKey;
             }
         }
         $tables = is_array($tpl['tables'] ?? null) ? array_values($tpl['tables']) : [];
-        $tables = assisted_v2_normalize_template_tables($tables, $catalogMap, $warnings, $stats);
+        if ($templateKind === 'financial_manual') {
+            $rawTableIds = [];
+            foreach ($tables as $table) {
+                if (!is_array($table)) {
+                    continue;
+                }
+                $rawTableIds[] = pack_normalize_placeholder_key((string)($table['tableId'] ?? $table['id'] ?? $table['title'] ?? ''));
+            }
+            foreach (array_values(array_unique(array_filter($rawTableIds))) as $rawTableId) {
+                if ($rawTableId === 'financial_bid') {
+                    continue;
+                }
+                $pattern = '/{{\s*table:\s*' . preg_quote($rawTableId, '/') . '\s*}}/i';
+                $body = preg_replace($pattern, '{{table:financial_bid}}', $body) ?? $body;
+                $renderTemplate = preg_replace($pattern, '{{table:financial_bid}}', $renderTemplate) ?? $renderTemplate;
+                $stats['placeholdersFixed'] = ($stats['placeholdersFixed'] ?? 0) + 1;
+            }
+        }
+        $tables = assisted_v2_normalize_template_tables($tables, $catalogMap, $warnings, $stats, $templateKind, $keyMap);
         $tableIds = [];
         foreach ($tables as $table) {
             if (!is_array($table)) {
@@ -1194,8 +1254,8 @@ function assisted_v2_normalize_payload(array $payload, array &$warnings = [], ar
         $normalized['annexureTemplates'][] = [
             'annexureCode' => $code ?? '',
             'title' => $title ?? 'Annexure',
-            'type' => assisted_v2_clean_string($tpl['templateKind'] ?? $tpl['type'] ?? '') ?? 'standard',
-            'templateKind' => assisted_v2_clean_string($tpl['templateKind'] ?? $tpl['type'] ?? '') ?? 'standard',
+            'type' => $templateKind,
+            'templateKind' => $templateKind,
             'body' => $body,
             'renderTemplate' => $renderTemplate,
             'placeholders' => is_array($tpl['placeholders'] ?? null) ? array_values($tpl['placeholders']) : [],
@@ -1458,6 +1518,7 @@ function assisted_v2_preview_bundle(array $payload, array $tender, array $contra
             'missing' => trim((string)$value) === '',
         ];
     }
+    $mappingDiagnostics = profile_mapping_diagnostics($contractor, $previewKeys);
     $tables = [];
     foreach ($annexures as $tpl) {
         if (!is_array($tpl)) {
@@ -1479,6 +1540,7 @@ function assisted_v2_preview_bundle(array $payload, array $tender, array $contra
 
     return [
         'fields' => $fields,
+        'mappingDiagnostics' => $mappingDiagnostics,
         'tables' => $tables,
     ];
 }

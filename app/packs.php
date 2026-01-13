@@ -1119,11 +1119,22 @@ function pack_field_aliases(): array
         'contractor_address' => 'firm.address',
         'contractor_gst' => 'tax.gst',
         'contractor_pan' => 'tax.pan',
+        'company_name' => 'firm.name',
+        'dealer_name' => 'firm.name',
+        'contractor_name' => 'firm.name',
+        'firm_name' => 'firm.name',
+        'company_address' => 'firm.address',
+        'pan_no' => 'tax.pan',
+        'pan_number' => 'tax.pan',
+        'gst_no' => 'tax.gst',
+        'gstin' => 'tax.gst',
         'authorized_signatory' => 'signatory.name',
         'designation' => 'signatory.designation',
         'contractor_email' => 'contact.email',
         'email' => 'contact.email',
         'contractor_mobile' => 'contact.mobile',
+        'mobile_no' => 'contact.mobile',
+        'phone' => 'contact.mobile',
         'mobile' => 'contact.mobile',
         'office_phone' => 'contact.office_phone',
         'residence_phone' => 'contact.residence_phone',
@@ -1318,29 +1329,7 @@ function pack_tender_placeholder_values(array $pack): array
 
 function pack_profile_placeholder_values(array $contractor): array
 {
-    $keys = [
-        'firm.name',
-        'firm.type',
-        'firm.address',
-        'firm.city',
-        'firm.state',
-        'firm.pincode',
-        'tax.gst',
-        'tax.pan',
-        'contact.mobile',
-        'contact.email',
-        'contact.office_phone',
-        'contact.residence_phone',
-        'contact.fax',
-        'bank.account_no',
-        'bank.ifsc',
-        'bank.bank_name',
-        'bank.branch',
-        'bank.account_holder',
-        'signatory.name',
-        'signatory.designation',
-        'place',
-    ];
+    $keys = array_keys(assisted_v2_canonical_key_set());
 
     $values = [
         'date' => '',
@@ -1365,20 +1354,7 @@ function pack_profile_placeholder_values(array $contractor): array
 
 function pack_resolve_field_value(string $key, array $pack, array $contractor, bool $useOverrides = true): string
 {
-    $key = pack_normalize_placeholder_key($key);
-    $registry = is_array($pack['fieldRegistry'] ?? null) ? $pack['fieldRegistry'] : [];
-    if ($useOverrides && array_key_exists($key, $registry)) {
-        $value = trim((string)$registry[$key]);
-        if ($value !== '') {
-            return $value;
-        }
-    }
-    $derived = pack_tender_placeholder_values($pack);
-    if (array_key_exists($key, $derived) && trim((string)$derived[$key]) !== '') {
-        return trim((string)$derived[$key]);
-    }
-    $profile = pack_profile_placeholder_values($contractor);
-    return trim((string)($profile[$key] ?? ''));
+    return resolve_field_value($pack, $contractor, $key, $useOverrides);
 }
 
 function pack_placeholder_value_map(array $pack, array $contractor, ?array $catalog = null): array
