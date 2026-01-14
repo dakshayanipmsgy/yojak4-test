@@ -22,6 +22,8 @@ require_once __DIR__ . '/ai.php';
 require_once __DIR__ . '/bills.php';
 require_once __DIR__ . '/tender_discovery.php';
 require_once __DIR__ . '/support.php';
+require_once __DIR__ . '/site_analytics.php';
+require_once __DIR__ . '/site_public.php';
 require_once __DIR__ . '/assisted_v2.php';
 require_once __DIR__ . '/contractor_templates.php';
 require_once __DIR__ . '/branding.php';
