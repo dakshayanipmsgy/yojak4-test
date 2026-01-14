@@ -3,32 +3,24 @@ declare(strict_types=1);
 
 function branding_config_path(): string
 {
-    return DATA_PATH . '/platform/branding.json';
+    return DATA_PATH . '/site/branding.json';
 }
 
 function branding_log_path(): string
 {
-    return DATA_PATH . '/logs/branding.log';
+    return DATA_PATH . '/logs/site.log';
 }
 
 function branding_default_config(): array
 {
     return [
-        'logoEnabled' => false,
-        'logoPublicPath' => null,
-        'logoUploadedAt' => null,
-        'updatedAt' => null,
-        'updatedBy' => null,
+        'logoPath' => null,
+        'logoUpdatedAt' => null,
     ];
 }
 
 function ensure_branding_environment(): void
 {
-    $platformDir = DATA_PATH . '/platform';
-    if (!is_dir($platformDir)) {
-        mkdir($platformDir, 0775, true);
-    }
-
     $uploadDir = PUBLIC_PATH . '/uploads/branding';
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0775, true);
@@ -45,10 +37,7 @@ function ensure_branding_environment(): void
 
     $configPath = branding_config_path();
     if (!file_exists($configPath)) {
-        $now = now_kolkata()->format(DateTime::ATOM);
         $config = branding_default_config();
-        $config['updatedAt'] = $now;
-        $config['updatedBy'] = 'system';
         writeJsonAtomic($configPath, $config);
     }
 }
@@ -62,11 +51,8 @@ function branding_read_config(): array
             $config[$key] = $default;
         }
     }
-    $config['logoEnabled'] = (bool)($config['logoEnabled'] ?? false);
-    $config['logoPublicPath'] = $config['logoPublicPath'] ?? null;
-    $config['logoUploadedAt'] = $config['logoUploadedAt'] ?? null;
-    $config['updatedAt'] = $config['updatedAt'] ?? null;
-    $config['updatedBy'] = $config['updatedBy'] ?? null;
+    $config['logoPath'] = $config['logoPath'] ?? null;
+    $config['logoUpdatedAt'] = $config['logoUpdatedAt'] ?? null;
     return $config;
 }
 
@@ -81,8 +67,6 @@ function branding_update_config(array $changes, string $actor): array
     foreach ($changes as $key => $value) {
         $config[$key] = $value;
     }
-    $config['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
-    $config['updatedBy'] = $actor;
     branding_write_config($config);
     return $config;
 }
@@ -98,17 +82,7 @@ function branding_log(string $event, string $actor, string $result, array $detai
     ];
 
     $file = branding_log_path();
-    $dir = dirname($file);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0775, true);
-    }
-    $handle = fopen($file, 'a');
-    if ($handle) {
-        flock($handle, LOCK_EX);
-        fwrite($handle, json_encode($entry, JSON_UNESCAPED_SLASHES) . PHP_EOL);
-        flock($handle, LOCK_UN);
-        fclose($handle);
-    }
+    logEvent($file, $entry);
 }
 
 function branding_logo_exists(?string $publicPath): bool
@@ -123,13 +97,10 @@ function branding_logo_exists(?string $publicPath): bool
 function branding_display_logo_path(): ?string
 {
     $config = branding_read_config();
-    if (!$config['logoEnabled']) {
+    if (!branding_logo_exists($config['logoPath'])) {
         return null;
     }
-    if (!branding_logo_exists($config['logoPublicPath'])) {
-        return null;
-    }
-    return $config['logoPublicPath'];
+    return $config['logoPath'];
 }
 
 function branding_handle_upload(array $file, string $actor): array
@@ -157,41 +128,32 @@ function branding_handle_upload(array $file, string $actor): array
 
     $name = $file['name'] ?? 'upload';
     $extension = strtolower((string)pathinfo($name, PATHINFO_EXTENSION));
-    $allowed = ['png', 'jpg', 'jpeg', 'webp'];
+    $allowed = ['png'];
     if (!in_array($extension, $allowed, true)) {
-        throw new RuntimeException('Only PNG, JPG, JPEG, or WEBP files are allowed.');
+        throw new RuntimeException('Only PNG files are allowed.');
     }
 
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime = $finfo->file($tmpPath) ?: '';
-    $allowedMimes = ['image/png', 'image/jpeg', 'image/webp'];
+    $allowedMimes = ['image/png'];
     if (!in_array($mime, $allowedMimes, true)) {
         throw new RuntimeException('Uploaded file is not a valid image.');
     }
 
-    $targetExtension = $extension === 'jpeg' ? 'jpg' : $extension;
     $uploadDir = PUBLIC_PATH . '/uploads/branding';
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0775, true);
     }
 
-    foreach ($allowed as $ext) {
-        $existing = $uploadDir . '/logo.' . $ext;
-        if (file_exists($existing)) {
-            unlink($existing);
-        }
-    }
-
-    $targetPath = $uploadDir . '/logo.' . $targetExtension;
+    $targetPath = $uploadDir . '/logo.png';
     if (!move_uploaded_file($tmpPath, $targetPath)) {
         throw new RuntimeException('Unable to store uploaded file.');
     }
 
-    $publicPath = '/uploads/branding/logo.' . $targetExtension;
+    $publicPath = branding_logo_public_path();
     $config = branding_update_config([
-        'logoEnabled' => true,
-        'logoPublicPath' => $publicPath,
-        'logoUploadedAt' => now_kolkata()->format(DateTime::ATOM),
+        'logoPath' => $publicPath,
+        'logoUpdatedAt' => now_kolkata()->format(DateTime::ATOM),
     ], $actor);
 
     branding_log('upload_logo', $actor, 'success', [
@@ -205,15 +167,15 @@ function branding_handle_upload(array $file, string $actor): array
 
 function branding_handle_toggle(bool $enabled, string $actor): array
 {
-    $config = branding_update_config(['logoEnabled' => $enabled], $actor);
-    branding_log('toggle_logo', $actor, 'success', ['enabled' => $enabled]);
+    $config = branding_read_config();
+    branding_log('toggle_logo', $actor, 'ignored', ['enabled' => $enabled]);
     return $config;
 }
 
 function branding_handle_delete(string $actor): array
 {
     $config = branding_read_config();
-    $publicPath = $config['logoPublicPath'] ?? null;
+    $publicPath = $config['logoPath'] ?? null;
     $deleted = false;
     if ($publicPath) {
         $absolute = rtrim(PUBLIC_PATH, '/') . $publicPath;
@@ -223,9 +185,8 @@ function branding_handle_delete(string $actor): array
     }
 
     $config = branding_update_config([
-        'logoEnabled' => false,
-        'logoPublicPath' => null,
-        'logoUploadedAt' => null,
+        'logoPath' => null,
+        'logoUpdatedAt' => null,
     ], $actor);
 
     branding_log('delete_logo', $actor, 'success', [

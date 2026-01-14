@@ -6,16 +6,7 @@ safe_page(function () {
     $user = require_role('superadmin');
     require_csrf();
 
-    $actor = $user['username'] ?? 'superadmin';
-    $enabled = ($_POST['enabled'] ?? '') === '1';
-
-    try {
-        branding_handle_toggle($enabled, $actor);
-        set_flash('success', $enabled ? 'Logo enabled for dashboard.' : 'Logo hidden from dashboard.');
-    } catch (Throwable $e) {
-        branding_log('toggle_logo', $actor, 'failed', ['message' => $e->getMessage(), 'enabled' => $enabled]);
-        set_flash('error', 'Unable to update branding toggle: ' . $e->getMessage());
-    }
+    set_flash('error', 'Logo visibility toggle has been removed. The logo is always shown when uploaded.');
 
     redirect('/superadmin/profile.php#branding');
 });
