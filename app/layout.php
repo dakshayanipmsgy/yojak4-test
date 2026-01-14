@@ -30,9 +30,8 @@ function render_layout(string $title, callable $content): void
         'features' => ['hi' => 'विशेषताएँ', 'en' => 'Features'],
         'templates' => ['hi' => 'टेम्पलेट्स और पैक', 'en' => 'Templates & Packs'],
         'contact' => ['hi' => 'संपर्क', 'en' => 'Contact'],
-        'contractorLogin' => ['hi' => 'कॉन्ट्रैक्टर लॉगिन', 'en' => 'Contractor Login'],
-        'contractorSignup' => ['hi' => 'कॉन्ट्रैक्टर साइन अप', 'en' => 'Contractor Sign Up'],
         'departmentLogin' => ['hi' => 'विभाग लॉगिन', 'en' => 'Department Login'],
+        'yojakLogin' => ['hi' => 'YOJAK लॉगिन', 'en' => 'YOJAK Login'],
         'call' => ['hi' => 'कॉल', 'en' => 'Call'],
         'email' => ['hi' => 'ईमेल', 'en' => 'Email'],
         'tagline' => ['hi' => 'ठेकेदार-प्रथम दस्तावेज़ प्लेटफ़ॉर्म', 'en' => 'Contractor-first documentation'],
@@ -409,9 +408,8 @@ function render_layout(string $title, callable $content): void
                         <a href="/site/index.php#features"><?= sanitize($publicNav['features'][$lang]); ?></a>
                         <a href="/site/index.php#templates-packs"><?= sanitize($publicNav['templates'][$lang]); ?></a>
                         <a href="/site/contact.php"><?= sanitize($publicNav['contact'][$lang]); ?></a>
-                        <a href="/contractor/login.php" class="primary"><?= sanitize($publicNav['contractorLogin'][$lang]); ?></a>
-                        <a href="/contractor/signup.php" class="secondary"><?= sanitize($publicNav['contractorSignup'][$lang]); ?></a>
                         <a href="/department/login.php" class="secondary"><?= sanitize($publicNav['departmentLogin'][$lang]); ?></a>
+                        <a href="/site/staff_login.php" class="primary"><?= sanitize($publicNav['yojakLogin'][$lang]); ?></a>
                     <?php endif; ?>
                     <form method="get" class="lang-toggle">
                         <span class="pill"><?= sanitize(t('language')); ?></span>

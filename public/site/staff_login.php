@@ -10,6 +10,13 @@ safe_page(function () {
         redirect($target);
     }
 
+    logEvent(DATA_PATH . '/logs/site.log', [
+        'at' => now_kolkata()->format(DateTime::ATOM),
+        'event' => 'STAFF_LOGIN_PAGE_VIEW',
+        'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+        'ua' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
+    ]);
+
     $title = get_app_config()['appName'] . ' | YOJAK Staff Login';
 
     render_layout($title, function () {
