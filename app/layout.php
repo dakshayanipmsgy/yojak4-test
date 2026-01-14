@@ -31,12 +31,12 @@ function render_layout(string $title, callable $content): void
         'templates' => ['hi' => 'टेम्पलेट्स और पैक', 'en' => 'Templates & Packs'],
         'contact' => ['hi' => 'संपर्क', 'en' => 'Contact'],
         'departmentLogin' => ['hi' => 'विभाग लॉगिन', 'en' => 'Department Login'],
+        'contractorLogin' => ['hi' => 'ठेकेदार लॉगिन', 'en' => 'Contractor Login'],
         'yojakLogin' => ['hi' => 'YOJAK लॉगिन', 'en' => 'YOJAK Login'],
         'call' => ['hi' => 'कॉल', 'en' => 'Call'],
         'email' => ['hi' => 'ईमेल', 'en' => 'Email'],
         'tagline' => ['hi' => 'ठेकेदार-प्रथम दस्तावेज़ प्लेटफ़ॉर्म', 'en' => 'Contractor-first documentation'],
     ];
-    $brandingLogoPath = (($user['type'] ?? '') === 'superadmin') ? branding_display_logo_path() : null;
     $flashes = consume_flashes();
     ?>
     <!DOCTYPE html>
@@ -74,16 +74,20 @@ function render_layout(string $title, callable $content): void
                 top: 0;
                 z-index: 10;
             }
+            .wrap {
+                width: 100%;
+                max-width: 1440px;
+                margin: 0 auto;
+                padding: 0 20px;
+            }
             .top-contact {
                 background: #f9fafb;
                 border-bottom: 1px solid var(--border);
-                padding: 8px 18px;
+                padding: 8px 0;
                 font-size: 12px;
                 color: var(--muted);
             }
             .top-contact-inner {
-                max-width: 1100px;
-                margin: 0 auto;
                 display: flex;
                 flex-wrap: wrap;
                 gap: 12px;
@@ -95,9 +99,7 @@ function render_layout(string $title, callable $content): void
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 12px 18px;
-                max-width: 1100px;
-                margin: 0 auto;
+                padding: 12px 0;
             }
             .brand {
                 display: flex;
@@ -108,10 +110,10 @@ function render_layout(string $title, callable $content): void
                 letter-spacing: 0.6px;
             }
             .brand-logo {
-                width: 36px;
-                height: 36px;
+                width: 32px;
+                height: 32px;
                 background: linear-gradient(135deg, #1f6feb, #2ea043);
-                border-radius: 10px;
+                border-radius: 9px;
                 display: grid;
                 place-items: center;
                 font-weight: 800;
@@ -150,8 +152,8 @@ function render_layout(string $title, callable $content): void
             .brand-logo-image {
                 width: auto;
                 height: auto;
-                min-height: 36px;
-                padding: 6px 10px;
+                min-height: 32px;
+                padding: 4px 10px;
                 border-radius: 10px;
                 border: 1px solid var(--border);
                 background: #ffffff;
@@ -162,14 +164,15 @@ function render_layout(string $title, callable $content): void
             }
             .brand-logo-image img {
                 display: block;
-                max-height: 28px;
-                max-width: 120px;
+                max-height: 32px;
+                max-width: 160px;
                 object-fit: contain;
             }
             .container {
-                max-width: 1100px;
+                width: 100%;
+                max-width: 1440px;
                 margin: 24px auto;
-                padding: 0 16px 32px;
+                padding: 0 20px 32px;
             }
             .hero {
                 display: grid;
@@ -277,6 +280,10 @@ function render_layout(string $title, callable $content): void
             @media (max-width: 600px) {
                 .nav { flex-direction: column; align-items: flex-start; gap: 10px; }
                 .nav-links { width: 100%; }
+                .wrap { padding: 0 16px; }
+                .brand-logo { width: 28px; height: 28px; }
+                .brand-logo-image { min-height: 28px; }
+                .brand-logo-image img { max-height: 28px; }
             }
         </style>
     </head>
@@ -284,7 +291,7 @@ function render_layout(string $title, callable $content): void
         <header>
             <?php if ($isPublicVisitor && $contactDetails): ?>
                 <div class="top-contact">
-                    <div class="top-contact-inner">
+                    <div class="wrap top-contact-inner">
                         <div>
                             <strong><?= sanitize($publicNav['call'][$lang]); ?>:</strong> <a href="tel:<?= sanitize($contactDetails['mobile']); ?>"><?= sanitize($contactDetails['mobile']); ?></a>
                             <span class="muted">•</span>
@@ -298,27 +305,15 @@ function render_layout(string $title, callable $content): void
                     </div>
                 </div>
             <?php endif; ?>
-            <div class="nav">
+            <div class="wrap nav">
                 <div class="brand">
-                    <?php if ($brandingLogoPath): ?>
-                        <div class="brand-logo-image">
-                            <img src="<?= sanitize($brandingLogoPath); ?>" alt="<?= sanitize($appName . ' logo'); ?>">
-                        </div>
-                        <div>
-                            <?= sanitize($appName); ?>
-                            <?php if ($isPublicVisitor): ?>
-                                <div class="muted" style="font-size:12px;"><?= sanitize($publicNav['tagline'][$lang]); ?></div>
-                            <?php endif; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="brand-logo">YJ</div>
-                        <div>
-                            <?= sanitize($appName); ?>
-                            <?php if ($isPublicVisitor): ?>
-                                <div class="muted" style="font-size:12px;"><?= sanitize($publicNav['tagline'][$lang]); ?></div>
-                            <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
+                    <?= render_logo_html('md'); ?>
+                    <div>
+                        <?= sanitize($appName); ?>
+                        <?php if ($isPublicVisitor): ?>
+                            <div class="muted" style="font-size:12px;"><?= sanitize($publicNav['tagline'][$lang]); ?></div>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <div class="nav-links">
                     <?php if ($user && ($user['type'] ?? '') === 'superadmin'): ?>
@@ -408,20 +403,31 @@ function render_layout(string $title, callable $content): void
                         <a href="/site/index.php#features"><?= sanitize($publicNav['features'][$lang]); ?></a>
                         <a href="/site/index.php#templates-packs"><?= sanitize($publicNav['templates'][$lang]); ?></a>
                         <a href="/site/contact.php"><?= sanitize($publicNav['contact'][$lang]); ?></a>
-                        <a href="/department/login.php" class="secondary"><?= sanitize($publicNav['departmentLogin'][$lang]); ?></a>
-                        <a href="/site/staff_login.php" class="primary"><?= sanitize($publicNav['yojakLogin'][$lang]); ?></a>
                     <?php endif; ?>
-                    <form method="get" class="lang-toggle">
-                        <span class="pill"><?= sanitize(t('language')); ?></span>
-                        <select name="lang" onchange="this.form.submit()">
-                            <option value="en" <?= $lang === 'en' ? 'selected' : ''; ?>><?= sanitize(t('english')); ?></option>
-                            <option value="hi" <?= $lang === 'hi' ? 'selected' : ''; ?>><?= sanitize(t('hindi')); ?></option>
-                        </select>
-                    </form>
+                    <?php if (!$user): ?>
+                        <form method="get" class="lang-toggle">
+                            <span class="pill"><?= sanitize(t('language')); ?></span>
+                            <select name="lang" onchange="this.form.submit()">
+                                <option value="en" <?= $lang === 'en' ? 'selected' : ''; ?>><?= sanitize(t('english')); ?></option>
+                                <option value="hi" <?= $lang === 'hi' ? 'selected' : ''; ?>><?= sanitize(t('hindi')); ?></option>
+                            </select>
+                        </form>
+                        <a href="/department/login.php" class="secondary"><?= sanitize($publicNav['departmentLogin'][$lang]); ?></a>
+                        <a href="/contractor/login.php" class="secondary"><?= sanitize($publicNav['contractorLogin'][$lang]); ?></a>
+                        <a href="/auth/login.php" class="primary"><?= sanitize($publicNav['yojakLogin'][$lang]); ?></a>
+                    <?php else: ?>
+                        <form method="get" class="lang-toggle">
+                            <span class="pill"><?= sanitize(t('language')); ?></span>
+                            <select name="lang" onchange="this.form.submit()">
+                                <option value="en" <?= $lang === 'en' ? 'selected' : ''; ?>><?= sanitize(t('english')); ?></option>
+                                <option value="hi" <?= $lang === 'hi' ? 'selected' : ''; ?>><?= sanitize(t('hindi')); ?></option>
+                            </select>
+                        </form>
+                    <?php endif; ?>
                 </div>
             </div>
         </header>
-        <main class="container">
+        <main class="container wrap">
             <?php if ($flashes): ?>
                 <div class="flashes">
                     <?php foreach ($flashes as $flash): ?>

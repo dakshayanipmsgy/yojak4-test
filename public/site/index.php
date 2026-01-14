@@ -366,7 +366,7 @@ safe_page(function () {
                         <div class="cta-helper"><?= sanitize($text['ctaDepartmentHelp'][$lang]); ?></div>
                     </div>
                     <div class="cta-column">
-                        <a class="btn" href="/site/staff_login.php"><?= sanitize($text['ctaTertiary'][$lang]); ?></a>
+                        <a class="btn" href="/auth/login.php"><?= sanitize($text['ctaTertiary'][$lang]); ?></a>
                         <div class="cta-helper"><?= sanitize($text['ctaStaffHelp'][$lang]); ?></div>
                     </div>
                 </div>
