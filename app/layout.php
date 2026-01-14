@@ -45,9 +45,6 @@ function render_layout(string $title, callable $content): void
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= sanitize($title); ?></title>
-        <script>
-            document.documentElement.classList.add('js');
-        </script>
         <style>
             :root {
                 --primary: #1f6feb;
@@ -102,18 +99,7 @@ function render_layout(string $title, callable $content): void
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 10px 0;
-                gap: 16px;
-            }
-            .nav-left {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }
-            .nav-right {
-                display: flex;
-                align-items: center;
-                gap: 10px;
+                padding: 12px 0;
             }
             .brand {
                 display: flex;
@@ -122,16 +108,6 @@ function render_layout(string $title, callable $content): void
                 font-weight: 700;
                 font-size: 18px;
                 letter-spacing: 0.6px;
-                color: inherit;
-                text-decoration: none;
-            }
-            .brand-text {
-                display: flex;
-                flex-direction: column;
-                gap: 2px;
-            }
-            .brand-tagline {
-                font-size: 12px;
             }
             .brand-logo {
                 width: 32px;
@@ -173,121 +149,6 @@ function render_layout(string $title, callable $content): void
                 border-color: #d0d7e2;
                 color: var(--text);
             }
-            .hamburger {
-                display: none;
-                align-items: center;
-                justify-content: center;
-                width: 40px;
-                height: 40px;
-                border-radius: 10px;
-                border: 1px solid var(--border);
-                background: #ffffff;
-                font-size: 20px;
-                cursor: pointer;
-            }
-            .mobile-quick-action {
-                display: none;
-                padding: 6px 10px;
-                border-radius: 10px;
-                border: 1px solid var(--border);
-                font-size: 12px;
-                font-weight: 700;
-                background: #f1f5f9;
-                color: var(--text);
-            }
-            .mobile-menu-overlay {
-                position: fixed;
-                inset: 0;
-                background: rgba(15, 23, 42, 0.4);
-                opacity: 0;
-                pointer-events: none;
-                transition: opacity 0.2s ease;
-                z-index: 20;
-            }
-            .mobile-menu {
-                position: fixed;
-                top: 0;
-                right: 0;
-                height: 100%;
-                width: min(320px, 90vw);
-                background: #ffffff;
-                border-left: 1px solid var(--border);
-                transform: translateX(100%);
-                transition: transform 0.2s ease;
-                z-index: 30;
-                display: flex;
-                flex-direction: column;
-            }
-            .mobile-menu.open {
-                transform: translateX(0);
-            }
-            .mobile-menu-overlay.open {
-                opacity: 1;
-                pointer-events: auto;
-            }
-            .mobile-menu-header {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 14px 18px;
-                border-bottom: 1px solid var(--border);
-                font-weight: 700;
-            }
-            .mobile-menu-close {
-                border: 1px solid var(--border);
-                background: #ffffff;
-                border-radius: 8px;
-                width: 32px;
-                height: 32px;
-                font-size: 18px;
-                cursor: pointer;
-            }
-            .mobile-menu-content {
-                padding: 16px 18px 24px;
-                overflow-y: auto;
-                display: grid;
-                gap: 16px;
-            }
-            .mobile-menu-section {
-                display: grid;
-                gap: 10px;
-            }
-            .mobile-menu-section h4 {
-                margin: 0;
-                font-size: 12px;
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                color: var(--muted);
-            }
-            .mobile-menu-link {
-                padding: 10px 12px;
-                border-radius: 10px;
-                border: 1px solid var(--border);
-                color: var(--text);
-                font-weight: 600;
-                background: #f8fafc;
-            }
-            .mobile-menu-actions {
-                display: grid;
-                gap: 10px;
-            }
-            .mobile-menu-actions .btn,
-            .mobile-menu-actions .btn.secondary {
-                width: 100%;
-                text-align: center;
-            }
-            .mobile-contact {
-                display: grid;
-                gap: 8px;
-                font-size: 14px;
-            }
-            .mobile-contact a {
-                color: var(--text);
-                font-weight: 600;
-            }
-            .mobile-lang select {
-                width: 100%;
-            }
             .brand-logo-image {
                 width: auto;
                 height: auto;
@@ -312,9 +173,6 @@ function render_layout(string $title, callable $content): void
                 max-width: 1440px;
                 margin: 24px auto;
                 padding: 0 20px 32px;
-            }
-            .main-content {
-                padding-top: 8px;
             }
             .hero {
                 display: grid;
@@ -370,14 +228,6 @@ function render_layout(string $title, callable $content): void
                 background: #ffffff;
                 color: var(--text);
             }
-            textarea {
-                padding: 10px 12px;
-                border-radius: 10px;
-                border: 1px solid var(--border);
-                background: #ffffff;
-                color: var(--text);
-                font-family: inherit;
-            }
             .flashes {
                 margin-bottom: 16px;
                 display: grid;
@@ -427,65 +277,13 @@ function render_layout(string $title, callable $content): void
                 color: var(--muted);
             }
             .tag.success { border-color: var(--success); color: #166534; background: #ecfdf3; }
-            .accordion-card {
-                display: grid;
-                gap: 12px;
-            }
-            .accordion-header {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: 12px;
-            }
-            .accordion-toggle {
-                border: 1px solid var(--border);
-                background: #ffffff;
-                border-radius: 999px;
-                padding: 6px 12px;
-                font-size: 12px;
-                font-weight: 700;
-                cursor: pointer;
-            }
-            @media (max-width: 768px) {
-                .top-contact { display: none; }
-                .nav { padding: 8px 0; }
-                .nav-links { display: none; }
-                .hamburger { display: inline-flex; }
-                .mobile-quick-action { display: inline-flex; }
+            @media (max-width: 600px) {
+                .nav { flex-direction: column; align-items: flex-start; gap: 10px; }
+                .nav-links { width: 100%; }
                 .wrap { padding: 0 16px; }
-                .brand-logo { width: 24px; height: 24px; }
-                .brand-logo-image { min-height: 24px; padding: 2px 8px; }
-                .brand-logo-image img { max-height: 24px; }
-                .brand { font-size: 16px; gap: 8px; }
-                .brand-tagline { display: none; }
-                .container { margin: 16px auto; padding: 0 16px 24px; }
-                .main-content { padding-top: 16px; }
-                .card { padding: 14px; }
-                .buttons { flex-direction: column; align-items: stretch; }
-                .buttons .btn, .buttons a { width: 100%; text-align: center; }
-                input, select, textarea { width: 100%; }
-                h1 { font-size: 28px; }
-                h2 { font-size: 22px; }
-                h3 { font-size: 18px; }
-                table {
-                    display: block;
-                    overflow-x: auto;
-                    -webkit-overflow-scrolling: touch;
-                }
-                th, td { white-space: nowrap; }
-                .js .accordion-card[data-accordion] .accordion-content { display: none; }
-                .js .accordion-card.is-open .accordion-content { display: block; }
-            }
-            @media (max-width: 420px) {
-                .wrap { padding: 0 12px; }
-                .nav { padding: 6px 0; }
-                .hamburger { width: 36px; height: 36px; }
-                .mobile-quick-action { font-size: 11px; padding: 6px 8px; }
-                .container { padding: 0 12px 20px; }
-                .card { padding: 12px; }
-                h1 { font-size: 24px; }
-                h2 { font-size: 20px; }
-                h3 { font-size: 17px; }
+                .brand-logo { width: 28px; height: 28px; }
+                .brand-logo-image { min-height: 28px; }
+                .brand-logo-image img { max-height: 28px; }
             }
         </style>
     </head>
@@ -507,206 +305,129 @@ function render_layout(string $title, callable $content): void
                     </div>
                 </div>
             <?php endif; ?>
-            <?php
-            $navLinks = [];
-            $logoutAction = null;
-            if ($user && ($user['type'] ?? '') === 'superadmin') {
-                $navLinks = [
-                    ['label' => t('nav_home'), 'href' => '/home.php'],
-                    ['label' => t('nav_dashboard'), 'href' => '/superadmin/dashboard.php'],
-                    ['label' => 'Departments', 'href' => '/superadmin/departments.php'],
-                    ['label' => 'Contractors', 'href' => '/superadmin/contractors.php'],
-                    ['label' => 'Employees', 'href' => '/superadmin/employees.php'],
-                    ['label' => 'AI Studio', 'href' => '/superadmin/ai_studio.php'],
-                    ['label' => 'Tender Discovery', 'href' => '/superadmin/tender_discovery.php'],
-                    ['label' => 'Backups', 'href' => '/superadmin/backup.php'],
-                    ['label' => 'Support Inbox', 'href' => '/superadmin/support_dashboard.php'],
-                    ['label' => 'Assisted Pack v2', 'href' => '/superadmin/assisted_v2/queue.php'],
-                    ['label' => 'Error Log', 'href' => '/superadmin/error_log.php'],
-                    ['label' => 'Factory Reset', 'href' => '/superadmin/factory_reset.php'],
-                    ['label' => 'Stats', 'href' => '/superadmin/stats.php'],
-                    ['label' => 'Reset Approvals', 'href' => '/superadmin/reset_requests.php'],
-                    ['label' => t('profile'), 'href' => '/superadmin/profile.php'],
-                ];
-                $logoutAction = '/auth/logout.php';
-            } elseif ($user && ($user['type'] ?? '') === 'department') {
-                $navLinks = [
-                    ['label' => t('nav_home'), 'href' => '/home.php'],
-                    ['label' => 'Department', 'href' => '/department/dashboard.php'],
-                    ['label' => 'Roles', 'href' => '/department/roles.php'],
-                    ['label' => 'Users', 'href' => '/department/users.php'],
-                    ['label' => 'Contractors', 'href' => '/department/contractors.php'],
-                    ['label' => 'Requests', 'href' => '/department/contractor_requests.php'],
-                    ['label' => 'Templates', 'href' => '/department/templates.php'],
-                    ['label' => 'Quick Doc', 'href' => '/department/quick_doc.php'],
-                    ['label' => 'Docs', 'href' => '/department/docs_inbox.php'],
-                    ['label' => 'Tenders', 'href' => '/department/tenders.php'],
-                    ['label' => 'Workorders', 'href' => '/department/workorders.php'],
-                    ['label' => 'Requirement Sets', 'href' => '/department/requirement_sets.php'],
-                    ['label' => 'DAK', 'href' => '/department/dak.php'],
-                    ['label' => 'Health', 'href' => '/department/health.php'],
-                    ['label' => 'Support', 'href' => '/department/support.php'],
-                ];
-                $logoutAction = '/department/logout.php';
-            } elseif ($user && ($user['type'] ?? '') === 'contractor') {
-                $navLinks = [
-                    ['label' => t('nav_home'), 'href' => '/home.php'],
-                    ['label' => 'Contractor', 'href' => '/contractor/dashboard.php'],
-                    ['label' => 'Departments', 'href' => '/contractor/departments.php'],
-                    ['label' => 'Tender Packs', 'href' => '/contractor/packs.php'],
-                    ['label' => 'Vault', 'href' => '/contractor/vault.php'],
-                    ['label' => 'Bills', 'href' => '/contractor/bills.php'],
-                    ['label' => 'Workorders', 'href' => '/contractor/workorders.php'],
-                    ['label' => 'Tenders', 'href' => '/contractor/tenders.php'],
-                    ['label' => 'Templates', 'href' => '/contractor/templates.php'],
-                    ['label' => 'Discovered', 'href' => '/contractor/discovered_tenders.php'],
-                    ['label' => 'Offline Tenders', 'href' => '/contractor/offline_tenders.php'],
-                    ['label' => 'Tender Archive', 'href' => '/contractor/tender_archive.php'],
-                    ['label' => 'Notifications', 'href' => '/contractor/notifications.php'],
-                    ['label' => 'Support', 'href' => '/contractor/support.php'],
-                ];
-                $logoutAction = '/contractor/logout.php';
-            } elseif ($user && ($user['type'] ?? '') === 'employee') {
-                $navLinks = [
-                    ['label' => t('nav_home'), 'href' => '/home.php'],
-                    ['label' => 'Staff', 'href' => '/staff/dashboard.php'],
-                ];
-                if (in_array('tickets', $user['permissions'] ?? [], true)) {
-                    $navLinks[] = ['label' => 'Tickets', 'href' => '/staff/tickets.php'];
-                }
-                if (in_array('can_process_assisted', $user['permissions'] ?? [], true)) {
-                    $navLinks[] = ['label' => 'Assisted Pack v2', 'href' => '/staff/assisted_v2/queue.php'];
-                }
-                if (in_array('audit_view', $user['permissions'] ?? [], true)) {
-                    $navLinks[] = ['label' => 'Audit', 'href' => '/staff/audit.php'];
-                }
-                if (in_array('stats_view', $user['permissions'] ?? [], true)) {
-                    $navLinks[] = ['label' => 'Stats', 'href' => '/superadmin/stats.php'];
-                }
-                if (in_array('reset_approvals', $user['permissions'] ?? [], true)) {
-                    $navLinks[] = ['label' => 'Reset Approvals', 'href' => '/superadmin/reset_requests.php'];
-                }
-                $logoutAction = '/auth/logout.php';
-            } else {
-                $navLinks = [
-                    ['label' => $publicNav['home'][$lang], 'href' => '/site/index.php'],
-                    ['label' => $publicNav['how'][$lang], 'href' => '/site/index.php#how-it-works'],
-                    ['label' => $publicNav['features'][$lang], 'href' => '/site/index.php#features'],
-                    ['label' => $publicNav['templates'][$lang], 'href' => '/site/index.php#templates-packs'],
-                    ['label' => $publicNav['contact'][$lang], 'href' => '/site/contact.php'],
-                ];
-            }
-            $homeHref = $isPublicVisitor ? '/site/index.php' : '/home.php';
-            $quickActionLabel = $isPublicVisitor ? $publicNav['yojakLogin'][$lang] : t('nav_home');
-            $quickActionHref = $isPublicVisitor ? '/auth/login.php' : '/home.php';
-            ?>
             <div class="wrap nav">
-                <div class="nav-left">
-                    <button class="hamburger" type="button" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false">
-                        ☰
-                    </button>
-                    <a class="brand" href="<?= sanitize($homeHref); ?>">
-                        <?= render_logo_html('md'); ?>
-                        <div class="brand-text">
-                            <span><?= sanitize($appName); ?></span>
-                            <?php if ($isPublicVisitor): ?>
-                                <span class="muted brand-tagline"><?= sanitize($publicNav['tagline'][$lang]); ?></span>
-                            <?php endif; ?>
-                        </div>
-                    </a>
-                </div>
-                <div class="nav-right">
-                    <a class="mobile-quick-action" href="<?= sanitize($quickActionHref); ?>"><?= sanitize($quickActionLabel); ?></a>
+                <div class="brand">
+                    <?= render_logo_html('md'); ?>
+                    <div>
+                        <?= sanitize($appName); ?>
+                        <?php if ($isPublicVisitor): ?>
+                            <div class="muted" style="font-size:12px;"><?= sanitize($publicNav['tagline'][$lang]); ?></div>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <div class="nav-links">
-                    <?php foreach ($navLinks as $link): ?>
-                        <a href="<?= sanitize($link['href']); ?>"><?= sanitize($link['label']); ?></a>
-                    <?php endforeach; ?>
-                    <?php if ($logoutAction): ?>
-                        <form method="post" action="<?= sanitize($logoutAction); ?>" style="display:inline;">
+                    <?php if ($user && ($user['type'] ?? '') === 'superadmin'): ?>
+                        <a href="/home.php"><?= sanitize(t('nav_home')); ?></a>
+                        <a href="/superadmin/dashboard.php"><?= sanitize(t('nav_dashboard')); ?></a>
+                        <a href="/superadmin/departments.php"><?= sanitize('Departments'); ?></a>
+                        <a href="/superadmin/contractors.php"><?= sanitize('Contractors'); ?></a>
+                        <a href="/superadmin/employees.php"><?= sanitize('Employees'); ?></a>
+                        <a href="/superadmin/ai_studio.php"><?= sanitize('AI Studio'); ?></a>
+                        <a href="/superadmin/tender_discovery.php"><?= sanitize('Tender Discovery'); ?></a>
+                        <a href="/superadmin/backup.php"><?= sanitize('Backups'); ?></a>
+                        <a href="/superadmin/support_dashboard.php"><?= sanitize('Support Inbox'); ?></a>
+                        <a href="/superadmin/assisted_v2/queue.php"><?= sanitize('Assisted Pack v2'); ?></a>
+                        <a href="/superadmin/error_log.php"><?= sanitize('Error Log'); ?></a>
+                        <a href="/superadmin/factory_reset.php"><?= sanitize('Factory Reset'); ?></a>
+                        <a href="/superadmin/stats.php"><?= sanitize('Stats'); ?></a>
+                        <a href="/superadmin/reset_requests.php"><?= sanitize('Reset Approvals'); ?></a>
+                        <a href="/superadmin/profile.php"><?= sanitize(t('profile')); ?></a>
+                        <form method="post" action="/auth/logout.php" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
                         </form>
-                    <?php endif; ?>
-                    <form method="get" class="lang-toggle">
-                        <span class="pill"><?= sanitize(t('language')); ?></span>
-                        <select name="lang" onchange="this.form.submit()">
-                            <option value="en" <?= $lang === 'en' ? 'selected' : ''; ?>><?= sanitize(t('english')); ?></option>
-                            <option value="hi" <?= $lang === 'hi' ? 'selected' : ''; ?>><?= sanitize(t('hindi')); ?></option>
-                        </select>
-                    </form>
-                    <?php if (!$user): ?>
-                        <a href="/department/login.php" class="secondary"><?= sanitize($publicNav['departmentLogin'][$lang]); ?></a>
-                        <a href="/contractor/login.php" class="secondary"><?= sanitize($publicNav['contractorLogin'][$lang]); ?></a>
-                        <a href="/auth/login.php" class="primary"><?= sanitize($publicNav['yojakLogin'][$lang]); ?></a>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <div class="mobile-menu-overlay" data-mobile-overlay></div>
-            <nav class="mobile-menu" id="mobile-menu" aria-hidden="true">
-                <div class="mobile-menu-header">
-                    <span><?= sanitize('Menu'); ?></span>
-                    <button type="button" class="mobile-menu-close" aria-label="<?= sanitize('Close menu'); ?>">×</button>
-                </div>
-                <div class="mobile-menu-content">
-                    <div class="mobile-menu-section">
-                        <h4><?= sanitize('Navigation'); ?></h4>
-                        <?php foreach ($navLinks as $link): ?>
-                            <a class="mobile-menu-link" href="<?= sanitize($link['href']); ?>"><?= sanitize($link['label']); ?></a>
-                        <?php endforeach; ?>
-                        <?php if ($logoutAction): ?>
-                            <form method="post" action="<?= sanitize($logoutAction); ?>" class="mobile-menu-actions">
-                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                                <button type="submit" class="btn secondary"><?= sanitize(t('logout')); ?></button>
-                            </form>
+                    <?php elseif ($user && ($user['type'] ?? '') === 'department'): ?>
+                        <a href="/home.php"><?= sanitize(t('nav_home')); ?></a>
+                        <a href="/department/dashboard.php"><?= sanitize('Department'); ?></a>
+                        <a href="/department/roles.php"><?= sanitize('Roles'); ?></a>
+                        <a href="/department/users.php"><?= sanitize('Users'); ?></a>
+                        <a href="/department/contractors.php"><?= sanitize('Contractors'); ?></a>
+                        <a href="/department/contractor_requests.php"><?= sanitize('Requests'); ?></a>
+                        <a href="/department/templates.php"><?= sanitize('Templates'); ?></a>
+                        <a href="/department/quick_doc.php"><?= sanitize('Quick Doc'); ?></a>
+                        <a href="/department/docs_inbox.php"><?= sanitize('Docs'); ?></a>
+                        <a href="/department/tenders.php"><?= sanitize('Tenders'); ?></a>
+                        <a href="/department/workorders.php"><?= sanitize('Workorders'); ?></a>
+                        <a href="/department/requirement_sets.php"><?= sanitize('Requirement Sets'); ?></a>
+                        <a href="/department/dak.php"><?= sanitize('DAK'); ?></a>
+                        <a href="/department/health.php"><?= sanitize('Health'); ?></a>
+                        <a href="/department/support.php"><?= sanitize('Support'); ?></a>
+                        <form method="post" action="/department/logout.php" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                            <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
+                        </form>
+                    <?php elseif ($user && ($user['type'] ?? '') === 'contractor'): ?>
+                        <a href="/home.php"><?= sanitize(t('nav_home')); ?></a>
+                        <a href="/contractor/dashboard.php"><?= sanitize('Contractor'); ?></a>
+                        <a href="/contractor/departments.php"><?= sanitize('Departments'); ?></a>
+                        <a href="/contractor/packs.php"><?= sanitize('Tender Packs'); ?></a>
+                        <a href="/contractor/vault.php"><?= sanitize('Vault'); ?></a>
+                        <a href="/contractor/bills.php"><?= sanitize('Bills'); ?></a>
+                        <a href="/contractor/workorders.php"><?= sanitize('Workorders'); ?></a>
+                        <a href="/contractor/tenders.php"><?= sanitize('Tenders'); ?></a>
+                        <a href="/contractor/templates.php"><?= sanitize('Templates'); ?></a>
+                        <a href="/contractor/discovered_tenders.php"><?= sanitize('Discovered'); ?></a>
+                        <a href="/contractor/offline_tenders.php"><?= sanitize('Offline Tenders'); ?></a>
+                        <a href="/contractor/tender_archive.php"><?= sanitize('Tender Archive'); ?></a>
+                        <a href="/contractor/notifications.php"><?= sanitize('Notifications'); ?></a>
+                        <a href="/contractor/support.php"><?= sanitize('Support'); ?></a>
+                        <form method="post" action="/contractor/logout.php" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                            <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
+                        </form>
+                    <?php elseif ($user && ($user['type'] ?? '') === 'employee'): ?>
+                        <a href="/home.php"><?= sanitize(t('nav_home')); ?></a>
+                        <a href="/staff/dashboard.php"><?= sanitize('Staff'); ?></a>
+                        <?php if (in_array('tickets', $user['permissions'] ?? [], true)): ?>
+                            <a href="/staff/tickets.php"><?= sanitize('Tickets'); ?></a>
                         <?php endif; ?>
-                    </div>
-                    <?php if (!$user): ?>
-                        <div class="mobile-menu-section">
-                            <h4><?= sanitize('Logins'); ?></h4>
-                            <div class="mobile-menu-actions">
-                                <a class="btn secondary" href="/department/login.php"><?= sanitize($publicNav['departmentLogin'][$lang]); ?></a>
-                                <a class="btn secondary" href="/contractor/login.php"><?= sanitize($publicNav['contractorLogin'][$lang]); ?></a>
-                                <a class="btn" href="/auth/login.php"><?= sanitize($publicNav['yojakLogin'][$lang]); ?></a>
-                            </div>
-                        </div>
+                        <?php if (in_array('can_process_assisted', $user['permissions'] ?? [], true)): ?>
+                            <a href="/staff/assisted_v2/queue.php"><?= sanitize('Assisted Pack v2'); ?></a>
+                        <?php endif; ?>
+                        <?php if (in_array('audit_view', $user['permissions'] ?? [], true)): ?>
+                            <a href="/staff/audit.php"><?= sanitize('Audit'); ?></a>
+                        <?php endif; ?>
+                        <?php if (in_array('stats_view', $user['permissions'] ?? [], true)): ?>
+                            <a href="/superadmin/stats.php"><?= sanitize('Stats'); ?></a>
+                        <?php endif; ?>
+                        <?php if (in_array('reset_approvals', $user['permissions'] ?? [], true)): ?>
+                            <a href="/superadmin/reset_requests.php"><?= sanitize('Reset Approvals'); ?></a>
+                        <?php endif; ?>
+                        <form method="post" action="/auth/logout.php" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                            <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
+                        </form>
+                    <?php else: ?>
+                        <a href="/site/index.php"><?= sanitize($publicNav['home'][$lang]); ?></a>
+                        <a href="/site/index.php#how-it-works"><?= sanitize($publicNav['how'][$lang]); ?></a>
+                        <a href="/site/index.php#features"><?= sanitize($publicNav['features'][$lang]); ?></a>
+                        <a href="/site/index.php#templates-packs"><?= sanitize($publicNav['templates'][$lang]); ?></a>
+                        <a href="/site/contact.php"><?= sanitize($publicNav['contact'][$lang]); ?></a>
                     <?php endif; ?>
-                    <div class="mobile-menu-section mobile-lang">
-                        <h4><?= sanitize(t('language')); ?></h4>
-                        <form method="get">
+                    <?php if (!$user): ?>
+                        <form method="get" class="lang-toggle">
+                            <span class="pill"><?= sanitize(t('language')); ?></span>
                             <select name="lang" onchange="this.form.submit()">
                                 <option value="en" <?= $lang === 'en' ? 'selected' : ''; ?>><?= sanitize(t('english')); ?></option>
                                 <option value="hi" <?= $lang === 'hi' ? 'selected' : ''; ?>><?= sanitize(t('hindi')); ?></option>
                             </select>
                         </form>
-                    </div>
-                    <?php if ($isPublicVisitor && $contactDetails): ?>
-                        <div class="mobile-menu-section">
-                            <h4><?= sanitize('Contact'); ?></h4>
-                            <div class="mobile-contact">
-                                <a href="tel:<?= sanitize($contactDetails['mobile']); ?>"><?= sanitize($publicNav['call'][$lang]); ?>: <?= sanitize($contactDetails['mobile']); ?></a>
-                                <a href="mailto:<?= sanitize($contactDetails['email']); ?>"><?= sanitize($publicNav['email'][$lang]); ?>: <?= sanitize($contactDetails['email']); ?></a>
-                            </div>
-                        </div>
+                        <a href="/department/login.php" class="secondary"><?= sanitize($publicNav['departmentLogin'][$lang]); ?></a>
+                        <a href="/contractor/login.php" class="secondary"><?= sanitize($publicNav['contractorLogin'][$lang]); ?></a>
+                        <a href="/auth/login.php" class="primary"><?= sanitize($publicNav['yojakLogin'][$lang]); ?></a>
+                    <?php else: ?>
+                        <form method="get" class="lang-toggle">
+                            <span class="pill"><?= sanitize(t('language')); ?></span>
+                            <select name="lang" onchange="this.form.submit()">
+                                <option value="en" <?= $lang === 'en' ? 'selected' : ''; ?>><?= sanitize(t('english')); ?></option>
+                                <option value="hi" <?= $lang === 'hi' ? 'selected' : ''; ?>><?= sanitize(t('hindi')); ?></option>
+                            </select>
+                        </form>
                     <?php endif; ?>
                 </div>
-            </nav>
-            <noscript>
-                <div class="wrap" style="padding-bottom:12px;">
-                    <div style="display:grid;gap:8px;">
-                        <?php foreach ($navLinks as $link): ?>
-                            <a class="mobile-menu-link" href="<?= sanitize($link['href']); ?>"><?= sanitize($link['label']); ?></a>
-                        <?php endforeach; ?>
-                        <?php if (!$user): ?>
-                            <a class="mobile-menu-link" href="/department/login.php"><?= sanitize($publicNav['departmentLogin'][$lang]); ?></a>
-                            <a class="mobile-menu-link" href="/contractor/login.php"><?= sanitize($publicNav['contractorLogin'][$lang]); ?></a>
-                            <a class="mobile-menu-link" href="/auth/login.php"><?= sanitize($publicNav['yojakLogin'][$lang]); ?></a>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </noscript>
+            </div>
         </header>
-        <main class="container wrap main-content">
+        <main class="container wrap">
             <?php if ($flashes): ?>
                 <div class="flashes">
                     <?php foreach ($flashes as $flash): ?>
@@ -716,81 +437,6 @@ function render_layout(string $title, callable $content): void
             <?php endif; ?>
             <?php $content(); ?>
         </main>
-        <script>
-            (() => {
-                const menu = document.getElementById('mobile-menu');
-                const overlay = document.querySelector('[data-mobile-overlay]');
-                const openButton = document.querySelector('.hamburger');
-                const closeButton = document.querySelector('.mobile-menu-close');
-                if (!menu || !overlay || !openButton || !closeButton) {
-                    return;
-                }
-                const focusableSelector = 'a, button, select, textarea, input, [tabindex]:not([tabindex="-1"])';
-                const closeMenu = () => {
-                    menu.classList.remove('open');
-                    overlay.classList.remove('open');
-                    menu.setAttribute('aria-hidden', 'true');
-                    openButton.setAttribute('aria-expanded', 'false');
-                };
-                const openMenu = () => {
-                    menu.classList.add('open');
-                    overlay.classList.add('open');
-                    menu.setAttribute('aria-hidden', 'false');
-                    openButton.setAttribute('aria-expanded', 'true');
-                    const firstFocusable = menu.querySelector(focusableSelector);
-                    if (firstFocusable) {
-                        firstFocusable.focus();
-                    }
-                };
-                openButton.addEventListener('click', openMenu);
-                closeButton.addEventListener('click', closeMenu);
-                overlay.addEventListener('click', closeMenu);
-                menu.addEventListener('click', (event) => {
-                    const target = event.target;
-                    if (target instanceof HTMLElement && target.closest('a')) {
-                        closeMenu();
-                    }
-                });
-                document.addEventListener('keydown', (event) => {
-                    if (event.key === 'Escape') {
-                        closeMenu();
-                    }
-                });
-            })();
-            (() => {
-                const accordions = Array.from(document.querySelectorAll('[data-accordion]'));
-                if (!accordions.length) {
-                    return;
-                }
-                const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
-                const setState = (card, open) => {
-                    card.classList.toggle('is-open', open);
-                    const toggle = card.querySelector('[data-accordion-toggle]');
-                    if (toggle) {
-                        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-                        toggle.textContent = open ? 'Collapse' : 'Expand';
-                    }
-                };
-                const initialize = () => {
-                    accordions.forEach((card) => {
-                        setState(card, !isMobile());
-                    });
-                };
-                accordions.forEach((card) => {
-                    const toggle = card.querySelector('[data-accordion-toggle]');
-                    if (!toggle) {
-                        return;
-                    }
-                    toggle.addEventListener('click', () => {
-                        setState(card, !card.classList.contains('is-open'));
-                    });
-                });
-                initialize();
-                window.addEventListener('resize', () => {
-                    initialize();
-                });
-            })();
-        </script>
     </body>
     </html>
     <?php
