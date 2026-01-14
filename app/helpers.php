@@ -42,6 +42,9 @@ function ensure_data_structure(): void
         DATA_PATH . '/assisted_v2/requests',
         DATA_PATH . '/assisted_v2/templates',
         DATA_PATH . '/defaults',
+        DATA_PATH . '/site',
+        DATA_PATH . '/site/analytics',
+        DATA_PATH . '/site/inquiries',
     ];
 
     foreach ($directories as $dir) {
@@ -126,11 +129,35 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/print.log',
         DATA_PATH . '/logs/contractor_profile.log',
         DATA_PATH . '/logs/templates.log',
+        DATA_PATH . '/logs/site.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {
             touch($logFile);
         }
+    }
+
+    $visitsPath = DATA_PATH . '/site/analytics/visits.json';
+    if (!file_exists($visitsPath)) {
+        $now = now_kolkata();
+        $date = $now->format('Y-m-d');
+        $defaultVisits = [
+            'totalPageViews' => 0,
+            'totalUniqueVisitors' => 0,
+            'daily' => [
+                $date => [
+                    'pageViews' => 0,
+                    'uniqueVisitors' => 0,
+                ],
+            ],
+            'updatedAt' => $now->format(DateTime::ATOM),
+        ];
+        writeJsonAtomic($visitsPath, $defaultVisits);
+    }
+
+    $visitsLogPath = DATA_PATH . '/site/analytics/visits_log.jsonl';
+    if (!file_exists($visitsLogPath)) {
+        touch($visitsLogPath);
     }
 
     if (!file_exists(default_contractor_templates_path())) {

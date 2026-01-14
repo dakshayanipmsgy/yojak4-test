@@ -21,6 +21,22 @@ function render_layout(string $title, callable $content): void
     $appName = get_app_config()['appName'] ?? 'YOJAK';
     $lang = get_language();
     $user = current_user();
+    $path = $_SERVER['REQUEST_URI'] ?? '';
+    $isPublicVisitor = !$user;
+    $contactDetails = function_exists('public_contact_details') ? public_contact_details() : null;
+    $publicNav = [
+        'home' => ['hi' => 'मुख्य पृष्ठ', 'en' => 'Home'],
+        'how' => ['hi' => 'कैसे काम करता है', 'en' => 'How it works'],
+        'features' => ['hi' => 'विशेषताएँ', 'en' => 'Features'],
+        'templates' => ['hi' => 'टेम्पलेट्स और पैक', 'en' => 'Templates & Packs'],
+        'contact' => ['hi' => 'संपर्क', 'en' => 'Contact'],
+        'contractorLogin' => ['hi' => 'कॉन्ट्रैक्टर लॉगिन', 'en' => 'Contractor Login'],
+        'contractorSignup' => ['hi' => 'कॉन्ट्रैक्टर साइन अप', 'en' => 'Contractor Sign Up'],
+        'departmentLogin' => ['hi' => 'विभाग लॉगिन', 'en' => 'Department Login'],
+        'call' => ['hi' => 'कॉल', 'en' => 'Call'],
+        'email' => ['hi' => 'ईमेल', 'en' => 'Email'],
+        'tagline' => ['hi' => 'ठेकेदार-प्रथम दस्तावेज़ प्लेटफ़ॉर्म', 'en' => 'Contractor-first documentation'],
+    ];
     $brandingLogoPath = (($user['type'] ?? '') === 'superadmin') ? branding_display_logo_path() : null;
     $flashes = consume_flashes();
     ?>
@@ -58,6 +74,23 @@ function render_layout(string $title, callable $content): void
                 top: 0;
                 z-index: 10;
             }
+            .top-contact {
+                background: rgba(13,17,23,0.85);
+                border-bottom: 1px solid #30363d;
+                padding: 8px 18px;
+                font-size: 12px;
+                color: var(--muted);
+            }
+            .top-contact-inner {
+                max-width: 1100px;
+                margin: 0 auto;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .top-contact a { color: var(--text); }
             .nav {
                 display: flex;
                 align-items: center;
@@ -108,6 +141,11 @@ function render_layout(string $title, callable $content): void
                 border-color: var(--primary);
                 color: #fff;
                 box-shadow: 0 4px 12px rgba(31,111,235,0.3);
+            }
+            .nav-links .secondary {
+                background: #21262d;
+                border-color: #30363d;
+                color: var(--text);
             }
             .brand-logo-image {
                 width: auto;
@@ -242,21 +280,47 @@ function render_layout(string $title, callable $content): void
     </head>
     <body>
         <header>
+            <?php if ($isPublicVisitor && $contactDetails): ?>
+                <div class="top-contact">
+                    <div class="top-contact-inner">
+                        <div>
+                            <strong><?= sanitize($publicNav['call'][$lang]); ?>:</strong> <a href="tel:<?= sanitize($contactDetails['mobile']); ?>"><?= sanitize($contactDetails['mobile']); ?></a>
+                            <span class="muted">•</span>
+                            <strong><?= sanitize($publicNav['email'][$lang]); ?>:</strong> <a href="mailto:<?= sanitize($contactDetails['email']); ?>"><?= sanitize($contactDetails['email']); ?></a>
+                        </div>
+                        <div>
+                            <a href="<?= sanitize($contactDetails['instagramUrl']); ?>" target="_blank" rel="noopener">Instagram: <?= sanitize($contactDetails['instagram']); ?></a>
+                            <span class="muted">•</span>
+                            <a href="<?= sanitize($contactDetails['facebookUrl']); ?>" target="_blank" rel="noopener">Facebook: <?= sanitize($contactDetails['facebook']); ?></a>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
             <div class="nav">
                 <div class="brand">
                     <?php if ($brandingLogoPath): ?>
                         <div class="brand-logo-image">
                             <img src="<?= sanitize($brandingLogoPath); ?>" alt="<?= sanitize($appName . ' logo'); ?>">
                         </div>
-                        <div><?= sanitize($appName); ?></div>
+                        <div>
+                            <?= sanitize($appName); ?>
+                            <?php if ($isPublicVisitor): ?>
+                                <div class="muted" style="font-size:12px;"><?= sanitize($publicNav['tagline'][$lang]); ?></div>
+                            <?php endif; ?>
+                        </div>
                     <?php else: ?>
                         <div class="brand-logo">YJ</div>
-                        <div><?= sanitize($appName); ?></div>
+                        <div>
+                            <?= sanitize($appName); ?>
+                            <?php if ($isPublicVisitor): ?>
+                                <div class="muted" style="font-size:12px;"><?= sanitize($publicNav['tagline'][$lang]); ?></div>
+                            <?php endif; ?>
+                        </div>
                     <?php endif; ?>
                 </div>
                 <div class="nav-links">
-                    <a href="/home.php"><?= sanitize(t('nav_home')); ?></a>
                     <?php if ($user && ($user['type'] ?? '') === 'superadmin'): ?>
+                        <a href="/home.php"><?= sanitize(t('nav_home')); ?></a>
                         <a href="/superadmin/dashboard.php"><?= sanitize(t('nav_dashboard')); ?></a>
                         <a href="/superadmin/departments.php"><?= sanitize('Departments'); ?></a>
                         <a href="/superadmin/contractors.php"><?= sanitize('Contractors'); ?></a>
@@ -276,6 +340,7 @@ function render_layout(string $title, callable $content): void
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
                         </form>
                     <?php elseif ($user && ($user['type'] ?? '') === 'department'): ?>
+                        <a href="/home.php"><?= sanitize(t('nav_home')); ?></a>
                         <a href="/department/dashboard.php"><?= sanitize('Department'); ?></a>
                         <a href="/department/roles.php"><?= sanitize('Roles'); ?></a>
                         <a href="/department/users.php"><?= sanitize('Users'); ?></a>
@@ -295,6 +360,7 @@ function render_layout(string $title, callable $content): void
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
                         </form>
                     <?php elseif ($user && ($user['type'] ?? '') === 'contractor'): ?>
+                        <a href="/home.php"><?= sanitize(t('nav_home')); ?></a>
                         <a href="/contractor/dashboard.php"><?= sanitize('Contractor'); ?></a>
                         <a href="/contractor/departments.php"><?= sanitize('Departments'); ?></a>
                         <a href="/contractor/packs.php"><?= sanitize('Tender Packs'); ?></a>
@@ -313,6 +379,7 @@ function render_layout(string $title, callable $content): void
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
                         </form>
                     <?php elseif ($user && ($user['type'] ?? '') === 'employee'): ?>
+                        <a href="/home.php"><?= sanitize(t('nav_home')); ?></a>
                         <a href="/staff/dashboard.php"><?= sanitize('Staff'); ?></a>
                         <?php if (in_array('tickets', $user['permissions'] ?? [], true)): ?>
                             <a href="/staff/tickets.php"><?= sanitize('Tickets'); ?></a>
@@ -334,9 +401,14 @@ function render_layout(string $title, callable $content): void
                             <button type="submit" class="nav-link"><?= sanitize(t('logout')); ?></button>
                         </form>
                     <?php else: ?>
-                        <a href="/contractor/login.php"><?= sanitize('Contractor Login'); ?></a>
-                        <a href="/department/login.php"><?= sanitize('Department Login'); ?></a>
-                        <a href="/auth/login.php" class="primary"><?= sanitize(t('nav_auth')); ?></a>
+                        <a href="/site/index.php"><?= sanitize($publicNav['home'][$lang]); ?></a>
+                        <a href="/site/index.php#how-it-works"><?= sanitize($publicNav['how'][$lang]); ?></a>
+                        <a href="/site/index.php#features"><?= sanitize($publicNav['features'][$lang]); ?></a>
+                        <a href="/site/index.php#templates-packs"><?= sanitize($publicNav['templates'][$lang]); ?></a>
+                        <a href="/site/contact.php"><?= sanitize($publicNav['contact'][$lang]); ?></a>
+                        <a href="/contractor/login.php" class="primary"><?= sanitize($publicNav['contractorLogin'][$lang]); ?></a>
+                        <a href="/contractor/signup.php" class="secondary"><?= sanitize($publicNav['contractorSignup'][$lang]); ?></a>
+                        <a href="/department/login.php" class="secondary"><?= sanitize($publicNav['departmentLogin'][$lang]); ?></a>
                     <?php endif; ?>
                     <form method="get" class="lang-toggle">
                         <span class="pill"><?= sanitize(t('language')); ?></span>
