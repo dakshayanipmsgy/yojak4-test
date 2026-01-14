@@ -50,10 +50,11 @@ function render_layout(string $title, callable $content): void
             :root {
                 --primary: #1f6feb;
                 --primary-dark: #144ea3;
-                --background: #0d1117;
-                --surface: #161b22;
-                --text: #e6edf3;
-                --muted: #8b949e;
+                --background: #ffffff;
+                --surface: #ffffff;
+                --text: #111827;
+                --muted: #6b7280;
+                --border: #e5e7eb;
                 --danger: #f85149;
                 --success: #2ea043;
             }
@@ -61,22 +62,22 @@ function render_layout(string $title, callable $content): void
             body {
                 margin: 0;
                 font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-                background: linear-gradient(180deg, #0b1a2a, #0d1117 60%);
+                background: var(--background);
                 color: var(--text);
                 min-height: 100vh;
             }
             a { color: var(--primary); text-decoration: none; }
             header {
-                background: rgba(22,27,34,0.9);
+                background: rgba(255,255,255,0.98);
                 backdrop-filter: blur(8px);
-                border-bottom: 1px solid #30363d;
+                border-bottom: 1px solid var(--border);
                 position: sticky;
                 top: 0;
                 z-index: 10;
             }
             .top-contact {
-                background: rgba(13,17,23,0.85);
-                border-bottom: 1px solid #30363d;
+                background: #f9fafb;
+                border-bottom: 1px solid var(--border);
                 padding: 8px 18px;
                 font-size: 12px;
                 color: var(--muted);
@@ -134,17 +135,17 @@ function render_layout(string $title, callable $content): void
                 font-weight: 600;
             }
             .nav-links a:hover, .nav-links form button:hover {
-                background: #21262d;
+                background: #f3f4f6;
             }
             .nav-links .primary {
                 background: var(--primary);
                 border-color: var(--primary);
                 color: #fff;
-                box-shadow: 0 4px 12px rgba(31,111,235,0.3);
+                box-shadow: 0 4px 12px rgba(31,111,235,0.18);
             }
             .nav-links .secondary {
-                background: #21262d;
-                border-color: #30363d;
+                background: #f1f5f9;
+                border-color: #d0d7e2;
                 color: var(--text);
             }
             .brand-logo-image {
@@ -153,12 +154,12 @@ function render_layout(string $title, callable $content): void
                 min-height: 36px;
                 padding: 6px 10px;
                 border-radius: 10px;
-                border: 1px solid #30363d;
-                background: #0d1117;
+                border: 1px solid var(--border);
+                background: #ffffff;
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+                box-shadow: 0 8px 16px rgba(15, 23, 42, 0.12);
             }
             .brand-logo-image img {
                 display: block;
@@ -179,10 +180,10 @@ function render_layout(string $title, callable $content): void
             }
             .card {
                 background: var(--surface);
-                border: 1px solid #30363d;
+                border: 1px solid var(--border);
                 border-radius: 14px;
                 padding: 18px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+                box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
             }
             .card h1, .card h2, .card h3 { margin-top: 0; }
             .muted { color: var(--muted); }
@@ -200,11 +201,13 @@ function render_layout(string $title, callable $content): void
                 border-radius: 10px;
                 cursor: pointer;
                 font-weight: 700;
-                box-shadow: 0 6px 18px rgba(31,111,235,0.25);
+                box-shadow: 0 6px 18px rgba(31,111,235,0.16);
             }
             .btn.secondary {
-                background: #21262d;
-                border-color: #30363d;
+                background: #f1f5f9;
+                border-color: #d0d7e2;
+                color: var(--text);
+                box-shadow: none;
             }
             .btn.danger {
                 background: var(--danger);
@@ -219,8 +222,8 @@ function render_layout(string $title, callable $content): void
             input, select {
                 padding: 10px 12px;
                 border-radius: 10px;
-                border: 1px solid #30363d;
-                background: #0d1117;
+                border: 1px solid var(--border);
+                background: #ffffff;
                 color: var(--text);
             }
             .flashes {
@@ -231,12 +234,12 @@ function render_layout(string $title, callable $content): void
             .flash {
                 padding: 10px 12px;
                 border-radius: 10px;
-                border: 1px solid #30363d;
-                background: #111820;
+                border: 1px solid var(--border);
+                background: #ffffff;
                 font-weight: 600;
             }
-            .flash.success { border-color: var(--success); color: #8ce99a; }
-            .flash.error { border-color: var(--danger); color: #f77676; }
+            .flash.success { border-color: var(--success); color: #166534; background: #ecfdf3; }
+            .flash.error { border-color: var(--danger); color: #b91c1c; background: #fef2f2; }
             .lang-toggle {
                 display: inline-flex;
                 align-items: center;
@@ -245,8 +248,8 @@ function render_layout(string $title, callable $content): void
             .pill {
                 padding: 6px 10px;
                 border-radius: 999px;
-                border: 1px solid #30363d;
-                background: #111820;
+                border: 1px solid var(--border);
+                background: #f8fafc;
                 font-size: 12px;
                 color: var(--muted);
             }
@@ -258,20 +261,20 @@ function render_layout(string $title, callable $content): void
             }
             th, td {
                 padding: 10px;
-                border-bottom: 1px solid #30363d;
+                border-bottom: 1px solid var(--border);
                 text-align: left;
             }
             th { color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px; }
-            tr:hover td { background: #0f1520; }
+            tr:hover td { background: #f9fafb; }
             .tag {
                 display: inline-block;
                 padding: 4px 8px;
                 border-radius: 999px;
-                border: 1px solid #30363d;
+                border: 1px solid var(--border);
                 font-size: 12px;
                 color: var(--muted);
             }
-            .tag.success { border-color: var(--success); color: #8ce99a; }
+            .tag.success { border-color: var(--success); color: #166534; background: #ecfdf3; }
             @media (max-width: 600px) {
                 .nav { flex-direction: column; align-items: flex-start; gap: 10px; }
                 .nav-links { width: 100%; }

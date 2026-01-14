@@ -17,7 +17,7 @@ function public_theme_css(): string
 {
     return <<<CSS
         :root {
-            --public-bg: #f6f8fc;
+            --public-bg: #ffffff;
             --public-surface: #ffffff;
             --public-text: #0b1320;
             --public-muted: #5c6b7a;
