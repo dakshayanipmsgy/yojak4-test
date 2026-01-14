@@ -82,7 +82,7 @@ safe_page(function () {
                             </div>
                             <div class="buttons" style="gap:6px;">
                                 <a class="btn secondary" href="/contractor/pack_view.php?packId=<?= sanitize($pack['packId']); ?>#missing-docs"><?= sanitize('Review'); ?></a>
-                                <a class="btn" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=full" target="_blank" rel="noopener"><?= sanitize('Print'); ?></a>
+                                <a class="btn" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=full&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Print (opens dialog)'); ?></a>
                             </div>
                         </div>
                     <?php endforeach; ?>

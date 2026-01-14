@@ -2063,7 +2063,11 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         'annexureId' => null,
         'templateId' => null,
         'annexurePreview' => false,
+        'mode' => 'preview',
+        'autoprint' => false,
     ], $options);
+    $mode = $options['mode'] === 'print' ? 'print' : 'preview';
+    $autoPrint = !empty($options['autoprint']);
     $singleAnnexureId = is_string($options['annexureId']) ? trim($options['annexureId']) : '';
     if ($singleAnnexureId !== '') {
         $annexureTemplates = array_values(array_filter($annexureTemplates, static function ($tpl) use ($singleAnnexureId) {
@@ -2384,12 +2388,33 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .print-settings select,.print-settings input{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:8px;color:#e6edf3;}
     .print-settings button{background:#1f6feb;border:none;color:#fff;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
     .print-settings .hint{font-size:12px;color:#8b949e;}
+    .print-actions{display:none;margin-bottom:12px;padding:12px;border:1px solid #d0d7de;border-radius:10px;background:#fff;color:#000;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+    .print-actions .btn{background:#111827;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
+    .print-actions .hint{font-size:12px;color:#444;}
+    body.print-mode{background:#fff !important;color:#000 !important;}
+    body.print-mode .page{background:#fff;border:1px solid #ddd;border-radius:0;box-shadow:none;padding:0;}
+    body.print-mode h1,body.print-mode h2,body.print-mode h3,body.print-mode h4,body.print-mode strong{color:#000;}
+    body.print-mode .muted{color:#444;}
+    body.print-mode a{color:#000;text-decoration:none;}
+    body.print-mode .print-settings{display:none;}
+    body.print-mode .print-actions{display:flex;}
+    body.print-mode .card-sm,body.print-mode .template-block,body.print-mode .warning{background:#fff;border:1px solid #ddd;}
+    body.print-mode .pill{background:#fff;border:1px solid #bbb;color:#000;}
+    body.print-mode th,body.print-mode td{border:1px solid #ddd;color:#000;}
+    body.print-mode th{background:#f7f7f7;}
+    body.print-mode .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
+    body.print-mode hr{border-top:1px solid #000 !important;}
     @media print{
-        body{background:#fff;color:#000;}
-        .page{box-shadow:none;border:1px solid #ddd;padding:0;}
-        a{color:#000;}
-        .print-settings{display:none;}
+        body{background:#fff !important;color:#000 !important;}
+        .page{box-shadow:none;border:1px solid #ddd;padding:0;background:#fff;}
+        a{color:#000;text-decoration:none;}
+        .print-settings,.print-actions{display:none;}
+        .card-sm,.template-block,.warning{background:#fff;border:1px solid #ddd;box-shadow:none;}
+        th,td{border:1px solid #ddd;color:#000;}
+        th{background:#f7f7f7;}
+        .pill{background:#fff;border:1px solid #bbb;color:#000;}
         .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
+        hr{border-top:1px solid #000 !important;}
         footer .page-number::after{content: counter(page);}
     }
     </style>";
@@ -2428,7 +2453,9 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     }
     $footer = '<footer>' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
 
-    $settingsPanel = '<form class="print-settings" method="post" action="/contractor/pack_print.php">'
+    $settingsPanel = '';
+    if ($mode === 'preview') {
+        $settingsPanel = '<form class="print-settings" method="post" action="/contractor/pack_print.php">'
         . '<input type="hidden" name="csrf_token" value="' . htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') . '">'
         . '<input type="hidden" name="packId" value="' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . '">'
         . '<input type="hidden" name="doc" value="' . htmlspecialchars($docType, ENT_QUOTES, 'UTF-8') . '">'
@@ -2463,6 +2490,15 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '</select></label>'
         . '</div>'
         . '</form>';
+    }
+
+    $printActions = '';
+    if ($mode === 'print') {
+        $printActions = '<div class="print-actions">'
+            . '<div><strong>Print mode</strong><div class="hint">In print dialog, keep Scale = 100% for exact sizing.</div></div>'
+            . '<button type="button" class="btn" data-print-now>Print now</button>'
+            . '</div>';
+    }
 
     $rateScript = "<script>
     (() => {
@@ -2490,11 +2526,28 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     })();
     </script>";
 
+    $autoPrintScript = '';
+    if ($mode === 'print') {
+        $autoPrintScript = "<script>
+        (() => {
+            const printNow = () => window.print();
+            const btn = document.querySelector('[data-print-now]');
+            if (btn) {
+                btn.addEventListener('click', printNow);
+            }
+            if (" . ($autoPrint ? 'true' : 'false') . ") {
+                window.addEventListener('load', () => setTimeout(printNow, 300));
+            }
+        })();
+        </script>";
+    }
+
+    $bodyClass = $mode === 'print' ? ' class="print-mode"' : '';
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
         . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'
-        . $styles . '</head><body><div class="page">' . $settingsPanel . $header
+        . $styles . '</head><body' . $bodyClass . '><div class="page">' . $printActions . $settingsPanel . $header
         . implode('<hr class="muted" style="border:none;border-top:1px solid #30363d;margin:16px 0;">', $sections) . $footer . '</div>'
-        . $rateScript . '</body></html>';
+        . $rateScript . $autoPrintScript . '</body></html>';
 
     return $html;
 }

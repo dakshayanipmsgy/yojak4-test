@@ -68,6 +68,11 @@ safe_page(function () {
         return;
     }
 
+    $mode = trim((string)($_GET['mode'] ?? 'preview'));
+    if (!in_array($mode, ['preview', 'print'], true)) {
+        $mode = 'preview';
+    }
+    $autoPrint = $mode === 'print' && (($_GET['autoprint'] ?? '') === '1');
     $printPrefs = array_merge(default_pack_print_prefs(), $pack['printPrefs'] ?? []);
     $pageSize = trim((string)($_GET['pageSize'] ?? $printPrefs['pageSize']));
     $orientation = trim((string)($_GET['orientation'] ?? $printPrefs['orientation']));
@@ -98,14 +103,19 @@ safe_page(function () {
         'annexureId' => trim((string)($_GET['annexId'] ?? '')) ?: null,
         'templateId' => trim((string)($_GET['tplId'] ?? '')) ?: null,
         'annexurePreview' => ($_GET['annexurePreview'] ?? '') === '1',
+        'mode' => $mode,
+        'autoprint' => $autoPrint,
     ];
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
     $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles, $annexureTemplates);
     logEvent(PACK_PRINT_LOG, [
         'event' => 'PACK_PRINT',
+        'at' => now_kolkata()->format(DateTime::ATOM),
         'yojId' => $yojId,
         'packId' => $packId,
         'doc' => $doc,
+        'mode' => $mode,
+        'autoprint' => $autoPrint ? 1 : 0,
         'letterhead' => $letterheadMode,
         'pageSize' => $pageSize,
         'orientation' => $orientation,
