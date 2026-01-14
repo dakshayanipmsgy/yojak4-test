@@ -113,7 +113,7 @@ safe_page(function () {
 
     set_flash('success', $updatedCount > 0 ? 'Pack fields saved.' : 'No changes applied.');
     if (($_POST['after'] ?? '') === 'print') {
-        redirect('/contractor/pack_print.php?packId=' . urlencode($packId) . '&doc=full&letterhead=1');
+        redirect('/contractor/pack_print.php?packId=' . urlencode($packId) . '&doc=full&mode=print&autoprint=1&letterhead=1');
         return;
     }
     redirect('/contractor/pack_view.php?packId=' . urlencode($packId) . '#field-registry');
