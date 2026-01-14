@@ -68,10 +68,6 @@ safe_page(function () {
             'hi' => 'सुपरएडमिन / कर्मचारी लॉगिन',
             'en' => 'Superadmin / employee login',
         ],
-        'ctaSignup' => [
-            'hi' => 'नए हैं? साइन अप करें',
-            'en' => 'New here? Sign up',
-        ],
         'whatTitle' => [
             'hi' => 'YOJAK क्या है?',
             'en' => 'What is YOJAK?',
@@ -364,7 +360,6 @@ safe_page(function () {
                     <div class="cta-column">
                         <a class="btn" href="/contractor/login.php"><?= sanitize($text['ctaPrimary'][$lang]); ?></a>
                         <div class="cta-helper"><?= sanitize($text['ctaContractorHelp'][$lang]); ?></div>
-                        <a class="cta-helper" href="/contractor/signup.php"><?= sanitize($text['ctaSignup'][$lang]); ?></a>
                     </div>
                     <div class="cta-column">
                         <a class="btn" href="/department/login.php"><?= sanitize($text['ctaSecondary'][$lang]); ?></a>
