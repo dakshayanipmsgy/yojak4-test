@@ -45,20 +45,32 @@ safe_page(function () {
             ],
         ],
         'ctaPrimary' => [
-            'hi' => 'कॉन्ट्रैक्टर लॉगिन',
-            'en' => 'Contractor Login',
+            'hi' => 'कॉन्ट्रैक्टर',
+            'en' => 'Contractor',
         ],
         'ctaSecondary' => [
-            'hi' => 'कॉन्ट्रैक्टर साइन अप',
-            'en' => 'Contractor Sign Up',
+            'hi' => 'विभाग',
+            'en' => 'Department',
         ],
         'ctaTertiary' => [
-            'hi' => 'विभाग लॉगिन',
-            'en' => 'Department Login',
+            'hi' => 'YOJAK (स्टाफ)',
+            'en' => 'YOJAK (Staff)',
         ],
-        'ctaHelp' => [
-            'hi' => 'मदद चाहिए?',
-            'en' => 'Request Help',
+        'ctaContractorHelp' => [
+            'hi' => 'पैक बनाएं, एनैक्सचर प्रिंट करें',
+            'en' => 'Create packs, print annexures',
+        ],
+        'ctaDepartmentHelp' => [
+            'hi' => 'टेम्पलेट्स, टेंडर, वर्कऑर्डर',
+            'en' => 'Templates, tenders, workorders',
+        ],
+        'ctaStaffHelp' => [
+            'hi' => 'सुपरएडमिन / कर्मचारी लॉगिन',
+            'en' => 'Superadmin / employee login',
+        ],
+        'ctaSignup' => [
+            'hi' => 'नए हैं? साइन अप करें',
+            'en' => 'New here? Sign up',
         ],
         'whatTitle' => [
             'hi' => 'YOJAK क्या है?',
@@ -266,9 +278,17 @@ safe_page(function () {
                 gap: 14px;
             }
             .cta-row {
-                display: flex;
-                flex-wrap: wrap;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
                 gap: 12px;
+            }
+            .cta-column {
+                display: grid;
+                gap: 6px;
+            }
+            .cta-helper {
+                font-size: 12px;
+                color: var(--public-muted);
             }
             .section {
                 margin-top: 28px;
@@ -341,10 +361,19 @@ safe_page(function () {
                     <?php endforeach; ?>
                 </ul>
                 <div class="cta-row">
-                    <a class="btn" href="/contractor/login.php"><?= sanitize($text['ctaPrimary'][$lang]); ?></a>
-                    <a class="btn secondary" href="/contractor/signup.php"><?= sanitize($text['ctaSecondary'][$lang]); ?></a>
-                    <a class="btn outline" href="/department/login.php"><?= sanitize($text['ctaTertiary'][$lang]); ?></a>
-                    <a class="btn secondary" href="/site/contact.php"><?= sanitize($text['ctaHelp'][$lang]); ?></a>
+                    <div class="cta-column">
+                        <a class="btn" href="/contractor/login.php"><?= sanitize($text['ctaPrimary'][$lang]); ?></a>
+                        <div class="cta-helper"><?= sanitize($text['ctaContractorHelp'][$lang]); ?></div>
+                        <a class="cta-helper" href="/contractor/signup.php"><?= sanitize($text['ctaSignup'][$lang]); ?></a>
+                    </div>
+                    <div class="cta-column">
+                        <a class="btn" href="/department/login.php"><?= sanitize($text['ctaSecondary'][$lang]); ?></a>
+                        <div class="cta-helper"><?= sanitize($text['ctaDepartmentHelp'][$lang]); ?></div>
+                    </div>
+                    <div class="cta-column">
+                        <a class="btn" href="/site/staff_login.php"><?= sanitize($text['ctaTertiary'][$lang]); ?></a>
+                        <div class="cta-helper"><?= sanitize($text['ctaStaffHelp'][$lang]); ?></div>
+                    </div>
                 </div>
             </div>
             <div class="card hero-card notice-card">
