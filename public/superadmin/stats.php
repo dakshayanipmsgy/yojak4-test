@@ -31,7 +31,7 @@ safe_page(function () {
             <p class="muted" style="margin-top:0;"><?= sanitize('Superadmin and auditors see counts only. No content or document access.'); ?></p>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px;">
                 <?php foreach ($cards as $card): ?>
-                    <div class="card" style="border:1px solid #30363d;">
+                    <div class="card" style="border:1px solid var(--border);">
                         <div class="muted" style="text-transform:uppercase;font-size:12px;letter-spacing:0.06em;"><?= sanitize($card['label']); ?></div>
                         <div style="font-size:28px;font-weight:800;margin-top:6px;"><?= sanitize((string)$card['value']); ?></div>
                     </div>

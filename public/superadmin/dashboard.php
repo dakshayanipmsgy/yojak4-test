@@ -171,7 +171,7 @@ safe_page(function () {
             .dashboard-value {
                 font-size: 2.1rem;
                 font-weight: 700;
-                color: #0f172a;
+                color: var(--text);
             }
             .dashboard-meta {
                 font-size: 0.88rem;

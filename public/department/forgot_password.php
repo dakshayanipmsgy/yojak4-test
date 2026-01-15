@@ -98,7 +98,7 @@ safe_page(function () {
                     <?php endforeach; ?>
                 </div>
             <?php elseif ($showInfo): ?>
-                <div class="flash" style="margin-top:12px;border-color:#30363d;"><?= sanitize($successMessage); ?></div>
+                <div class="flash" style="margin-top:12px;border-color:var(--border);"><?= sanitize($successMessage); ?></div>
             <?php endif; ?>
             <form method="post" style="margin-top:12px;display:grid;gap:12px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">

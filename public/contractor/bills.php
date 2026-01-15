@@ -21,7 +21,7 @@ safe_page(function () {
 
     $title = get_app_config()['appName'] . ' | Bills';
     $statusColors = [
-        'draft' => '#8b949e',
+        'draft' => 'var(--muted)',
         'submitted' => '#f0ad4e',
         'approved' => '#2ea043',
         'paid' => '#58a6ff',
@@ -70,12 +70,12 @@ safe_page(function () {
                     <?php foreach ($detailed as $bill): ?>
                         <?php
                         $status = $bill['status'] ?? 'draft';
-                        $color = $statusColors[$status] ?? '#8b949e';
+                        $color = $statusColors[$status] ?? 'var(--muted)';
                         $nextReminder = bill_next_reminder($bill);
                         ?>
                         <tr>
                             <td>
-                                <a href="/contractor/bill_view.php?id=<?= sanitize($bill['billId']); ?>" class="pill" style="border-color:#30363d;">
+                                <a href="/contractor/bill_view.php?id=<?= sanitize($bill['billId']); ?>" class="pill" style="border-color:var(--border);">
                                     <?= sanitize($bill['billId']); ?>
                                 </a>
                             </td>

@@ -90,7 +90,7 @@ safe_page(function () {
                     </div>
                 </div>
                 <div style="display:grid; gap:8px; max-width:520px;">
-                    <div style="height:12px; background:#0d1117; border:1px solid #30363d; border-radius:999px; overflow:hidden;">
+                    <div style="height:12px; background:var(--surface); border:1px solid var(--border); border-radius:999px; overflow:hidden;">
                         <div style="width:<?= $progress; ?>%; height:100%; background:linear-gradient(90deg, var(--primary), #2ea043);"></div>
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -122,7 +122,7 @@ safe_page(function () {
                 unset($nonComplianceGroups['Financial Manual Entry']);
                 ?>
                 <?php if ($complianceFields): ?>
-                    <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:10px;">
+                    <div style="border:1px solid var(--border);border-radius:12px;padding:10px;display:grid;gap:10px;">
                         <strong><?= sanitize('Compliance Table'); ?></strong>
                         <div style="display:grid; gap:8px;">
                             <?php foreach ($complianceFields as $field): ?>
@@ -158,7 +158,7 @@ safe_page(function () {
                                 $isFinancialManual = strtolower(trim((string)($tpl['templateKind'] ?? $tpl['type'] ?? ''))) === 'financial_manual';
                                 $tableId = pack_normalize_placeholder_key((string)($table['tableId'] ?? $table['title'] ?? 'table'));
                                 ?>
-                                <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:8px;">
+                                <div style="border:1px solid var(--border);border-radius:12px;padding:10px;display:grid;gap:8px;">
                                     <div>
                                         <strong><?= sanitize(($tpl['annexureCode'] ?? 'Annexure') . ' • ' . ($tpl['title'] ?? 'Table')); ?></strong>
                                         <div class="muted" style="font-size:12px;"><?= sanitize($table['title'] ?? 'Table'); ?></div>
@@ -256,7 +256,7 @@ safe_page(function () {
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                     <input type="hidden" name="packId" value="<?= sanitize($pack['packId']); ?>">
                     <?php foreach ($nonComplianceGroups as $group => $fields): ?>
-                        <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:grid;gap:8px;">
+                        <div style="border:1px solid var(--border);border-radius:12px;padding:10px;display:grid;gap:8px;">
                             <strong><?= sanitize($group); ?></strong>
                             <div style="display:grid; gap:8px;">
                                 <?php foreach ($fields as $field): ?>
@@ -296,7 +296,7 @@ safe_page(function () {
                     </div>
                 </form>
             <?php else: ?>
-                <div class="flash" style="background:#0f1625;border:1px solid #2ea043;">
+                <div class="flash" style="background:var(--surface-2);border:1px solid #2ea043;">
                     <?= sanitize('Generate annexure formats to detect field requirements.'); ?>
                 </div>
             <?php endif; ?>
@@ -315,7 +315,7 @@ safe_page(function () {
                         <?php foreach ($pack['items'] ?? [] as $item): ?>
                             <?php $itemId = $item['itemId'] ?? ($item['id'] ?? ''); ?>
                             <?php if (!in_array($itemId, $missingIds, true)) { continue; } ?>
-                            <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:grid; gap:6px;">
+                            <div style="border:1px solid var(--border); border-radius:10px; padding:10px; display:grid; gap:6px;">
                                 <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;">
                                     <div>
                                         <strong><?= sanitize($item['title'] ?? ''); ?></strong>
@@ -346,7 +346,7 @@ safe_page(function () {
                         <?php endforeach; ?>
                     </div>
                 <?php else: ?>
-                    <div class="flash" style="background:#0f1625;border:1px solid #2ea043;">
+                    <div class="flash" style="background:var(--surface-2);border:1px solid #2ea043;">
                         <?= sanitize('All required items have vault attachments or are no longer pending.'); ?>
                     </div>
                 <?php endif; ?>
@@ -362,7 +362,7 @@ safe_page(function () {
                         <div style="display:grid; gap:8px;">
                             <?php foreach ($pack['checklist'] as $item): ?>
                                 <?php $itemId = $item['itemId'] ?? ($item['id'] ?? ''); ?>
-                                <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:grid; gap:6px;">
+                                <div style="border:1px solid var(--border); border-radius:10px; padding:10px; display:grid; gap:6px;">
                                     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
                                         <div>
                                             <strong><?= sanitize($item['title'] ?? ''); ?></strong>
@@ -399,7 +399,7 @@ safe_page(function () {
                     </div>
                 </div>
                 <?php if (!empty($pack['officialChecklistLocked'])): ?>
-                    <div class="flash" style="background:#0f1625;border:1px solid #1f6feb;">
+                    <div class="flash" style="background:var(--surface-2);border:1px solid #1f6feb;">
                         <?= sanitize('Official checklist available. Link to the department to auto-load it.'); ?>
                         <a class="btn secondary" style="margin-left:8px;" href="/contractor/departments.php"><?= sanitize('Link now'); ?></a>
                     </div>
@@ -409,7 +409,7 @@ safe_page(function () {
                         <?php $itemId = $item['itemId'] ?? ($item['id'] ?? ''); ?>
                         <?php $itemSuggestions = $itemId !== '' ? ($suggestions[$itemId] ?? []) : []; ?>
                         <?php $attached = $itemId !== '' ? ($attachments[$itemId] ?? null) : null; ?>
-                        <div style="border:1px solid #30363d; border-radius:12px; padding:10px; display:grid; gap:8px;">
+                        <div style="border:1px solid var(--border); border-radius:12px; padding:10px; display:grid; gap:8px;">
                             <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
                                 <div>
                                     <strong><?= sanitize($item['title'] ?? ''); ?></strong>
@@ -493,7 +493,7 @@ safe_page(function () {
                         <h4 style="margin:0 0 8px 0;"><?= sanitize('Auto-filled templates'); ?></h4>
                         <div style="display:grid; gap:8px;">
                             <?php foreach ($pack['generatedTemplates'] ?? [] as $tpl): ?>
-                                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid #30363d; padding:8px 10px; border-radius:10px; flex-wrap:wrap;">
+                                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--border); padding:8px 10px; border-radius:10px; flex-wrap:wrap;">
                                     <div>
                                         <strong><?= sanitize($tpl['name'] ?? 'Template'); ?></strong>
                                         <div class="muted" style="margin-top:4px;"><?= sanitize($tpl['lastGeneratedAt'] ?? ''); ?></div>
@@ -520,7 +520,7 @@ safe_page(function () {
                         <h4 style="margin:0 0 8px 0;"><?= sanitize('Other generated documents'); ?></h4>
                         <div style="display:grid; gap:6px;">
                             <?php foreach ($pack['generatedDocs'] ?? [] as $doc): ?>
-                                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid #30363d; padding:8px 10px; border-radius:10px;">
+                                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--border); padding:8px 10px; border-radius:10px;">
                                     <div>
                                         <strong><?= sanitize($doc['title'] ?? 'Document'); ?></strong>
                                         <div class="muted" style="margin-top:4px;"><?= sanitize($doc['generatedAt'] ?? ''); ?></div>
@@ -542,7 +542,7 @@ safe_page(function () {
                         <h3 style="margin:0;"><?= sanitize('Annexures & Formats'); ?></h3>
                         <p class="muted" style="margin:0;">Generate printable annexure templates from NIB list. Financial annexures are manual-entry formats.</p>
                     </div>
-                    <div class="flash" style="display:grid;gap:6px;background:#0f1625;border:1px solid #1f6feb;">
+                    <div class="flash" style="display:grid;gap:6px;background:var(--surface-2);border:1px solid #1f6feb;">
                         <strong><?= sanitize('Steps'); ?></strong>
                         <ol style="margin:0 0 0 18px; padding:0; color:var(--text); line-height:1.5;">
                             <li><?= sanitize('Review checklist'); ?></li>
@@ -572,7 +572,7 @@ safe_page(function () {
                         <?php if ($list): ?>
                             <?php foreach (array_slice($list, 0, 10) as $annex): ?>
                                 <?php $label = is_array($annex) ? ($annex['title'] ?? ($annex['name'] ?? 'Annexure')) : (string)$annex; ?>
-                                <div style="border:1px solid #30363d;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                                <div style="border:1px solid var(--border);border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
                                     <div>
                                         <strong><?= sanitize($label); ?></strong>
                                         <?php if (pack_is_restricted_annexure_label($label)): ?>
@@ -594,7 +594,7 @@ safe_page(function () {
                             <h4 style="margin:0 0 6px 0;"><?= sanitize('Generated templates'); ?></h4>
                             <div style="display:grid;gap:6px;">
                                 <?php foreach ($annexureTemplatesList as $tpl): ?>
-                                    <div style="border:1px solid #30363d;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                                    <div style="border:1px solid var(--border);border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
                                         <div>
                                             <strong><?= sanitize(($tpl['annexureCode'] ?? 'Annexure') . ' • ' . ($tpl['title'] ?? 'Template')); ?></strong>
                                             <div class="muted" style="margin-top:4px;"><?= sanitize($tpl['type'] ?? 'Annexure'); ?></div>
@@ -633,7 +633,7 @@ safe_page(function () {
                     <h3 style="margin:0;"><?= sanitize('Print Center'); ?></h3>
                     <p class="muted" style="margin:0;">Preview or print every section with letterhead on/off.</p>
                 </div>
-                <div class="flash" style="display:grid;gap:6px;background:#0f1625;border:1px solid #1f6feb;">
+                <div class="flash" style="display:grid;gap:6px;background:var(--surface-2);border:1px solid #1f6feb;">
                     <strong><?= sanitize('Stepper'); ?></strong>
                     <ol style="margin:0 0 0 18px; padding:0; color:var(--text); line-height:1.5;">
                         <li><?= sanitize('Review checklist'); ?></li>
@@ -661,7 +661,7 @@ safe_page(function () {
                     ];
                     ?>
                     <?php foreach ($docLinks as $docLink): ?>
-                        <div style="border:1px solid #30363d;border-radius:12px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                        <div style="border:1px solid var(--border);border-radius:12px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
                             <div>
                                 <strong><?= sanitize($docLink['title']); ?></strong>
                                 <div class="muted" style="margin-top:4px;"><?= sanitize($docLink['desc']); ?></div>
@@ -690,7 +690,7 @@ safe_page(function () {
                         <?php $displayed++; $itemId = $item['itemId'] ?? ($item['id'] ?? ''); ?>
                         <?php $attached = $itemId !== '' ? ($attachments[$itemId] ?? null) : null; ?>
                         <?php $itemSuggestions = $itemId !== '' ? ($suggestions[$itemId] ?? []) : []; ?>
-                        <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:grid; gap:6px;">
+                        <div style="border:1px solid var(--border); border-radius:10px; padding:10px; display:grid; gap:6px;">
                             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <div>
                                     <strong><?= sanitize($item['title'] ?? ''); ?></strong>

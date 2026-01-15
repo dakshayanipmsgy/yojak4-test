@@ -103,12 +103,12 @@ safe_page(function () {
             </div>
             <div>
                 <label class="muted" for="progress-box"><?= sanitize('Progress (pseudo-stream)'); ?></label>
-                <textarea id="progress-box" readonly rows="7" style="width:100%;background:#0f1520;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;resize:vertical;"><?= sanitize(implode("\n", $progress)); ?></textarea>
+                <textarea id="progress-box" readonly rows="7" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;resize:vertical;"><?= sanitize(implode("\n", $progress)); ?></textarea>
             </div>
         </div>
         <div class="card" style="margin-top:14px;">
             <h4 style="margin-top:0;"><?= sanitize('Raw Response'); ?></h4>
-            <textarea readonly rows="8" style="width:100%;background:#0f1520;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;resize:vertical;"><?= sanitize($callResult['rawText'] ?: 'No response received.'); ?></textarea>
+            <textarea readonly rows="8" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;resize:vertical;"><?= sanitize($callResult['rawText'] ?: 'No response received.'); ?></textarea>
             <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
                 <div class="pill"><?= sanitize('HTTP: ' . ($callResult['httpStatus'] ?? 'n/a')); ?></div>
                 <div class="pill"><?= sanitize('Latency: ' . (($callResult['latencyMs'] ?? null) !== null ? ($callResult['latencyMs'] . ' ms') : 'n/a')); ?></div>
@@ -129,13 +129,13 @@ safe_page(function () {
                 <div>
                     <h4 style="margin:0 0 6px 0;"><?= sanitize('Parsed JSON'); ?></h4>
                     <?php if ($callResult['json'] !== null): ?>
-                        <pre style="background:#0f1520;border:1px solid #30363d;border-radius:10px;padding:10px;overflow:auto;"><?= sanitize(json_encode($callResult['json'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></pre>
+                        <pre style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;overflow:auto;"><?= sanitize(json_encode($callResult['json'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></pre>
                     <?php else: ?>
                         <p class="muted" style="margin:0;"><?= sanitize('No JSON parsed. Raw text is available for manual inspection.'); ?></p>
                     <?php endif; ?>
                     <details style="margin-top:10px;">
                         <summary class="muted" style="cursor:pointer;"><?= sanitize('Raw body snippet (collapsed)'); ?></summary>
-                        <pre style="background:#0f1520;border:1px solid #30363d;border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap;"><?= sanitize($rawSnippet ?: 'No body captured.'); ?></pre>
+                        <pre style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap;"><?= sanitize($rawSnippet ?: 'No body captured.'); ?></pre>
                     </details>
                 </div>
                 <div>

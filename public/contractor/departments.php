@@ -86,7 +86,7 @@ safe_page(function () {
             <?php else: ?>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px;">
                     <?php foreach ($myDepartments as $dept): ?>
-                        <div class="card" style="padding:14px;background:#111820;border:1px solid #1f2a37;">
+                        <div class="card" style="padding:14px;background:var(--surface-2);border:1px solid var(--border);">
                             <h3 style="margin:0 0 6px 0;"><?= sanitize($dept['name']); ?></h3>
                             <p class="muted" style="margin:0 0 8px 0;"><?= sanitize(strtoupper($dept['deptId']) . ($dept['district'] ? ' • ' . $dept['district'] : '')); ?></p>
                             <?php
@@ -134,7 +134,7 @@ safe_page(function () {
             <?php else: ?>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px;">
                     <?php foreach ($departments as $dept): ?>
-                        <div class="card" style="padding:14px;background:#111820;border:1px solid #1f2a37;">
+                        <div class="card" style="padding:14px;background:var(--surface-2);border:1px solid var(--border);">
                             <h3 style="margin:0 0 6px 0;"><?= sanitize($dept['name']); ?></h3>
                             <p class="muted" style="margin:0 0 8px 0;"><?= sanitize(strtoupper($dept['deptId']) . ($dept['district'] ? ' • ' . $dept['district'] : '')); ?></p>
                             <?php if ($dept['link']): ?>
@@ -147,7 +147,7 @@ safe_page(function () {
                             <form method="post" action="/contractor/dept_request_link.php" style="margin-top:10px;display:grid;gap:8px;">
                                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                                 <input type="hidden" name="deptId" value="<?= sanitize($dept['deptId']); ?>">
-                                <textarea name="message" rows="2" placeholder="Short message (optional)" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"></textarea>
+                                <textarea name="message" rows="2" placeholder="Short message (optional)" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"></textarea>
                                 <button class="btn" type="submit" <?= ($dept['link'] || ($dept['latestRequest']['status'] ?? '') === 'pending' || empty($dept['acceptingLinkRequests'])) ? 'disabled' : ''; ?>>
                                     <?= sanitize($dept['link'] ? 'Linked' : 'Request Access'); ?>
                                 </button>

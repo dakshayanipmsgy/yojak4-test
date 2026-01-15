@@ -70,7 +70,7 @@ safe_page(function () {
         }
 
         $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'
-            . htmlspecialchars($tenderTitle) . '</title><style>body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:24px;}h1{margin-top:0;color:#fff;}p{line-height:1.6;}</style></head><body>'
+            . htmlspecialchars($tenderTitle) . '</title><style>body{font-family:Arial,sans-serif;background:var(--surface);color:var(--text);padding:24px;}h1{margin-top:0;color:#fff;}p{line-height:1.6;}</style></head><body>'
             . $body . '</body></html>';
 
         file_put_contents($path, $html);

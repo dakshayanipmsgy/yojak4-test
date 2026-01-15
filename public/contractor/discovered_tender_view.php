@@ -69,7 +69,7 @@ safe_page(function () {
                     <span class="pill"><?= sanitize($record['dept']); ?></span>
                 <?php endif; ?>
             </div>
-            <div style="border:1px solid #30363d; border-radius:10px; padding:10px;">
+            <div style="border:1px solid var(--border); border-radius:10px; padding:10px;">
                 <h4 style="margin-top:0;">Details</h4>
                 <p style="margin:0; white-space:pre-wrap;"><?= sanitize(print_r($record['raw'] ?? [], true)); ?></p>
             </div>

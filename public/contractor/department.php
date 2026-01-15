@@ -53,7 +53,7 @@ safe_page(function () {
                 <span class="pill"><?= sanitize('Dept Contractor ID: ' . ($link['deptContractorId'] ?? '')); ?></span>
             </div>
             <div style="margin-top:14px;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
-                <div class="card" style="background:#0f1520;border:1px solid #1f2a37;">
+                <div class="card" style="background:var(--surface-2);border:1px solid var(--border);">
                     <h3 style="margin:0 0 6px 0;"><?= sanitize('Overview'); ?></h3>
                     <p class="muted" style="margin:0 0 6px 0;"><?= sanitize($department['address'] ?? ''); ?></p>
                     <?php if (!empty($department['contactEmail'])): ?>
@@ -63,7 +63,7 @@ safe_page(function () {
                         <p style="margin:0;"><?= sanitize('Phone: ' . ($department['contactPhone'] ?? '')); ?></p>
                     <?php endif; ?>
                 </div>
-                <div class="card" style="background:#0f1520;border:1px solid #1f2a37;">
+                <div class="card" style="background:var(--surface-2);border:1px solid var(--border);">
                     <h3 style="margin:0 0 6px 0;"><?= sanitize('Workorders'); ?></h3>
                     <p class="muted" style="margin:0;">No assigned workorders yet.</p>
                 </div>
@@ -83,7 +83,7 @@ safe_page(function () {
             <?php else: ?>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px;">
                     <?php foreach ($tenders as $tender): ?>
-                        <div class="card" style="background:#0f1520;border:1px solid #1f2a37;">
+                        <div class="card" style="background:var(--surface-2);border:1px solid var(--border);">
                             <h4 style="margin:0 0 6px 0;"><?= sanitize($tender['title'] ?? $tender['id']); ?></h4>
                             <p class="muted" style="margin:0 0 6px 0;"><?= sanitize($tender['id'] ?? ''); ?></p>
                             <p style="margin:0 0 4px 0;"><?= sanitize('Publish: ' . ($tender['publishDate'] ?? '')); ?></p>

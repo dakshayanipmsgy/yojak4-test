@@ -136,10 +136,10 @@ safe_page(function () {
                         <?php endif; ?>
                     </ul>
                 </div>
-                <details style="border:1px solid #30363d; border-radius:10px; padding:10px; background:#0f1520;">
+                <details style="border:1px solid var(--border); border-radius:10px; padding:10px; background:var(--surface-2);">
                     <summary style="cursor:pointer;"><?= sanitize('Paste/Review AI text'); ?></summary>
                     <p class="muted" style="margin-top:8px;"><?= sanitize('If parsing failed, copy the AI output here to manually adjust fields.'); ?></p>
-                    <textarea readonly rows="6" style="width:100%; resize:vertical; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:10px; padding:8px;"><?= sanitize($ai['rawText'] ?? ''); ?></textarea>
+                    <textarea readonly rows="6" style="width:100%; resize:vertical; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:8px;"><?= sanitize($ai['rawText'] ?? ''); ?></textarea>
                 </details>
             </div>
             <div class="card" style="display:grid; gap:10px;">
@@ -149,7 +149,7 @@ safe_page(function () {
                     <input type="hidden" name="id" value="<?= sanitize($workorder['woId']); ?>">
                     <input type="hidden" name="mode" value="save_obligations">
                     <?php foreach ($obligations as $item): ?>
-                        <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:grid; gap:8px;">
+                        <div style="border:1px solid var(--border); border-radius:10px; padding:10px; display:grid; gap:8px;">
                             <input type="hidden" name="obligations[<?= sanitize($item['itemId']); ?>][itemId]" value="<?= sanitize($item['itemId']); ?>">
                             <div class="field">
                                 <label><?= sanitize('Title'); ?></label>
@@ -172,7 +172,7 @@ safe_page(function () {
                             </div>
                         </div>
                     <?php endforeach; ?>
-                    <div style="border:1px dashed #30363d; border-radius:10px; padding:10px;">
+                    <div style="border:1px dashed var(--border); border-radius:10px; padding:10px;">
                         <h4 style="margin-top:0;"><?= sanitize('Add obligations'); ?></h4>
                         <?php for ($i = 0; $i < 3; $i++): ?>
                             <div class="field" style="margin-bottom:8px;">
@@ -195,7 +195,7 @@ safe_page(function () {
                     <input type="hidden" name="id" value="<?= sanitize($workorder['woId']); ?>">
                     <input type="hidden" name="mode" value="save_docs">
                     <?php foreach ($requiredDocs as $idx => $doc): ?>
-                        <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:grid; gap:6px;">
+                        <div style="border:1px solid var(--border); border-radius:10px; padding:10px; display:grid; gap:6px;">
                             <div class="field">
                                 <label><?= sanitize('Name'); ?></label>
                                 <input name="requiredDocs[<?= $idx; ?>][name]" value="<?= sanitize($doc['name'] ?? ''); ?>" required>
@@ -209,7 +209,7 @@ safe_page(function () {
                             </label>
                         </div>
                     <?php endforeach; ?>
-                    <div style="border:1px dashed #30363d; border-radius:10px; padding:10px;">
+                    <div style="border:1px dashed var(--border); border-radius:10px; padding:10px;">
                         <h4 style="margin-top:0;"><?= sanitize('Add documents'); ?></h4>
                         <?php for ($i = 0; $i < 3; $i++): ?>
                             <div class="field" style="margin-bottom:8px;">
@@ -228,7 +228,7 @@ safe_page(function () {
                     <input type="hidden" name="id" value="<?= sanitize($workorder['woId']); ?>">
                     <input type="hidden" name="mode" value="save_timeline">
                     <?php foreach ($timeline as $idx => $entry): ?>
-                        <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:grid; gap:6px;">
+                        <div style="border:1px solid var(--border); border-radius:10px; padding:10px; display:grid; gap:6px;">
                             <div class="field">
                                 <label><?= sanitize('Milestone'); ?></label>
                                 <input name="timeline[<?= $idx; ?>][milestone]" value="<?= sanitize($entry['milestone'] ?? ''); ?>" required>
@@ -242,7 +242,7 @@ safe_page(function () {
                             </label>
                         </div>
                     <?php endforeach; ?>
-                    <div style="border:1px dashed #30363d; border-radius:10px; padding:10px;">
+                    <div style="border:1px dashed var(--border); border-radius:10px; padding:10px;">
                         <h4 style="margin-top:0;"><?= sanitize('Add timeline entries'); ?></h4>
                         <?php for ($i = 0; $i < 3; $i++): ?>
                             <div class="field" style="margin-bottom:8px;">

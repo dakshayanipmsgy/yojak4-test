@@ -43,7 +43,7 @@ safe_page(function () {
                     <a class="btn secondary" href="/department/quick_doc.php"><?= sanitize('Back'); ?></a>
                 </div>
             </div>
-            <div style="margin-top:12px;border:1px solid #30363d;border-radius:12px;padding:12px;background:#0d1117;">
+            <div style="margin-top:12px;border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface);">
                 <?= $doc['renderedHtml'] ?? ''; ?>
             </div>
         </div>

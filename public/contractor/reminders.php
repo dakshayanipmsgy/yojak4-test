@@ -91,7 +91,7 @@ safe_page(function () {
                             $link .= '#missing-docs';
                         }
                         ?>
-                        <div style="border:1px solid #30363d; border-radius:10px; padding:10px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <div style="border:1px solid var(--border); border-radius:10px; padding:10px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
                             <div>
                                 <strong><?= sanitize($reminder['title'] ?? 'Reminder'); ?></strong>
                                 <div class="muted" style="margin-top:4px;">

@@ -238,7 +238,7 @@ safe_page(function () {
                     <input type="hidden" name="id" value="<?= sanitize($tender['id']); ?>">
                     <input type="hidden" name="mode" value="save_checklist">
                     <?php foreach ($checklist as $item): ?>
-                        <div style="border:1px solid #30363d; border-radius:10px; padding:10px;">
+                        <div style="border:1px solid var(--border); border-radius:10px; padding:10px;">
                             <input type="hidden" name="checklist[<?= sanitize($item['itemId']); ?>][itemId]" value="<?= sanitize($item['itemId']); ?>">
                             <div class="field">
                                 <label><?= sanitize('Title'); ?></label>
@@ -263,7 +263,7 @@ safe_page(function () {
                             </div>
                         </div>
                     <?php endforeach; ?>
-                    <div style="border:1px dashed #30363d; border-radius:10px; padding:10px;">
+                    <div style="border:1px dashed var(--border); border-radius:10px; padding:10px;">
                         <h4 style="margin-top:0;"><?= sanitize('Add checklist items'); ?></h4>
                         <?php for ($i = 0; $i < 3; $i++): ?>
                             <div class="field" style="margin-bottom:8px;">

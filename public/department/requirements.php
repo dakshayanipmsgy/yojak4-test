@@ -30,7 +30,7 @@ safe_page(function () {
                 </div>
                 <div class="field">
                     <label for="items"><?= sanitize('Items (one per line)'); ?></label>
-                    <textarea id="items" name="items" rows="3" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"></textarea>
+                    <textarea id="items" name="items" rows="3" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"></textarea>
                 </div>
                 <button class="btn" type="submit"><?= sanitize('Create Set'); ?></button>
             </form>
@@ -40,7 +40,7 @@ safe_page(function () {
                 <p class="muted"><?= sanitize('No requirement sets.'); ?></p>
             <?php else: ?>
                 <?php foreach ($sets as $set): ?>
-                    <div class="card" style="margin-top:12px;background:#0f1625;">
+                    <div class="card" style="margin-top:12px;background:var(--surface-2);">
                         <form method="post" action="/department/requirement_set_update.php" style="display:grid;gap:8px;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                             <input type="hidden" name="setId" value="<?= sanitize($set['setId'] ?? ''); ?>">
@@ -54,7 +54,7 @@ safe_page(function () {
                             </div>
                             <div class="field">
                                 <label><?= sanitize('Items'); ?></label>
-                                <textarea name="items" rows="3" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"><?= htmlspecialchars(implode(PHP_EOL, $set['items'] ?? []), ENT_QUOTES, 'UTF-8'); ?></textarea>
+                                <textarea name="items" rows="3" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"><?= htmlspecialchars(implode(PHP_EOL, $set['items'] ?? []), ENT_QUOTES, 'UTF-8'); ?></textarea>
                             </div>
                             <div class="buttons">
                                 <button class="btn secondary" type="submit"><?= sanitize('Update'); ?></button>

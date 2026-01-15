@@ -167,12 +167,12 @@ safe_page(function () {
                 </div>
                 <button class="btn" type="submit"><?= sanitize(t('submit')); ?></button>
             </form>
-            <div style="margin-top:14px; border-top:1px solid #30363d; padding-top:12px;">
+            <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
                 <button class="link-btn" type="button" onclick="document.getElementById('forgotPanel').classList.toggle('open');" style="display:flex;align-items:center;gap:6px;color:var(--primary);background:none;border:none;padding:0;cursor:pointer;">
                     <span style="font-weight:700;">Forgot password? (Admin)</span>
                     <span class="muted" style="font-size:0.9rem;">Secure reset via superadmin</span>
                 </button>
-                <div id="forgotPanel" class="slide-panel <?= $forgotErrors || $forgotSuccess ? 'open' : ''; ?>" style="margin-top:10px; border:1px solid #30363d; border-radius:10px; padding:12px; background:#111820;">
+                <div id="forgotPanel" class="slide-panel <?= $forgotErrors || $forgotSuccess ? 'open' : ''; ?>" style="margin-top:10px; border:1px solid var(--border); border-radius:10px; padding:12px; background:var(--surface-2);">
                     <?php if ($forgotErrors): ?>
                         <div class="flashes">
                             <?php foreach ($forgotErrors as $error): ?>

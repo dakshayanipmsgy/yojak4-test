@@ -25,12 +25,12 @@ safe_page(function () {
             </div>
             <div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
                 <?php if (!$templates): ?>
-                    <div class="card" style="background:#0f1520;border:1px dashed #30363d;">
+                    <div class="card" style="background:var(--surface-2);border:1px dashed var(--border);">
                         <p class="muted" style="margin:0;">No templates yet. Seed defaults to get started.</p>
                     </div>
                 <?php endif; ?>
                 <?php foreach ($templates as $tpl): ?>
-                    <div style="border:1px solid #30363d;border-radius:12px;padding:12px;display:grid;gap:8px;background:#0f1520;">
+                    <div style="border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:8px;background:var(--surface-2);">
                         <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
                             <div>
                                 <h3 style="margin:0 0 4px 0;"><?= sanitize($tpl['name'] ?? 'Template'); ?></h3>

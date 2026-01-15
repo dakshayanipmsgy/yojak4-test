@@ -147,24 +147,24 @@ safe_page(function () {
             </div>
             <form method="post" style="margin-top:16px;display:grid;gap:16px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                <div class="card" style="background:#0f1520;border:1px solid #253047;border-radius:14px;padding:14px;display:grid;gap:10px;">
+                <div class="card" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:14px;display:grid;gap:10px;">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                         <div>
                             <h3 style="margin:0 0 4px 0;"><?= sanitize('Connection status'); ?></h3>
                             <p class="muted" style="margin:0;"><?= sanitize('Uses /data/ai/ai_config.json as the single source of truth.'); ?></p>
                         </div>
-                        <span class="pill" style="background:<?= !empty($config['apiKeyStored']) ? '#22863a' : '#8a3d3d'; ?>;color:#e6edf3;"><?= sanitize(!empty($config['apiKeyStored']) ? 'Key saved' : 'Key missing'); ?></span>
+                        <span class="pill" style="background:<?= !empty($config['apiKeyStored']) ? '#22863a' : '#8a3d3d'; ?>;color:var(--text);"><?= sanitize(!empty($config['apiKeyStored']) ? 'Key saved' : 'Key missing'); ?></span>
                     </div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
                         <div class="pill"><?= sanitize('Provider: ' . (($config['provider'] ?? '') !== '' ? $config['provider'] : 'not set')); ?></div>
                         <div class="pill"><?= sanitize('Text model: ' . (($config['textModel'] ?? '') !== '' ? $config['textModel'] : 'not set')); ?></div>
                         <div class="pill"><?= sanitize('Updated: ' . ($config['updatedAt'] ?? 'n/a')); ?></div>
                         <div class="pill"><?= sanitize('Last test: ' . ($lastTest['at'] ?? 'never')); ?></div>
-                        <div class="pill" style="background:#0c111b;color:<?= $lastTest['ok'] === false ? '#f77676' : '#9ea7b3'; ?>;">
+                        <div class="pill" style="background:var(--surface);border:1px solid var(--border);color:<?= $lastTest['ok'] === false ? '#b91c1c' : 'var(--muted)'; ?>;">
                             <?= sanitize('Last result: ' . ($lastTest['ok'] === null ? 'not run' : ($lastTest['ok'] ? 'ok' : 'error'))); ?>
                         </div>
                     </div>
-                    <div class="pill muted" style="background:#0c111b;color:#9ea7b3;">
+                    <div class="pill muted" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);">
                         <?= sanitize('If configuration is missing, AI callers will show: “AI is not configured. Superadmin: set provider, API key, and model in AI Studio.”'); ?>
                     </div>
                 </div>
@@ -192,13 +192,13 @@ safe_page(function () {
                     </div>
                 </div>
 
-                <div id="offline-extraction" class="card" style="background:#0f1520;border:1px solid #253047;border-radius:14px;padding:14px;display:grid;gap:12px;">
+                <div id="offline-extraction" class="card" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:14px;display:grid;gap:12px;">
                     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
                         <div>
                             <h3 style="margin:0 0 4px 0;"><?= sanitize('Offline Tender Extraction'); ?></h3>
                             <p class="muted" style="margin:0;"><?= sanitize('Use safer defaults when Gemini 3 Pro Preview returns empty content. Flash fallback + structured outputs keep runs stable.'); ?></p>
                         </div>
-                        <span class="pill" style="background:#1f6feb;color:#e6edf3;"><?= sanitize('Empty-response shield'); ?></span>
+                        <span class="pill" style="background:#1f6feb;color:var(--text);"><?= sanitize('Empty-response shield'); ?></span>
                     </div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;">
                         <div class="field">
@@ -246,7 +246,7 @@ safe_page(function () {
                             <button class="btn" type="submit" name="action" value="save"><?= sanitize('Save Settings'); ?></button>
                         </div>
                     </div>
-                    <div class="pill muted" style="background:#0c111b;color:#9ea7b3;">
+                    <div class="pill muted" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);">
                         <?= sanitize('Keys are obfuscated with a server secret and stored outside web root. Logs written to /data/logs/ai.log.'); ?>
                     </div>
                 </div>
@@ -265,7 +265,7 @@ safe_page(function () {
             </div>
             <div>
                 <label class="muted" for="test-progress"><?= sanitize('Progress'); ?></label>
-                <textarea id="test-progress" readonly rows="6" style="width:100%;resize:vertical;background:#0f1520;border:1px solid #30363d;border-radius:10px;padding:10px;color:#e6edf3;">Ready. Click "Test AI" to run a sample request.</textarea>
+                <textarea id="test-progress" readonly rows="6" style="width:100%;resize:vertical;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);">Ready. Click "Test AI" to run a sample request.</textarea>
             </div>
         </div>
         <script>
@@ -304,7 +304,7 @@ safe_page(function () {
                 </div>
                 <div style="margin-top:10px;">
                     <label class="muted"><?= sanitize('Response snippet'); ?></label>
-                    <pre style="background:#0f1520;border:1px solid #30363d;border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap;"><?= sanitize($lastProviderCall['responseSnippet'] ?? ''); ?></pre>
+                    <pre style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap;"><?= sanitize($lastProviderCall['responseSnippet'] ?? ''); ?></pre>
                 </div>
             </div>
         <?php endif; ?>

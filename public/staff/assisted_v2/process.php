@@ -111,7 +111,7 @@ safe_page(function () {
                 </form>
                 <?php if ($draftSummary): ?>
                     <?php if (!empty($draftStats['tableKeysGenerated']) || !empty($draftStats['placeholdersFixed'])): ?>
-                        <div class="flash" style="background:#0f172a;border:1px solid #38bdf8;">
+                        <div class="flash" style="background:var(--surface-2);border:1px solid #38bdf8;color:var(--text);">
                             <strong><?= sanitize('Auto-repairs applied'); ?></strong>
                             <ul style="margin:6px 0 0 16px;">
                                 <li><?= sanitize('Table placeholders fixed: ' . (int)($draftStats['placeholdersFixed'] ?? 0)); ?></li>
@@ -119,7 +119,7 @@ safe_page(function () {
                             </ul>
                         </div>
                     <?php endif; ?>
-                    <div class="flash" style="background:#0f1625;border:1px solid #1f6feb;">
+                    <div class="flash" style="background:var(--surface-2);border:1px solid #1f6feb;">
                         <strong><?= sanitize('Preview Summary'); ?></strong>
                         <ul style="margin:6px 0 0 16px;">
                             <li><?= sanitize('Checklist items: ' . $draftSummary['checklistCount']); ?></li>
@@ -134,9 +134,9 @@ safe_page(function () {
                                 <div style="display:grid;gap:6px;">
                                     <?php foreach ($draftPayload['restrictedAnnexures'] as $rest): ?>
                                         <?php $label = is_array($rest) ? ($rest['title'] ?? ($rest['name'] ?? 'Restricted')) : (string)$rest; ?>
-                                        <div style="border:1px solid #30363d;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                                        <div style="border:1px solid var(--border);border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
                                             <span><?= sanitize($label); ?></span>
-                                            <span class="pill" style="border-color:#30363d;color:#9da7b3;"><?= sanitize('Not supported (no rates)'); ?></span>
+                                            <span class="pill" style="border-color:var(--border);color:var(--muted);"><?= sanitize('Not supported (no rates)'); ?></span>
                                         </div>
                                     <?php endforeach; ?>
                                 </div>
@@ -144,7 +144,7 @@ safe_page(function () {
                         <?php endif; ?>
                     </div>
                     <?php if (!empty($draftWarnings)): ?>
-                        <div class="flash" style="background:#111827;border:1px solid #334155;">
+                        <div class="flash" style="background:var(--surface-2);border:1px solid #334155;color:var(--text);">
                             <strong><?= sanitize('Normalization notes'); ?></strong>
                             <ul style="margin:6px 0 0 16px;">
                                 <?php foreach ($draftWarnings as $warning): ?>
@@ -154,18 +154,18 @@ safe_page(function () {
                         </div>
                     <?php endif; ?>
                     <?php if ($previewBundle): ?>
-                        <div class="flash" style="background:#0b111a;border:1px solid #1f6feb33;">
+                        <div class="flash" style="background:var(--surface-2);border:1px solid #1f6feb33;">
                             <strong><?= sanitize('Resolved field preview'); ?></strong>
                             <div style="display:grid;gap:6px;margin-top:6px;max-height:220px;overflow:auto;">
                                 <?php foreach ($previewBundle['fields'] as $field): ?>
-                                    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px dashed #30363d;padding-bottom:4px;">
+                                    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px dashed var(--border);padding-bottom:4px;">
                                         <span class="muted"><?= sanitize($field['label'] . ' (' . $field['key'] . ')'); ?></span>
                                         <span><?= sanitize($field['value'] !== '' ? $field['value'] : '____'); ?></span>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
                         </div>
-                        <details class="flash" style="background:#0b111a;border:1px dashed #1f6feb33;">
+                        <details class="flash" style="background:var(--surface-2);border:1px dashed #1f6feb33;">
                             <summary style="cursor:pointer;"><?= sanitize('Profile mapping diagnostics'); ?></summary>
                             <div style="display:grid;gap:6px;margin-top:8px;max-height:200px;overflow:auto;">
                                 <?php if (!empty($previewBundle['mappingDiagnostics'])): ?>
@@ -180,11 +180,11 @@ safe_page(function () {
                             </div>
                         </details>
                         <?php if (!empty($previewBundle['tables'])): ?>
-                            <div class="flash" style="background:#0b111a;border:1px solid #1f6feb33;">
+                            <div class="flash" style="background:var(--surface-2);border:1px solid #1f6feb33;">
                                 <strong><?= sanitize('Table structure preview'); ?></strong>
                                 <div style="display:grid;gap:10px;margin-top:8px;">
                                     <?php foreach ($previewBundle['tables'] as $table): ?>
-                                        <div style="border:1px solid #30363d;border-radius:10px;padding:8px;">
+                                        <div style="border:1px solid var(--border);border-radius:10px;padding:8px;">
                                             <div style="font-weight:600;"><?= sanitize($table['templateTitle'] ?? 'Annexure'); ?></div>
                                             <div class="muted" style="font-size:12px;"><?= sanitize(($table['templateKind'] ?? '') . ' • ' . ($table['tableTitle'] ?? 'Table')); ?></div>
                                             <div style="overflow:auto;margin-top:6px;">

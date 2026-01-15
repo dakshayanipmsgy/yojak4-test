@@ -47,7 +47,7 @@ safe_page(function () {
             <?php else: ?>
                 <div style="display:grid;gap:10px;margin-top:12px;">
                     <?php foreach ($notifications as $note): ?>
-                        <div class="card" style="background:#0f1520;border:1px solid #1f2a37;">
+                        <div class="card" style="background:var(--surface-2);border:1px solid var(--border);">
                             <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
                                 <div>
                                     <h3 style="margin:0 0 4px 0;"><?= sanitize($note['title'] ?? ''); ?></h3>

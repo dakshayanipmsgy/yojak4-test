@@ -23,7 +23,7 @@ safe_page(function () {
 
     $title = get_app_config()['appName'] . ' | ' . ($bill['title'] ?? $bill['billId']);
     $statusColors = [
-        'draft' => '#8b949e',
+        'draft' => 'var(--muted)',
         'submitted' => '#f0ad4e',
         'approved' => '#2ea043',
         'paid' => '#58a6ff',
@@ -43,13 +43,13 @@ safe_page(function () {
 
     render_layout($title, function () use ($bill, $statusColors, $statuses, $allowedMimes, $formatDate) {
         $status = $bill['status'] ?? 'draft';
-        $color = $statusColors[$status] ?? '#8b949e';
+        $color = $statusColors[$status] ?? 'var(--muted)';
         $nextReminder = bill_next_reminder($bill);
         ?>
         <div class="card" style="display:grid; gap:12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
                 <div>
-                    <div class="pill" style="border-color:#30363d;"><?= sanitize($bill['billId']); ?></div>
+                    <div class="pill" style="border-color:var(--border);"><?= sanitize($bill['billId']); ?></div>
                     <h2 style="margin:6px 0 4px;"><?= sanitize($bill['title'] ?? ''); ?></h2>
                     <p class="muted" style="margin:0;"><?= sanitize('Invoice & Payment Tracker'); ?></p>
                 </div>
@@ -65,15 +65,15 @@ safe_page(function () {
                 </div>
             </div>
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
-                <div class="card" style="background:#111820;">
+                <div class="card" style="background:var(--surface-2);">
                     <p class="muted" style="margin:0 0 4px;"><?= sanitize('Workorder'); ?></p>
                     <h3 style="margin:0;"><?= sanitize($bill['workorderRef'] ?? 'Not provided'); ?></h3>
                 </div>
-                <div class="card" style="background:#111820;">
+                <div class="card" style="background:var(--surface-2);">
                     <p class="muted" style="margin:0 0 4px;"><?= sanitize('Amount Text'); ?></p>
                     <h3 style="margin:0;"><?= sanitize($bill['amountText'] ?? 'Not provided'); ?></h3>
                 </div>
-                <div class="card" style="background:#111820;">
+                <div class="card" style="background:var(--surface-2);">
                     <p class="muted" style="margin:0 0 4px;"><?= sanitize('Updated'); ?></p>
                     <h3 style="margin:0;"><?= sanitize($formatDate($bill['updatedAt'] ?? '')); ?></h3>
                 </div>
@@ -95,7 +95,7 @@ safe_page(function () {
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <label class="pill" style="display:inline-flex; align-items:center; gap:6px; background:#0f1520;">
+                    <label class="pill" style="display:inline-flex; align-items:center; gap:6px; background:var(--surface-2);">
                         <input type="checkbox" name="confirmRollback" value="1">
                         <?= sanitize('Confirm if you are rolling back to an earlier status.'); ?>
                     </label>
@@ -103,10 +103,10 @@ safe_page(function () {
                 </form>
                 <div style="display:grid; gap:8px;">
                     <?php foreach (array_reverse($bill['statusHistory'] ?? []) as $item): ?>
-                        <div class="card" style="background:#111820;">
+                        <div class="card" style="background:var(--surface-2);">
                             <div style="display:flex; justify-content:space-between; gap:8px;">
                                 <div>
-                                    <div class="pill" style="border-color:#30363d;"><?= sanitize(ucfirst($item['status'] ?? '')); ?></div>
+                                    <div class="pill" style="border-color:var(--border);"><?= sanitize(ucfirst($item['status'] ?? '')); ?></div>
                                     <p class="muted" style="margin:4px 0 0;"><?= sanitize($item['note'] ?? ''); ?></p>
                                 </div>
                                 <span class="muted"><?= sanitize($formatDate($item['changedAt'] ?? '')); ?></span>
@@ -156,10 +156,10 @@ safe_page(function () {
                         <p class="muted"><?= sanitize('No attachments yet.'); ?></p>
                     <?php endif; ?>
                     <?php foreach ($bill['attachments'] as $att): ?>
-                        <div class="card" style="background:#111820;">
+                        <div class="card" style="background:var(--surface-2);">
                             <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:center;">
                                 <div>
-                                    <div class="pill" style="border-color:#30363d;"><?= sanitize($att['fileId'] ?? ''); ?></div>
+                                    <div class="pill" style="border-color:var(--border);"><?= sanitize($att['fileId'] ?? ''); ?></div>
                                     <p style="margin:4px 0 0;"><?= sanitize($att['originalName'] ?? basename($att['path'] ?? '')); ?></p>
                                     <p class="muted" style="margin:2px 0 0;"><?= sanitize(format_bytes((int)($att['sizeBytes'] ?? 0))); ?> • <?= sanitize($att['mime'] ?? ''); ?></p>
                                 </div>
@@ -200,10 +200,10 @@ safe_page(function () {
                         <p class="muted"><?= sanitize('No reminders yet.'); ?></p>
                     <?php endif; ?>
                     <?php foreach (array_reverse($bill['reminders'] ?? []) as $rem): ?>
-                        <div class="card" style="background:#111820;">
+                        <div class="card" style="background:var(--surface-2);">
                             <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;">
                                 <div>
-                                    <div class="pill" style="border-color:#30363d;"><?= sanitize($rem['reminderId'] ?? ''); ?></div>
+                                    <div class="pill" style="border-color:var(--border);"><?= sanitize($rem['reminderId'] ?? ''); ?></div>
                                     <p style="margin:4px 0 0;"><?= sanitize($rem['note'] ?? ''); ?></p>
                                     <?php if (!empty($rem['statusRef'])): ?>
                                         <p class="muted" style="margin:2px 0 0;"><?= sanitize('For status: ' . ucfirst($rem['statusRef'])); ?></p>

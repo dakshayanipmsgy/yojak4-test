@@ -37,7 +37,7 @@ safe_page(function () {
                 <div class="pill"><?= sanitize('From: ' . ($doc['fromUser'] ?? '')); ?></div>
                 <div class="pill"><?= sanitize('To: ' . ($doc['toUser'] ?? '')); ?></div>
                 <?php if (!empty($doc['notesGreen'])): ?>
-                    <div class="card" style="background:#0f1625;">
+                    <div class="card" style="background:var(--surface-2);">
                         <strong><?= sanitize('Notes'); ?></strong>
                         <p class="muted"><?= nl2br(sanitize($doc['notesGreen'] ?? '')); ?></p>
                     </div>
@@ -53,7 +53,7 @@ safe_page(function () {
                     </div>
                     <div class="field">
                         <label for="notesGreen"><?= sanitize('Notes'); ?></label>
-                        <textarea id="notesGreen" name="notesGreen" rows="3" style="width:260px;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"></textarea>
+                        <textarea id="notesGreen" name="notesGreen" rows="3" style="width:260px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"></textarea>
                     </div>
                     <button class="btn" type="submit"><?= sanitize('Forward'); ?></button>
                 </form>

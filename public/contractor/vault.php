@@ -59,7 +59,7 @@ safe_page(function () {
             </form>
             <div id="vault-upload-progress" style="margin-top:12px; display:none;">
                 <div class="muted" id="vault-upload-status"><?= sanitize('Preparing upload...'); ?></div>
-                <div style="height:8px; background:#111820; border-radius:999px; overflow:hidden; margin-top:6px;">
+                <div style="height:8px; background:var(--surface-2); border-radius:999px; overflow:hidden; margin-top:6px;">
                     <div id="vault-upload-bar" style="height:8px; width:0%; background:linear-gradient(90deg, #1f6feb, #2ea043);"></div>
                 </div>
             </div>
@@ -73,7 +73,7 @@ safe_page(function () {
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
                     <?php foreach ($docTypes as $type): ?>
                         <?php $value = $type === 'All' ? '' : $type; ?>
-                        <button name="docType" value="<?= sanitize($value); ?>" class="pill" style="cursor:pointer; border-color: <?= $docTypeFilter === $value ? 'var(--primary)' : '#30363d'; ?>; color: <?= $docTypeFilter === $value ? '#fff' : 'var(--muted)'; ?>; background: <?= $docTypeFilter === $value ? 'var(--primary)' : '#111820'; ?>;">
+                        <button name="docType" value="<?= sanitize($value); ?>" class="pill" style="cursor:pointer; border-color: <?= $docTypeFilter === $value ? 'var(--primary)' : 'var(--border)'; ?>; color: <?= $docTypeFilter === $value ? '#fff' : 'var(--muted)'; ?>; background: <?= $docTypeFilter === $value ? 'var(--primary)' : 'var(--surface-2)'; ?>;">
                             <?= sanitize($type); ?>
                         </button>
                     <?php endforeach; ?>

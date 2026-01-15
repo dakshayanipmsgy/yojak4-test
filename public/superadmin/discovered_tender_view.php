@@ -101,7 +101,7 @@ safe_page(function () {
                     <span class="pill">Seen: <?= sanitize($record['seenByAdminAt']); ?></span>
                 <?php endif; ?>
             </div>
-            <div class="card" style="background:#0d1117; border-style:dashed; display:grid; gap:8px;">
+            <div class="card" style="background:var(--surface); border-style:dashed; display:grid; gap:8px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                     <h4 style="margin:0;">OFFTD seed text</h4>
                     <button class="btn secondary" type="button" onclick="copySeed()">Copy</button>
@@ -110,7 +110,7 @@ safe_page(function () {
             </div>
             <div class="card" style="border-style:dashed; display:grid; gap:6px;">
                 <h4 style="margin:0;">Raw snippet</h4>
-                <pre style="margin:0; white-space:pre-wrap; background:#0d1117; padding:10px; border-radius:10px; border:1px solid #30363d;"><?= sanitize(json_encode($record['raw'] ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></pre>
+                <pre style="margin:0; white-space:pre-wrap; background:var(--surface); padding:10px; border-radius:10px; border:1px solid var(--border);"><?= sanitize(json_encode($record['raw'] ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></pre>
             </div>
         </div>
         <script>

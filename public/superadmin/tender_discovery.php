@@ -126,7 +126,7 @@ safe_page(function () {
                 </div>
                 <div style="margin-top:10px; display:grid; gap:8px;">
                     <?php foreach ($lastSummary['perSource'] ?? [] as $row): ?>
-                        <div style="border:1px solid #30363d; border-radius:10px; padding:10px;">
+                        <div style="border:1px solid var(--border); border-radius:10px; padding:10px;">
                             <strong><?= sanitize($row['name'] ?? $row['sourceId'] ?? 'Source'); ?></strong>
                             <p class="muted" style="margin:4px 0 0;">
                                 Fetched <?= sanitize((string)($row['fetched'] ?? 0)); ?> • New <?= sanitize((string)($row['new'] ?? 0)); ?>
