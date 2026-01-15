@@ -9,24 +9,12 @@ safe_page(function () {
 
     $index = contractor_notifications_index($yojId);
     $notifications = [];
-    $updated = false;
-
-    foreach ($index as &$entry) {
-        $path = contractor_notifications_dir($yojId) . '/' . ($entry['notifId'] ?? '') . '.json';
+    foreach ($index as $entry) {
+        $path = contractor_notification_path($yojId, $entry);
         $detail = file_exists($path) ? readJson($path) : null;
         if ($detail) {
-            if (empty($entry['readAt']) && empty($detail['readAt'])) {
-                $entry['readAt'] = now_kolkata()->format(DateTime::ATOM);
-                $detail['readAt'] = $entry['readAt'];
-                writeJsonAtomic($path, $detail);
-                $updated = true;
-            }
             $notifications[] = $detail;
         }
-    }
-    unset($entry);
-    if ($updated) {
-        save_contractor_notifications_index($yojId, $index);
     }
 
     usort($notifications, fn($a, $b) => strcmp($b['createdAt'] ?? '', $a['createdAt'] ?? ''));
@@ -40,23 +28,47 @@ safe_page(function () {
                     <h2 style="margin:0 0 6px 0;"><?= sanitize('Notifications'); ?></h2>
                     <p class="muted" style="margin:0;"><?= sanitize('Stay updated on department links.'); ?></p>
                 </div>
-                <a class="btn secondary" href="/contractor/dashboard.php"><?= sanitize('Dashboard'); ?></a>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <form method="post" action="/contractor/notifications_mark_read.php">
+                        <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                        <input type="hidden" name="action" value="all">
+                        <button class="btn secondary" type="submit"><?= sanitize('Mark all read'); ?></button>
+                    </form>
+                    <a class="btn secondary" href="/contractor/dashboard.php"><?= sanitize('Dashboard'); ?></a>
+                </div>
             </div>
             <?php if (!$notifications): ?>
                 <p class="muted" style="margin-top:10px;"><?= sanitize('No notifications yet.'); ?></p>
             <?php else: ?>
                 <div style="display:grid;gap:10px;margin-top:12px;">
                     <?php foreach ($notifications as $note): ?>
+                        <?php $isUnread = empty($note['readAt']); ?>
                         <div class="card" style="background:var(--surface-2);border:1px solid var(--border);">
                             <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
                                 <div>
-                                    <h3 style="margin:0 0 4px 0;"><?= sanitize($note['title'] ?? ''); ?></h3>
+                                    <h3 style="margin:0 0 4px 0;display:flex;align-items:center;gap:6px;">
+                                        <?= sanitize($note['title'] ?? ''); ?>
+                                        <?php if ($isUnread): ?>
+                                            <span class="pill"><?= sanitize('New'); ?></span>
+                                        <?php endif; ?>
+                                    </h3>
                                     <p class="muted" style="margin:0 0 4px 0;"><?= sanitize($note['message'] ?? ''); ?></p>
                                     <?php if (!empty($note['deptId'])): ?>
                                         <span class="pill"><?= sanitize('Dept: ' . $note['deptId']); ?></span>
                                     <?php endif; ?>
                                 </div>
-                                <div class="muted" style="font-size:12px;"><?= sanitize($note['createdAt'] ?? ''); ?></div>
+                                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                                    <div class="muted" style="font-size:12px;"><?= sanitize($note['createdAt'] ?? ''); ?></div>
+                                    <?php if ($isUnread): ?>
+                                        <form method="post" action="/contractor/notifications_mark_read.php">
+                                            <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                            <input type="hidden" name="notifId" value="<?= sanitize($note['notifId'] ?? ''); ?>">
+                                            <button class="btn secondary" type="submit" style="padding:6px 10px;font-size:12px;">
+                                                <?= sanitize('Mark read'); ?>
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         </div>
                     <?php endforeach; ?>
