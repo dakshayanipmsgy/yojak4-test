@@ -55,7 +55,6 @@ function render_layout(string $title, callable $content): void
             ['label' => 'Support Inbox', 'href' => '/superadmin/support_dashboard.php'],
             ['label' => 'Assisted Pack v2', 'href' => '/superadmin/assisted_v2/queue.php'],
             ['label' => 'Error Log', 'href' => '/superadmin/error_log.php'],
-            ['label' => 'Comms Settings', 'href' => '/superadmin/comm_settings.php'],
             ['label' => 'Factory Reset', 'href' => '/superadmin/factory_reset.php'],
             ['label' => 'Stats', 'href' => '/superadmin/stats.php'],
             ['label' => 'Reset Approvals', 'href' => '/superadmin/reset_requests.php'],

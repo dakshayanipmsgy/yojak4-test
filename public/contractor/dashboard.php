@@ -11,13 +11,6 @@ safe_page(function () {
     $now = now_kolkata();
     $vaultFiles = contractor_vault_index($yojId);
     $contractorTemplates = load_contractor_templates_full($yojId);
-    $unreadNotifications = 0;
-    ensure_contractor_notifications_env($yojId);
-    foreach (contractor_notifications_index($yojId) as $entry) {
-        if (empty($entry['readAt'])) {
-            $unreadNotifications++;
-        }
-    }
 
     $packsInProgress = 0;
     $missingFieldsTotal = 0;
@@ -198,7 +191,7 @@ safe_page(function () {
         'remindersDue7' => $remindersDue7,
     ]);
 
-    render_layout($title, function () use ($user, $packsInProgress, $missingFieldsTotal, $checklistPendingTotal, $topMissingPack, $remindersDue7, $vaultMissingCount, $offlineTotal, $offlinePending, $assistedCounts, $billCounts, $pendingDeptLinks, $unreadNotifications) {
+    render_layout($title, function () use ($user, $packsInProgress, $missingFieldsTotal, $checklistPendingTotal, $topMissingPack, $remindersDue7, $vaultMissingCount, $offlineTotal, $offlinePending, $assistedCounts, $billCounts, $pendingDeptLinks) {
         ?>
         <style>
             .dashboard-grid {
@@ -240,17 +233,6 @@ safe_page(function () {
                 margin: 0 0 6px 0;
                 color: #0f172a;
             }
-            .notif-pill {
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                padding: 6px 12px;
-                border-radius: 999px;
-                background: rgba(37, 99, 235, 0.1);
-                color: #1d4ed8;
-                font-weight: 600;
-                font-size: 14px;
-            }
         </style>
 
         <div class="card" style="display:grid; gap:12px;">
@@ -275,14 +257,6 @@ safe_page(function () {
         </div>
 
         <div class="dashboard-grid" style="margin-top:16px;">
-            <div class="card dash-card">
-                <div class="dash-number"><?= sanitize((string)$unreadNotifications); ?></div>
-                <strong><?= sanitize('Unread Notifications'); ?></strong>
-                <div class="muted"><?= sanitize('Alerts for approvals, resets, and assisted packs.'); ?></div>
-                <a class="dash-link" href="/contractor/notifications.php">
-                    <span class="notif-pill">🔔 <?= sanitize((string)$unreadNotifications); ?></span>
-                </a>
-            </div>
             <div class="card dash-card">
                 <div class="dash-number"><?= sanitize((string)$packsInProgress); ?></div>
                 <strong><?= sanitize('Packs In Progress'); ?></strong>

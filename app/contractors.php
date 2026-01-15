@@ -652,27 +652,12 @@ function save_contractor_link_file(string $yojId, array $link): void
 
 function contractor_notifications_dir(string $yojId): string
 {
-    return DATA_PATH . '/notifications/contractor/' . $yojId;
-}
-
-function contractor_notifications_month_dir(string $yojId, DateTimeImmutable $date): string
-{
-    return contractor_notifications_dir($yojId) . '/' . $date->format('Ym');
+    return contractors_approved_path($yojId) . '/notifications';
 }
 
 function contractor_notifications_index_path(string $yojId): string
 {
     return contractor_notifications_dir($yojId) . '/index.json';
-}
-
-function contractor_notification_path(string $yojId, array $entry): string
-{
-    $month = $entry['month'] ?? '';
-    $notifId = $entry['notifId'] ?? '';
-    if ($month !== '') {
-        return contractor_notifications_dir($yojId) . '/' . $month . '/' . $notifId . '.json';
-    }
-    return contractor_notifications_dir($yojId) . '/' . $notifId . '.json';
 }
 
 function ensure_contractor_notifications_env(string $yojId): void
@@ -712,24 +697,19 @@ function create_contractor_notification(string $yojId, array $payload): ?array
         return null;
     }
     ensure_contractor_notifications_env($yojId);
-    $now = now_kolkata();
-    $monthDir = contractor_notifications_month_dir($yojId, $now);
-    if (!is_dir($monthDir)) {
-        mkdir($monthDir, 0775, true);
-    }
     do {
         $notifId = generate_notification_id();
-        $path = $monthDir . '/' . $notifId . '.json';
+        $path = contractor_notifications_dir($yojId) . '/' . $notifId . '.json';
     } while (file_exists($path));
 
-    $createdAt = $now->format(DateTime::ATOM);
+    $now = now_kolkata()->format(DateTime::ATOM);
     $notification = [
         'notifId' => $notifId,
         'type' => $payload['type'] ?? 'info',
         'title' => $payload['title'] ?? '',
         'message' => $payload['message'] ?? '',
         'deptId' => $payload['deptId'] ?? null,
-        'createdAt' => $createdAt,
+        'createdAt' => $now,
         'readAt' => null,
     ];
 
@@ -742,7 +722,6 @@ function create_contractor_notification(string $yojId, array $payload): ?array
         'title' => $notification['title'],
         'deptId' => $notification['deptId'],
         'createdAt' => $notification['createdAt'],
-        'month' => $now->format('Ym'),
         'readAt' => $notification['readAt'],
     ];
     save_contractor_notifications_index($yojId, $index);
