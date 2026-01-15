@@ -88,7 +88,7 @@ safe_page(function () {
                 <h2 style="margin-bottom:6px;"><?= sanitize('Profile'); ?></h2>
                 <p class="muted" style="margin:0;"><?= sanitize('Keep your contact and firm details updated. These values auto-fill tender templates.'); ?></p>
             </div>
-            <div style="border:1px solid #30363d;border-radius:12px;padding:12px;background:#0f1520;display:grid;gap:10px;">
+            <div style="border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface-2);display:grid;gap:10px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
                     <div>
                         <div style="font-weight:600;"><?= sanitize('Profile completion'); ?></div>
@@ -96,7 +96,7 @@ safe_page(function () {
                     </div>
                     <div class="pill" style="border-color:#2ea043;color:#8ce99a;font-weight:700;"><?= sanitize($completionPercent . '%'); ?></div>
                 </div>
-                <div style="background:#0b111b;border-radius:999px;height:10px;overflow:hidden;border:1px solid #2a323c;">
+                <div style="background:var(--surface);border-radius:999px;height:10px;overflow:hidden;border:1px solid var(--border);">
                     <div style="height:10px;width:<?= (int)$completionPercent; ?>%;background:linear-gradient(90deg,#2563eb,#22c55e);"></div>
                 </div>
                 <?php if ($missing): ?>
@@ -229,7 +229,7 @@ safe_page(function () {
                 </div>
                 <div class="pill" style="background:#13233a;color:#9cc4ff;font-weight:600;"><?= sanitize(count($memoryEntries) . ' saved'); ?></div>
             </div>
-            <details style="border:1px solid #30363d;border-radius:12px;padding:12px;background:#0f1520;">
+            <details style="border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface-2);">
                 <summary style="cursor:pointer;font-weight:600;"><?= sanitize('Advanced'); ?></summary>
                 <div style="display:grid;gap:12px;margin-top:12px;">
                     <div class="field" style="margin:0;">
@@ -237,7 +237,7 @@ safe_page(function () {
                         <input id="memory-search" type="search" placeholder="Search by label, key, or value" style="width:100%;">
                     </div>
                     <?php if ($memoryEntries): ?>
-                        <div style="overflow:auto;border:1px solid #2a323c;border-radius:12px;">
+                        <div style="overflow:auto;border:1px solid var(--border);border-radius:12px;">
                             <table class="table" style="min-width:760px;">
                                 <thead>
                                 <tr>

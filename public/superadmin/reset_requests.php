@@ -30,7 +30,7 @@ safe_page(function () {
             </div>
             <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;">
                 <?php foreach (['pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected'] as $key => $label): ?>
-                    <a class="pill" style="border-color: <?= $statusFilter === $key ? 'var(--primary)' : '#30363d'; ?>; color: <?= $statusFilter === $key ? '#fff' : 'var(--muted)'; ?>; background: <?= $statusFilter === $key ? '#1f6feb22' : '#111820'; ?>" href="/superadmin/reset_requests.php?status=<?= sanitize($key); ?>"><?= sanitize($label); ?></a>
+                    <a class="pill" style="border-color: <?= $statusFilter === $key ? 'var(--primary)' : 'var(--border)'; ?>; color: <?= $statusFilter === $key ? '#fff' : 'var(--muted)'; ?>; background: <?= $statusFilter === $key ? '#1f6feb22' : 'var(--surface-2)'; ?>" href="/superadmin/reset_requests.php?status=<?= sanitize($key); ?>"><?= sanitize($label); ?></a>
                 <?php endforeach; ?>
             </div>
             <?php if ($tempDisplay): ?>

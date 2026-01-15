@@ -22,7 +22,7 @@ safe_page(function () {
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px;">
                 <?php foreach ($features as $feature): ?>
                     <?php if (employee_has_permission($employee, $feature['key'])): ?>
-                        <a class="card" href="<?= sanitize($feature['link']); ?>" style="display:block;border:1px solid #30363d;">
+                        <a class="card" href="<?= sanitize($feature['link']); ?>" style="display:block;border:1px solid var(--border);">
                             <div class="muted" style="text-transform:uppercase;font-size:12px;letter-spacing:0.06em;"><?= sanitize($feature['title']); ?></div>
                             <div style="margin-top:6px;"><?= sanitize($feature['description']); ?></div>
                         </a>

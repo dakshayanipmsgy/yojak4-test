@@ -771,7 +771,7 @@ function pack_apply_default_templates(array $pack, array $tender, array $contrac
         $filled = contractor_fill_template_body($tpl['body'] ?? '', $contextMap);
         $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'
             . htmlspecialchars($tpl['name'] ?? 'Template')
-            . '</title><style>body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:24px;}h1{margin-top:0;color:#fff;}p,pre{line-height:1.6;white-space:pre-wrap;}</style></head><body>'
+            . '</title><style>body{font-family:Arial,sans-serif;background:var(--surface);color:var(--text);padding:24px;}h1{margin-top:0;color:#fff;}p,pre{line-height:1.6;white-space:pre-wrap;}</style></head><body>'
             . '<h1>' . htmlspecialchars($tpl['name'] ?? 'Template') . '</h1>'
             . '<pre>' . htmlspecialchars($filled) . '</pre>'
             . '</body></html>';
@@ -2129,7 +2129,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             'done' => '#2ea043',
         ];
         $label = ucfirst($status ?: 'Pending');
-        $color = $colors[$status] ?? '#8b949e';
+        $color = $colors[$status] ?? 'var(--muted)';
         return '<span class="status" style="background:' . $color . '1a;color:' . $color . ';border:1px solid ' . $color . '33;">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
     };
 
@@ -2374,48 +2374,48 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
 
     $styles = "<style>
     @page{size:{$pageSize} {$orientation};margin:30mm 18mm 20mm;}
-    body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px;}
-    .page{max-width:960px;margin:0 auto;background:#0f1520;border:1px solid #30363d;border-radius:14px;padding:20px;}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:var(--surface);color:var(--text);margin:0;padding:24px;}
+    .page{max-width:960px;margin:0 auto;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;}
     h1,h2,h3,h4{margin:0 0 8px;}
-    .muted{color:#8b949e;}
+    .muted{color:var(--muted);}
     table{width:100%;border-collapse:collapse;margin-top:8px;}
-    th,td{padding:8px;border-bottom:1px solid #30363d;text-align:left;vertical-align:top;}
-    th{color:#8b949e;text-transform:uppercase;font-size:12px;letter-spacing:0.04em;}
+    th,td{padding:8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;}
+    th{color:var(--muted);text-transform:uppercase;font-size:12px;letter-spacing:0.04em;}
     .status{padding:6px 10px;border-radius:20px;font-size:12px;display:inline-block;}
     .section{margin-top:16px;}
     .subsection{margin-top:10px;}
-    .warning{border:1px solid #f85149;padding:10px;border-radius:10px;background:#211015;}
-    .template-block{background:#0b111a;border:1px solid #1f6feb33;border-radius:12px;padding:14px;margin-top:12px;}
+    .warning{border:1px solid var(--danger);padding:10px;border-radius:10px;background:#fef2f2;color:#b91c1c;}
+    .template-block{background:var(--surface-2);border:1px solid #1f6feb33;border-radius:12px;padding:14px;margin-top:12px;}
     .template-body{white-space:pre-wrap;line-height:1.6;font-family:inherit;margin-top:8px;}
     .annexure-table{table-layout:fixed;word-break:break-word;}
     .annexure-table th,.annexure-table td{overflow-wrap:anywhere;}
-    .financial-manual-table input{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px;color:#e6edf3;}
+    .financial-manual-table input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px;color:var(--text);}
     .financial-amount{font-weight:600;}
     .template-table{margin-top:12px;}
     .table-title{font-weight:600;margin-bottom:6px;}
-    .field-blank{color:#e6edf3;text-decoration:none;border-bottom:1px solid #8b949e;padding:0 2px;}
+    .field-blank{color:var(--text);text-decoration:none;border-bottom:1px solid var(--muted);padding:0 2px;}
     .choice-empty{letter-spacing:0.04em;}
-    .card-sm{background:#0b111a;border:1px solid #30363d;border-radius:10px;padding:12px;}
+    .card-sm{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px;}
     .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;}
     .large{font-size:18px;font-weight:700;}
     .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px;}
     .plain{list-style:none;padding:0;margin:0;}
     .plain li{margin:4px 0;}
-    .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid #30363d;font-size:12px;background:#111820;}
+    .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;background:var(--surface-2);}
     .page-break{page-break-before:always;}
-    footer{margin-top:20px;font-size:12px;color:#8b949e;text-align:center;min-height:20mm;}
+    footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
     footer .page-number::after{content:'1';}
-    .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid #30363d;padding-bottom:10px;}
+    .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
-    .print-settings{background:#0b111a;border:1px solid #30363d;border-radius:12px;padding:12px;margin-bottom:16px;display:grid;gap:10px;}
+    .print-settings{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:16px;display:grid;gap:10px;}
     .print-settings .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
-    .print-settings label{display:grid;gap:6px;font-size:12px;color:#8b949e;}
-    .print-settings select,.print-settings input{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:8px;color:#e6edf3;}
-    .print-settings button{background:#1f6feb;border:none;color:#fff;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
-    .print-settings .hint{font-size:12px;color:#8b949e;}
+    .print-settings label{display:grid;gap:6px;font-size:12px;color:var(--muted);}
+    .print-settings select,.print-settings input{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);}
+    .print-settings button{background:var(--primary);border:none;color:var(--primary-contrast);padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
+    .print-settings .hint{font-size:12px;color:var(--muted);}
     .print-actions{display:none;margin-bottom:12px;padding:12px;border:1px solid #d0d7de;border-radius:10px;background:#fff;color:#000;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
-    .print-actions .btn{background:#111827;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
+    .print-actions .btn{background:var(--primary);color:var(--primary-contrast);border:none;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
     .print-actions .hint{font-size:12px;color:#444;}
     body.print-mode{background:#fff !important;color:#000 !important;}
     body.print-mode .page{background:#fff;border:1px solid #ddd;border-radius:0;box-shadow:none;padding:0;}
@@ -2572,7 +2572,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
         . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'
         . $styles . '</head><body' . $bodyClass . '><div class="page">' . $printActions . $settingsPanel . $header
-        . implode('<hr class="muted" style="border:none;border-top:1px solid #30363d;margin:16px 0;">', $sections) . $footer . '</div>'
+        . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sections) . $footer . '</div>'
         . $rateScript . $autoPrintScript . '</body></html>';
 
     return $html;

@@ -52,7 +52,7 @@ safe_page(function () {
                             $done = (int)($pack['doneRequired'] ?? 0);
                             $progress = $required > 0 ? (int)round(($done / max(1, $required)) * 100) : 0;
                             ?>
-                            <div style="position:relative; background:#0d1117; border:1px solid #30363d; border-radius:12px; height:12px; overflow:hidden;">
+                            <div style="position:relative; background:var(--surface); border:1px solid var(--border); border-radius:12px; height:12px; overflow:hidden;">
                                 <div style="width:<?= $progress; ?>%; background:var(--primary); height:100%;"></div>
                             </div>
                         </div>

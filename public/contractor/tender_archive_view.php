@@ -89,13 +89,13 @@ safe_page(function () {
                         <label for="keyLearnings"><?= sanitize('Key learnings (one per line)'); ?></label>
                         <textarea id="keyLearnings" name="keyLearnings" rows="4" style="resize:vertical;"><?= sanitize(implode("\n", $aiSummary['keyLearnings'] ?? [])); ?></textarea>
                     </div>
-                    <div class="card" style="border-color:#30363d;">
+                    <div class="card" style="border-color:var(--border);">
                         <h4 style="margin-top:0;"><?= sanitize('Suggested checklist items'); ?></h4>
                         <?php if (!$checklist): ?>
                             <p class="muted" style="margin:0 0 8px;"><?= sanitize('Add checklist items manually or run AI to generate.'); ?></p>
                         <?php endif; ?>
                         <?php foreach ($checklist as $idx => $item): ?>
-                            <div style="display:grid; gap:6px; border:1px solid #30363d; padding:10px; border-radius:10px; margin-bottom:8px;">
+                            <div style="display:grid; gap:6px; border:1px solid var(--border); padding:10px; border-radius:10px; margin-bottom:8px;">
                                 <input type="hidden" name="suggestedChecklist[<?= $idx; ?>][id]" value="<?= $idx; ?>">
                                 <div class="field" style="margin-bottom:0;">
                                     <label><?= sanitize('Title'); ?></label>
@@ -115,7 +115,7 @@ safe_page(function () {
                         <?php endforeach; ?>
                         <h5 style="margin:6px 0 4px;"><?= sanitize('Add new checklist items'); ?></h5>
                         <?php for ($i = 0; $i < 3; $i++): ?>
-                            <div style="display:grid; gap:6px; border:1px dashed #30363d; padding:10px; border-radius:10px; margin-bottom:8px;">
+                            <div style="display:grid; gap:6px; border:1px dashed var(--border); padding:10px; border-radius:10px; margin-bottom:8px;">
                                 <input name="newChecklist[<?= $i; ?>][title]" placeholder="<?= sanitize('Title'); ?>">
                                 <textarea name="newChecklist[<?= $i; ?>][description]" rows="2" placeholder="<?= sanitize('Description'); ?>" style="resize:vertical;"></textarea>
                                 <label style="display:flex; align-items:center; gap:6px;">
@@ -150,7 +150,7 @@ safe_page(function () {
                 <?php if (!empty($aiSummary['rawText'])): ?>
                     <details style="margin-top:8px;">
                         <summary class="muted"><?= sanitize('View raw AI response'); ?></summary>
-                        <pre style="white-space:pre-wrap; background:#0d1117; padding:10px; border-radius:10px; border:1px solid #30363d;"><?= sanitize($aiSummary['rawText']); ?></pre>
+                        <pre style="white-space:pre-wrap; background:var(--surface); padding:10px; border-radius:10px; border:1px solid var(--border);"><?= sanitize($aiSummary['rawText']); ?></pre>
                     </details>
                 <?php endif; ?>
                 <p class="muted" style="margin:8px 0 0; font-size:12px;"><?= sanitize('Last run: ' . ($aiSummary['lastRunAt'] ?? 'Never')); ?></p>

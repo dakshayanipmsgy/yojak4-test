@@ -139,18 +139,8 @@ function render_layout(string $title, callable $content): void
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= sanitize($title); ?></title>
+        <link rel="stylesheet" href="/assets/css/theme_tokens.css">
         <style>
-            :root {
-                --primary: #1f6feb;
-                --primary-dark: #144ea3;
-                --background: #ffffff;
-                --surface: #ffffff;
-                --text: #111827;
-                --muted: #6b7280;
-                --border: #e5e7eb;
-                --danger: #f85149;
-                --success: #2ea043;
-            }
             * { box-sizing: border-box; }
             body {
                 margin: 0;

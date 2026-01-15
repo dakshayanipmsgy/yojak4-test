@@ -89,7 +89,7 @@ safe_page(function () {
                 </div>
                 <div class="field">
                     <label for="bodyHtml"><?= sanitize('Body'); ?></label>
-                    <textarea id="bodyHtml" name="bodyHtml" rows="8" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:12px;"><?= htmlspecialchars($template['bodyHtml'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                    <textarea id="bodyHtml" name="bodyHtml" rows="8" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;"><?= htmlspecialchars($template['bodyHtml'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
                 </div>
                 <div class="field">
                     <label><?= sanitize('Placeholders'); ?></label>

@@ -63,7 +63,7 @@ safe_page(function () {
                 </div>
                 <div class="field">
                     <label for="paymentSteps"><?= sanitize('Payment Steps'); ?></label>
-                    <textarea id="paymentSteps" name="paymentSteps" rows="3" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"><?= htmlspecialchars(implode(PHP_EOL, $tender['paymentSteps'] ?? []), ENT_QUOTES, 'UTF-8'); ?></textarea>
+                    <textarea id="paymentSteps" name="paymentSteps" rows="3" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"><?= htmlspecialchars(implode(PHP_EOL, $tender['paymentSteps'] ?? []), ENT_QUOTES, 'UTF-8'); ?></textarea>
                 </div>
                 <div class="field">
                     <label for="emdText"><?= sanitize('EMD Text'); ?></label>
@@ -79,7 +79,7 @@ safe_page(function () {
                         <input id="pgPercent" name="pgPercent" value="<?= sanitize($tender['pgPercent'] ?? ''); ?>">
                     </div>
                 </div>
-                <div class="card" style="background:#0f1625;border:1px solid #1f6feb;display:grid;gap:10px;">
+                <div class="card" style="background:var(--surface-2);border:1px solid #1f6feb;display:grid;gap:10px;">
                     <h3 style="margin:0;"><?= sanitize('Contractor Visibility'); ?></h3>
                     <div class="field" style="display:flex;align-items:center;gap:10px;">
                         <input type="checkbox" id="publishedToContractors" name="publishedToContractors" style="width:auto;" <?= !empty($tender['publishedToContractors']) ? 'checked' : ''; ?>>
@@ -94,7 +94,7 @@ safe_page(function () {
                     </div>
                     <div class="field">
                         <label for="summaryPublic"><?= sanitize('Public Summary'); ?></label>
-                        <textarea id="summaryPublic" name="summaryPublic" rows="3" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"><?= htmlspecialchars($tender['contractorVisibleSummary']['summaryPublic'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                        <textarea id="summaryPublic" name="summaryPublic" rows="3" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"><?= htmlspecialchars($tender['contractorVisibleSummary']['summaryPublic'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
                     </div>
                     <div class="field">
                         <label for="requirementSetId"><?= sanitize('Official Requirement Set'); ?></label>

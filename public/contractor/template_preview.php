@@ -67,18 +67,19 @@ safe_page(function () {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title><?= sanitize($title); ?></title>
+        <link rel="stylesheet" href="/assets/css/theme_tokens.css">
         <style>
             :root{color-scheme:light;}
-            body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0;background:#f3f4f6;color:#111827;}
-            .toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:16px;background:#111827;color:#f9fafb;}
-            .toolbar .btn{background:#2563eb;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600;}
-            .toolbar .meta{font-size:14px;color:#d1d5db;}
-            .page{max-width:820px;margin:24px auto;padding:24px;background:#fff;box-shadow:0 10px 20px rgba(0,0,0,0.08);border-radius:12px;}
-            .print-header{min-height:90px;border-bottom:1px solid #e5e7eb;padding-bottom:12px;display:flex;gap:12px;align-items:center;}
+            body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0;background:var(--surface-2);color:var(--text);}
+            .toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:16px;background:var(--surface);color:var(--text);border-bottom:1px solid var(--border);}
+            .toolbar .btn{background:var(--primary);color:var(--primary-contrast);padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600;}
+            .toolbar .meta{font-size:14px;color:var(--muted);}
+            .page{max-width:820px;margin:24px auto;padding:24px;background:var(--surface);box-shadow:0 10px 20px rgba(0,0,0,0.08);border-radius:12px;border:1px solid var(--border);}
+            .print-header{min-height:90px;border-bottom:1px solid var(--border);padding-bottom:12px;display:flex;gap:12px;align-items:center;}
             .print-logo img{max-width:140px;max-height:80px;object-fit:contain;}
-            .print-header-text{flex:1;white-space:pre-wrap;font-size:14px;color:#111827;}
+            .print-header-text{flex:1;white-space:pre-wrap;font-size:14px;color:var(--text);}
             .content{padding:18px 0;white-space:pre-wrap;line-height:1.6;font-size:15px;}
-            .print-footer{min-height:60px;border-top:1px solid #e5e7eb;padding-top:10px;white-space:pre-wrap;font-size:13px;color:#4b5563;}
+            .print-footer{min-height:60px;border-top:1px solid var(--border);padding-top:10px;white-space:pre-wrap;font-size:13px;color:var(--muted);}
             @media print{
                 body{background:#fff;}
                 .toolbar{display:none;}
@@ -99,11 +100,11 @@ safe_page(function () {
         <div class="page">
             <div class="print-header">
                 <?= $logoHtml; ?>
-                <?= $headerText !== '' ? $headerText : '<div class="print-header-text" style="color:#9ca3af;">Header text disabled</div>'; ?>
+                <?= $headerText !== '' ? $headerText : '<div class="print-header-text" style="color:var(--muted);">Header text disabled</div>'; ?>
             </div>
             <div class="content"><?= nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8')); ?></div>
             <div class="print-footer">
-                <?= $footerText !== '' ? $footerText : '<span style="color:#9ca3af;">Footer text disabled</span>'; ?>
+                <?= $footerText !== '' ? $footerText : '<span style="color:var(--muted);">Footer text disabled</span>'; ?>
             </div>
         </div>
     </body>

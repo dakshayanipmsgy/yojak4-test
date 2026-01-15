@@ -1,0 +1,98 @@
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f7f8fb;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --primary: #2563eb;
+  --primary-contrast: #ffffff;
+  --primary-dark: #1d4ed8;
+  --danger: #ef4444;
+  --success: #16a34a;
+
+  --preview-bg: #0b1220;
+  --preview-text: #f9fafb;
+  --preview-muted: rgba(249, 250, 251, 0.75);
+  --preview-border: rgba(249, 250, 251, 0.15);
+
+  --background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.card-muted {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border: 1px solid var(--primary-dark);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.text-muted {
+  color: var(--muted);
+}
+
+.preview-block {
+  background: var(--preview-bg);
+  color: var(--preview-text);
+  border: 1px solid var(--preview-border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.preview-frame {
+  border: 1px dashed var(--preview-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.preview-block,
+.preview-block * {
+  color: var(--preview-text);
+}
+
+.preview-block .text-muted,
+.preview-block .muted {
+  color: var(--preview-muted) !important;
+}
+
+.preview-block .pill {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--preview-border);
+  color: var(--preview-text);
+}
+
+.preview-block input,
+.preview-block textarea,
+.preview-block select {
+  background: transparent;
+  color: var(--preview-text);
+  border-color: var(--preview-border);
+}

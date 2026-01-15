@@ -58,7 +58,7 @@ safe_page(function () {
                     <?php endforeach; ?>
                 </div>
             <?php elseif ($showInfo): ?>
-                <div class="flash" style="border-color:#30363d;"><?= sanitize($successMessage); ?></div>
+                <div class="flash" style="border-color:var(--border);"><?= sanitize($successMessage); ?></div>
             <?php endif; ?>
             <form method="post" action="/contractor/forgot_password.php">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">

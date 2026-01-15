@@ -69,13 +69,13 @@ safe_page(function () {
                     <?php endif; ?>
                 </div>
                 <?php if (!empty($snapshot['summaryPublic'])): ?>
-                    <div class="card" style="background:#0f1625;">
+                    <div class="card" style="background:var(--surface-2);">
                         <h3 style="margin:0 0 6px 0;"><?= sanitize('Summary'); ?></h3>
                         <p style="margin:0;"><?= nl2br(sanitize($snapshot['summaryPublic'])); ?></p>
                     </div>
                 <?php endif; ?>
                 <?php if (!empty($snapshot['attachmentsPublic'])): ?>
-                    <div class="card" style="background:#0f1625;">
+                    <div class="card" style="background:var(--surface-2);">
                         <h3 style="margin:0 0 6px 0;"><?= sanitize('Attachments'); ?></h3>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;">
                             <?php foreach ($snapshot['attachmentsPublic'] as $att): ?>
@@ -86,7 +86,7 @@ safe_page(function () {
                         </div>
                     </div>
                 <?php endif; ?>
-                <div class="card" style="background:#0f1625;">
+                <div class="card" style="background:var(--surface-2);">
                     <h3 style="margin:0 0 6px 0;"><?= sanitize('Checklist'); ?></h3>
                     <?php if (!empty($snapshot['requirementSetId'])): ?>
                         <?php if ($linked): ?>

@@ -259,7 +259,7 @@ safe_page(function () {
             </div>
             <form method="post" style="align-self:end;display:grid;gap:10px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                <div class="card" style="background:#0f1520;border:1px solid #253047;border-radius:14px;padding:14px;display:grid;gap:10px;">
+                <div class="card" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:14px;display:grid;gap:10px;">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
                         <div>
                             <h4 style="margin:0 0 4px 0;">Run live tests</h4>
@@ -267,7 +267,7 @@ safe_page(function () {
                         </div>
                         <button type="submit" class="btn primary" <?= !empty($preflightIssues) ? 'disabled' : ''; ?>>Run health tests</button>
                     </div>
-                    <div class="pill" style="background:#0c111b;color:#9ea7b3;">CSRF enforced • No secrets shown • Logs to /data/logs/ai.log</div>
+                    <div class="pill" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);">CSRF enforced • No secrets shown • Logs to /data/logs/ai.log</div>
                 </div>
             </form>
         </div>
@@ -279,7 +279,7 @@ safe_page(function () {
                         <h3 style="margin:0 0 4px 0;">Report card</h3>
                         <p class="muted" style="margin:0;">Timestamp: <?= sanitize($healthResult['timestamp']); ?></p>
                     </div>
-                    <span class="pill" style="background:<?= $statusPillColor; ?>;color:#e6edf3;"><?= sanitize($statusText); ?></span>
+                    <span class="pill" style="background:<?= $statusPillColor; ?>;color:var(--text);"><?= sanitize($statusText); ?></span>
                 </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
                     <div class="pill">Model used: <?= sanitize($config['textModel'] ?: 'unknown'); ?></div>
@@ -287,7 +287,7 @@ safe_page(function () {
                     <div class="pill">Empty twice: <?= !empty($healthResult['emptyTwice']) ? 'yes' : 'no'; ?></div>
                     <div class="pill">Tests run: <?= sanitize((string)count($healthResult['tests'])); ?></div>
                 </div>
-                <div class="card" style="background:#0f1520;border:1px solid #253047;border-radius:14px;padding:12px;display:grid;gap:10px;">
+                <div class="card" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:12px;display:grid;gap:10px;">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
                         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                             <h4 style="margin:0;">Findings</h4>
@@ -324,7 +324,7 @@ safe_page(function () {
                                     <h4 style="margin:0;"><?= sanitize($row['label']); ?></h4>
                                     <p class="muted" style="margin:0;">Expectation: <?= sanitize($row['expectation']); ?></p>
                                 </div>
-                                <span class="pill" style="background:<?= $okColor; ?>;color:#e6edf3;">Text len: <?= sanitize((string)($row['textLen'] ?? 0)); ?></span>
+                                <span class="pill" style="background:<?= $okColor; ?>;color:var(--text);">Text len: <?= sanitize((string)($row['textLen'] ?? 0)); ?></span>
                             </div>
                             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;">
                                 <div class="pill">HTTP: <?= sanitize($row['httpStatus'] ?? 'n/a'); ?></div>
@@ -344,17 +344,17 @@ safe_page(function () {
                             <div>
                                 <h5 style="margin:0 0 6px 0;">Parsed JSON</h5>
                                 <?php if (!empty($row['json'])): ?>
-                                    <pre style="background:#0f1520;border:1px solid #253047;border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap;"><?= sanitize(json_encode($row['json'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></pre>
+                                    <pre style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap;"><?= sanitize(json_encode($row['json'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></pre>
                                 <?php else: ?>
                                     <p class="muted" style="margin:0;">No JSON parsed; see raw text.</p>
                                 <?php endif; ?>
                             </div>
                             <div>
                                 <h5 style="margin:0 0 6px 0;">Response text</h5>
-                                <textarea readonly rows="6" style="width:100%;background:#0f1520;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;resize:vertical;"><?= sanitize($row['rawText'] ?: 'No response received.'); ?></textarea>
+                                <textarea readonly rows="6" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;resize:vertical;"><?= sanitize($row['rawText'] ?: 'No response received.'); ?></textarea>
                                 <details style="margin-top:10px;">
                                     <summary class="muted" style="cursor:pointer;">Raw body snippet</summary>
-                                    <pre style="background:#0f1520;border:1px solid #253047;border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap;"><?= sanitize($row['rawBodySnippet'] ?: 'No body captured.'); ?></pre>
+                                    <pre style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap;"><?= sanitize($row['rawBodySnippet'] ?: 'No body captured.'); ?></pre>
                                 </details>
                                 <?php if (!empty($row['errors'])): ?>
                                     <ul style="margin:10px 0 0 0;padding-left:18px;color:#f77676;">

@@ -36,7 +36,7 @@ safe_page(function () {
             <div style="margin-top:12px;display:grid;gap:8px;">
                 <div class="pill"><?= sanitize('Tender: ' . ($workorder['tenderId'] ?? 'N/A')); ?></div>
                 <?php if (!empty($workorder['description'])): ?>
-                    <div class="card" style="background:#0f1625;">
+                    <div class="card" style="background:var(--surface-2);">
                         <strong><?= sanitize('Description'); ?></strong>
                         <p class="muted"><?= nl2br(sanitize($workorder['description'] ?? '')); ?></p>
                     </div>

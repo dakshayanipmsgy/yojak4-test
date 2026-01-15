@@ -52,7 +52,7 @@ safe_page(function () {
         $path = $generatedDir . '/' . $filename;
         $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'
             . htmlspecialchars($tpl['name'] ?? 'Template')
-            . '</title><style>body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:28px;}h1{margin-top:0;}pre{white-space:pre-wrap;font-family:inherit;line-height:1.6;}</style></head><body>'
+            . '</title><style>body{font-family:Arial,sans-serif;background:var(--surface);color:var(--text);padding:28px;}h1{margin-top:0;}pre{white-space:pre-wrap;font-family:inherit;line-height:1.6;}</style></head><body>'
             . '<h1>' . htmlspecialchars($tpl['name'] ?? 'Template') . '</h1>'
             . '<pre>' . htmlspecialchars($tpl['body'] ?? '') . '</pre>'
             . '</body></html>';

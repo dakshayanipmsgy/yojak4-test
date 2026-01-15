@@ -36,7 +36,7 @@ safe_page(function () {
                 </div>
                 <div class="field">
                     <label for="description-new"><?= sanitize('Description (optional)'); ?></label>
-                    <textarea id="description-new" name="description" rows="2" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"></textarea>
+                    <textarea id="description-new" name="description" rows="2" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"></textarea>
                 </div>
                 <div class="field" style="display:flex;align-items:center;gap:8px;">
                     <input type="checkbox" id="visible-new" name="visibleToContractors" checked style="width:auto;">
@@ -44,7 +44,7 @@ safe_page(function () {
                 </div>
                 <div class="field">
                     <label for="items-new"><?= sanitize('Items (one per line, use "|description|category|required" optional segments)'); ?></label>
-                    <textarea id="items-new" name="items" rows="3" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"></textarea>
+                    <textarea id="items-new" name="items" rows="3" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"></textarea>
                 </div>
                 <button class="btn" type="submit"><?= sanitize('Create'); ?></button>
             </form>
@@ -76,7 +76,7 @@ safe_page(function () {
                         </div>
                         <div class="field">
                             <label><?= sanitize('Description'); ?></label>
-                            <textarea name="description" rows="2" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"><?= htmlspecialchars($set['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                            <textarea name="description" rows="2" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"><?= htmlspecialchars($set['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
                         </div>
                         <div class="field" style="display:flex;align-items:center;gap:8px;">
                             <input type="checkbox" name="visibleToContractors" <?= !empty($set['visibleToContractors']) ? 'checked' : ''; ?> style="width:auto;">
@@ -84,7 +84,7 @@ safe_page(function () {
                         </div>
                         <div class="field">
                             <label><?= sanitize('Items'); ?></label>
-                            <textarea name="items" rows="3" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"><?php
+                            <textarea name="items" rows="3" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"><?php
                                 $lines = [];
                                 foreach ($set['items'] ?? [] as $item) {
                                     $line = ($item['title'] ?? '');

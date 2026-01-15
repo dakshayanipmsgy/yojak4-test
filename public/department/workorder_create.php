@@ -84,7 +84,7 @@ safe_page(function () {
                 </div>
                 <div class="field">
                     <label for="description"><?= sanitize('Description'); ?></label>
-                    <textarea id="description" name="description" rows="3" style="width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px;"></textarea>
+                    <textarea id="description" name="description" rows="3" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;"></textarea>
                 </div>
                 <button class="btn" type="submit"><?= sanitize('Save Workorder'); ?></button>
             </form>

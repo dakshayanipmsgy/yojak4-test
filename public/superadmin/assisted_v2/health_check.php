@@ -171,7 +171,7 @@ safe_page(function () {
                 <p class="muted" style="margin:4px 0 0;"><?= sanitize('Scan recent packs for missing canonical keys and placeholder aliases.'); ?></p>
             </div>
             <?php if ($repairs): ?>
-                <div class="flash" style="background:#0b111a;border:1px solid #1f6feb33;">
+                <div class="flash" style="background:var(--surface-2);border:1px solid #1f6feb33;">
                     <?= sanitize('Repairs completed for pack(s): ' . implode(', ', array_filter($repairs))); ?>
                 </div>
             <?php endif; ?>
