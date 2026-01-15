@@ -35,6 +35,7 @@ safe_page(function () {
     $catalog = pack_field_meta_catalog($pack, $annexureTemplates, $contractorTemplates);
     $financialBlocked = array_flip(pack_financial_manual_field_keys($annexureTemplates));
     $updatedCount = 0;
+    $memoryCandidates = [];
     $errors = [];
     foreach ($fields as $key => $value) {
         $normalized = pack_normalize_placeholder_key((string)$key);
@@ -84,12 +85,21 @@ safe_page(function () {
             $pack['fieldRegistry'][$normalized] = $clean;
             $updatedCount++;
         }
+        $memoryCandidates[$normalized] = [
+            'label' => $catalog[$normalized]['label'] ?? profile_memory_label_from_key($normalized),
+            'value' => $clean,
+            'type' => $catalog[$normalized]['type'] ?? 'text',
+        ];
     }
 
     if ($errors) {
         set_flash('error', implode(' ', array_slice($errors, 0, 3)));
         redirect('/contractor/pack_view.php?packId=' . urlencode($packId) . '#field-registry');
         return;
+    }
+
+    if ($memoryCandidates) {
+        profile_memory_upsert_entries($yojId, $memoryCandidates, 'pack');
     }
 
     if ($updatedCount > 0) {

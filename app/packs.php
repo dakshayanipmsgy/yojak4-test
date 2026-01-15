@@ -1352,6 +1352,31 @@ function pack_profile_placeholder_values(array $contractor): array
     return $values;
 }
 
+function pack_profile_memory_values(string $yojId): array
+{
+    if ($yojId === '') {
+        return [];
+    }
+    static $cache = [];
+    if (isset($cache[$yojId])) {
+        return $cache[$yojId];
+    }
+    $memory = load_profile_memory($yojId);
+    $values = [];
+    foreach (($memory['fields'] ?? []) as $key => $entry) {
+        $normalized = pack_normalize_placeholder_key((string)$key);
+        if ($normalized === '') {
+            continue;
+        }
+        $value = trim((string)($entry['value'] ?? ''));
+        if ($value !== '') {
+            $values[$normalized] = $value;
+        }
+    }
+    $cache[$yojId] = $values;
+    return $values;
+}
+
 function pack_resolve_field_value(string $key, array $pack, array $contractor, bool $useOverrides = true): string
 {
     return resolve_field_value($pack, $contractor, $key, $useOverrides);
@@ -1390,6 +1415,7 @@ function pack_seed_field_registry(array $pack, array $contractor, array $annexur
     $registry = is_array($pack['fieldRegistry'] ?? null) ? $pack['fieldRegistry'] : [];
     $catalog = pack_field_meta_catalog($pack, $annexureTemplates, $contractorTemplates);
     $profile = pack_profile_placeholder_values($contractor);
+    $memory = pack_profile_memory_values((string)($contractor['yojId'] ?? ''));
 
     foreach (array_keys($catalog) as $key) {
         $normalized = pack_normalize_placeholder_key($key);
@@ -1399,7 +1425,7 @@ function pack_seed_field_registry(array $pack, array $contractor, array $annexur
         if (array_key_exists($normalized, $registry)) {
             continue;
         }
-        $registry[$normalized] = trim((string)($profile[$normalized] ?? ''));
+        $registry[$normalized] = trim((string)($memory[$normalized] ?? ($profile[$normalized] ?? '')));
     }
 
     $pack['fieldRegistry'] = $registry;
