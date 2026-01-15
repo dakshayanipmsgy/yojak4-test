@@ -235,6 +235,21 @@ safe_page(function () {
                     font-size: 1.7rem;
                 }
             }
+            .suggestion-cta {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 16px;
+                flex-wrap: wrap;
+            }
+            .suggestion-cta h3 {
+                margin: 0 0 6px 0;
+                color: #0f172a;
+            }
+            .suggestion-cta p {
+                margin: 0;
+                color: var(--muted);
+            }
         </style>
         <div class="card">
             <div class="dept-dashboard-header">
@@ -286,6 +301,15 @@ safe_page(function () {
                     <?php endif; ?>
                     <a class="btn secondary" href="/department/support.php"><?= sanitize('Report Issue'); ?></a>
                 </div>
+            </div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+            <div class="suggestion-cta">
+                <div>
+                    <h3><?= sanitize('Help us improve YOJAK'); ?></h3>
+                    <p><?= sanitize('We’re building YOJAK to fulfill all your needs. Please share what features you want, or what is confusing, so we can improve.'); ?></p>
+                </div>
+                <a class="btn" href="/suggestions/new.php?page=/department/dashboard.php"><?= sanitize('Share a Suggestion'); ?></a>
             </div>
         </div>
         <div class="card" style="margin-top:16px;">
