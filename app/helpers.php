@@ -48,6 +48,8 @@ function ensure_data_structure(): void
         DATA_PATH . '/suggestions',
         DATA_PATH . '/ratelimits',
         DATA_PATH . '/ratelimits/suggestions',
+        DATA_PATH . '/otp',
+        DATA_PATH . '/otp/contractor_signup',
     ];
 
     foreach ($directories as $dir) {
@@ -134,6 +136,9 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/templates.log',
         DATA_PATH . '/logs/site.log',
         DATA_PATH . '/logs/suggestions.log',
+        DATA_PATH . '/logs/whatsapp.log',
+        DATA_PATH . '/logs/email.log',
+        DATA_PATH . '/logs/otp.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {
