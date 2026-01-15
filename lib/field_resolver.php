@@ -26,6 +26,10 @@ function resolve_field_value(array $pack, array $contractor, string $key, bool $
     if (array_key_exists($key, $derived) && field_value_present($derived[$key])) {
         return trim((string)$derived[$key]);
     }
+    $memory = pack_profile_memory_values((string)($contractor['yojId'] ?? ''));
+    if (array_key_exists($key, $memory) && field_value_present($memory[$key])) {
+        return trim((string)$memory[$key]);
+    }
     $profile = pack_profile_placeholder_values($contractor);
     return trim((string)($profile[$key] ?? ''));
 }

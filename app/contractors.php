@@ -32,6 +32,11 @@ function ensure_contractors_root(): void
     if (!file_exists($uploadLog)) {
         touch($uploadLog);
     }
+
+    $profileMemoryLog = DATA_PATH . '/logs/profile_memory.log';
+    if (!file_exists($profileMemoryLog)) {
+        touch($profileMemoryLog);
+    }
 }
 
 function contractors_index_path(): string
@@ -72,6 +77,157 @@ function contractor_profile_defaults(): array
         'placeDefault' => null,
         'updatedAt' => null,
     ];
+}
+
+function contractor_profile_memory_path(string $yojId): string
+{
+    return contractors_approved_path($yojId) . '/profile_memory.json';
+}
+
+function profile_memory_defaults(): array
+{
+    return [
+        'version' => 1,
+        'fields' => [],
+        'lastUpdatedAt' => null,
+    ];
+}
+
+function profile_memory_label_from_key(string $key): string
+{
+    $clean = preg_replace('/^custom\./', '', $key);
+    $clean = str_replace(['.', '_'], ' ', $clean);
+    return ucwords(trim($clean));
+}
+
+function profile_memory_max_length(string $type): int
+{
+    return $type === 'textarea' ? 2000 : 500;
+}
+
+function profile_memory_limit_value(string $value, int $max): string
+{
+    $value = trim(strip_tags($value));
+    if ($max > 0 && function_exists('mb_substr')) {
+        return mb_substr($value, 0, $max);
+    }
+    if ($max > 0) {
+        return substr($value, 0, $max);
+    }
+    return $value;
+}
+
+function profile_memory_value_contains_pricing(string $value): bool
+{
+    $value = trim($value);
+    if ($value === '') {
+        return false;
+    }
+    $hasCurrency = (bool)preg_match('/(₹|rs\.?|inr)/i', $value);
+    $hasDigits = (bool)preg_match('/\d/', $value);
+    $hasKeyword = (bool)preg_match('/\b(rate|boq|amount|price|pricing)\b/i', $value);
+    return $hasCurrency && $hasDigits && $hasKeyword;
+}
+
+function profile_memory_is_eligible_key(string $key, string $value): bool
+{
+    $normalized = pack_normalize_placeholder_key($key);
+    if ($normalized === '') {
+        return false;
+    }
+    if (preg_match('/^(tender|meta|dates|fees)\./', $normalized)) {
+        return false;
+    }
+    if (preg_match('/^table\..+\.(rate|amount)$/', $normalized)) {
+        return false;
+    }
+    $allowedPrefix = (bool)preg_match('/^(firm|tax|contact|bank|signatory)\./', $normalized)
+        || str_starts_with($normalized, 'custom.');
+    if (!$allowedPrefix) {
+        return false;
+    }
+    if (profile_memory_value_contains_pricing($value)) {
+        return false;
+    }
+    return true;
+}
+
+function load_profile_memory(string $yojId): array
+{
+    static $cache = [];
+    if (isset($cache[$yojId])) {
+        return $cache[$yojId];
+    }
+    $path = contractor_profile_memory_path($yojId);
+    $data = readJson($path);
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $memory = array_merge(profile_memory_defaults(), $data);
+    if (!is_array($memory['fields'] ?? null)) {
+        $memory['fields'] = [];
+    }
+    $cache[$yojId] = $memory;
+    return $memory;
+}
+
+function save_profile_memory(string $yojId, array $memory): void
+{
+    writeJsonAtomic(contractor_profile_memory_path($yojId), $memory);
+}
+
+function profile_memory_upsert_entries(string $yojId, array $entries, string $source): int
+{
+    if (!$entries) {
+        return 0;
+    }
+    $memory = load_profile_memory($yojId);
+    $fields = is_array($memory['fields'] ?? null) ? $memory['fields'] : [];
+    $now = now_kolkata()->format(DateTime::ATOM);
+    $updated = 0;
+
+    foreach ($entries as $key => $entry) {
+        $normalized = pack_normalize_placeholder_key((string)$key);
+        if ($normalized === '') {
+            continue;
+        }
+        $rawValue = (string)($entry['value'] ?? '');
+        $type = (string)($entry['type'] ?? 'text');
+        $type = $type === 'textarea' ? 'textarea' : ($type === 'number' ? 'number' : ($type === 'choice' ? 'choice' : 'text'));
+        $value = profile_memory_limit_value($rawValue, profile_memory_max_length($type));
+        if ($value === '') {
+            continue;
+        }
+        if (!profile_memory_is_eligible_key($normalized, $value)) {
+            continue;
+        }
+        $label = trim((string)($entry['label'] ?? ''));
+        if ($label === '') {
+            $label = profile_memory_label_from_key($normalized);
+        }
+        $fields[$normalized] = [
+            'label' => $label,
+            'value' => $value,
+            'type' => $type,
+            'updatedAt' => $now,
+            'source' => $source,
+        ];
+        $updated++;
+        logEvent(DATA_PATH . '/logs/profile_memory.log', [
+            'at' => $now,
+            'yojId' => $yojId,
+            'event' => 'MEMORY_UPSERT',
+            'key' => $normalized,
+        ]);
+    }
+
+    if ($updated > 0) {
+        $memory['fields'] = $fields;
+        $memory['lastUpdatedAt'] = $now;
+        save_profile_memory($yojId, $memory);
+    }
+
+    return $updated;
 }
 
 function normalize_contractor_profile(array $contractor): array

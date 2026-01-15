@@ -9,6 +9,24 @@ safe_page(function () {
         render_error_page('Contractor profile not found.');
         return;
     }
+    $profileMemory = load_profile_memory($user['yojId']);
+    $memoryEntries = [];
+    foreach (($profileMemory['fields'] ?? []) as $key => $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        $memoryEntries[] = [
+            'key' => (string)$key,
+            'label' => (string)($entry['label'] ?? profile_memory_label_from_key((string)$key)),
+            'value' => trim((string)($entry['value'] ?? '')),
+            'type' => (string)($entry['type'] ?? 'text'),
+            'updatedAt' => (string)($entry['updatedAt'] ?? ''),
+            'source' => (string)($entry['source'] ?? ''),
+        ];
+    }
+    usort($memoryEntries, static function (array $a, array $b): int {
+        return strcmp($b['updatedAt'], $a['updatedAt']);
+    });
 
     $title = get_app_config()['appName'] . ' | Contractor Profile';
     $errors = $_SESSION['contractor_profile_errors'] ?? [];
@@ -61,7 +79,7 @@ safe_page(function () {
     $completedRequired = $totalRequired - count($missing);
     $completionPercent = (int)round(($completedRequired / max(1, $totalRequired)) * 100);
 
-    render_layout($title, function () use ($errors, $contractor, $form, $completionPercent, $missing) {
+    render_layout($title, function () use ($errors, $contractor, $form, $completionPercent, $missing, $memoryEntries) {
         $districts = ['Bokaro', 'Chatra', 'Deoghar', 'Dhanbad', 'Dumka', 'East Singhbhum', 'Garhwa', 'Giridih', 'Godda', 'Gumla', 'Hazaribagh', 'Jamtara', 'Khunti', 'Koderma', 'Latehar', 'Lohardaga', 'Pakur', 'Palamu', 'Ramgarh', 'Ranchi', 'Sahebganj', 'Seraikela Kharsawan', 'Simdega', 'West Singhbhum'];
         $firmTypes = ['Proprietorship', 'Partnership', 'LLP', 'Company', 'Other'];
         ?>
@@ -203,6 +221,73 @@ safe_page(function () {
             </form>
         </div>
 
+        <div class="card" style="display:grid;gap:14px;" id="profile-memory">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <div>
+                    <h2 style="margin-bottom:6px;"><?= sanitize('Saved Fields (Auto-fill Memory)'); ?></h2>
+                    <p class="muted" style="margin:0;"><?= sanitize('Values learned from offline packs auto-fill future placeholders. Edit or delete saved fields as needed.'); ?></p>
+                </div>
+                <div class="pill" style="background:#13233a;color:#9cc4ff;font-weight:600;"><?= sanitize(count($memoryEntries) . ' saved'); ?></div>
+            </div>
+            <details style="border:1px solid #30363d;border-radius:12px;padding:12px;background:#0f1520;">
+                <summary style="cursor:pointer;font-weight:600;"><?= sanitize('Advanced'); ?></summary>
+                <div style="display:grid;gap:12px;margin-top:12px;">
+                    <div class="field" style="margin:0;">
+                        <label for="memory-search"><?= sanitize('Find saved field...'); ?></label>
+                        <input id="memory-search" type="search" placeholder="Search by label, key, or value" style="width:100%;">
+                    </div>
+                    <?php if ($memoryEntries): ?>
+                        <div style="overflow:auto;border:1px solid #2a323c;border-radius:12px;">
+                            <table class="table" style="min-width:760px;">
+                                <thead>
+                                <tr>
+                                    <th><?= sanitize('Label'); ?></th>
+                                    <th><?= sanitize('Key'); ?></th>
+                                    <th><?= sanitize('Value'); ?></th>
+                                    <th><?= sanitize('Updated'); ?></th>
+                                    <th><?= sanitize('Actions'); ?></th>
+                                </tr>
+                                </thead>
+                                <tbody id="memory-table-body">
+                                <?php foreach ($memoryEntries as $entry): ?>
+                                    <?php
+                                    $search = strtolower(trim($entry['label'] . ' ' . $entry['key'] . ' ' . $entry['value']));
+                                    ?>
+                                    <tr data-search="<?= sanitize($search); ?>">
+                                        <td><?= sanitize($entry['label']); ?></td>
+                                        <td><span class="pill"><?= sanitize($entry['key']); ?></span></td>
+                                        <td>
+                                            <form method="post" action="/contractor/profile_memory_save.php" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                                <input type="hidden" name="key" value="<?= sanitize($entry['key']); ?>">
+                                                <?php if ($entry['type'] === 'textarea'): ?>
+                                                    <textarea name="value" rows="2" maxlength="<?= profile_memory_max_length('textarea'); ?>" style="min-width:240px;"><?= sanitize($entry['value']); ?></textarea>
+                                                <?php else: ?>
+                                                    <input name="value" value="<?= sanitize($entry['value']); ?>" maxlength="<?= profile_memory_max_length('text'); ?>" style="min-width:220px;">
+                                                <?php endif; ?>
+                                                <button class="btn secondary" type="submit"><?= sanitize('Save'); ?></button>
+                                            </form>
+                                        </td>
+                                        <td class="muted" style="font-size:12px;white-space:nowrap;"><?= sanitize($entry['updatedAt'] !== '' ? $entry['updatedAt'] : '—'); ?></td>
+                                        <td>
+                                            <form method="post" action="/contractor/profile_memory_delete.php">
+                                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                                <input type="hidden" name="key" value="<?= sanitize($entry['key']); ?>">
+                                                <button class="btn danger" type="submit" onclick="return confirm('Remove this saved field?');"><?= sanitize('Delete'); ?></button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="muted"><?= sanitize('No saved fields yet. Fill a new placeholder in a pack to create memory.'); ?></div>
+                    <?php endif; ?>
+                </div>
+            </details>
+        </div>
+
         <div class="card" style="display:grid;gap:14px;">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
                 <div>
@@ -228,6 +313,22 @@ safe_page(function () {
                 <button class="btn" type="submit"><?= sanitize('Save Password'); ?></button>
             </form>
         </div>
+        <script>
+            (function () {
+                const searchInput = document.getElementById('memory-search');
+                const rows = Array.from(document.querySelectorAll('#memory-table-body tr'));
+                if (!searchInput || !rows.length) {
+                    return;
+                }
+                searchInput.addEventListener('input', function () {
+                    const query = searchInput.value.trim().toLowerCase();
+                    rows.forEach((row) => {
+                        const haystack = (row.getAttribute('data-search') || '');
+                        row.style.display = haystack.includes(query) ? '' : 'none';
+                    });
+                });
+            })();
+        </script>
         <?php
     });
 });
