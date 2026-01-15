@@ -39,7 +39,6 @@ function render_layout(string $title, callable $content): void
         'yojakLogin' => ['hi' => 'YOJAK लॉगिन', 'en' => 'YOJAK Login'],
         'call' => ['hi' => 'कॉल', 'en' => 'Call'],
         'email' => ['hi' => 'ईमेल', 'en' => 'Email'],
-        'tagline' => ['hi' => 'ठेकेदार-प्रथम दस्तावेज़ प्लेटफ़ॉर्म', 'en' => 'Contractor-first documentation'],
     ];
     $navLinks = [];
     $logoutAction = null;
@@ -131,7 +130,7 @@ function render_layout(string $title, callable $content): void
     }
     $mobilePrimaryAction = $user
         ? ['label' => t('nav_home'), 'href' => '/home.php', 'style' => 'secondary']
-        : ['label' => $publicNav['yojakLogin'][$lang], 'href' => '/auth/login.php', 'style' => 'primary'];
+        : null;
     $flashes = consume_flashes();
     ?>
     <!DOCTYPE html>
@@ -542,6 +541,11 @@ function render_layout(string $title, callable $content): void
                 .mobile-only { display: flex; }
                 .nav {
                     padding: 6px 0;
+                    align-items: center;
+                }
+                .nav-actions {
+                    margin-left: auto;
+                    justify-content: flex-end;
                 }
                 .wrap { padding: 0 16px; }
                 .nav-left { gap: 8px; }
@@ -621,19 +625,18 @@ function render_layout(string $title, callable $content): void
             <?php endif; ?>
             <div class="wrap nav">
                 <div class="nav-left">
-                    <button class="hamburger mobile-only" type="button" aria-label="Open menu" data-mobile-toggle>☰</button>
                     <div class="brand">
                         <?= render_logo_html('md'); ?>
                         <div>
                             <?= sanitize($appName); ?>
-                            <?php if ($isPublicVisitor): ?>
-                                <div class="muted" style="font-size:12px;"><?= sanitize($publicNav['tagline'][$lang]); ?></div>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
                 <div class="nav-actions mobile-only">
-                    <a class="btn <?= $mobilePrimaryAction['style'] === 'primary' ? '' : 'secondary'; ?>" href="<?= sanitize($mobilePrimaryAction['href']); ?>"><?= sanitize($mobilePrimaryAction['label']); ?></a>
+                    <button class="hamburger" type="button" aria-label="Open menu" data-mobile-toggle>☰</button>
+                    <?php if ($mobilePrimaryAction): ?>
+                        <a class="btn <?= $mobilePrimaryAction['style'] === 'primary' ? '' : 'secondary'; ?>" href="<?= sanitize($mobilePrimaryAction['href']); ?>"><?= sanitize($mobilePrimaryAction['label']); ?></a>
+                    <?php endif; ?>
                 </div>
                 <div class="nav-links desktop-only">
                     <?php foreach ($navLinks as $link): ?>
@@ -655,7 +658,6 @@ function render_layout(string $title, callable $content): void
                     <?php if (!$user): ?>
                         <a href="/department/login.php" class="secondary"><?= sanitize($publicNav['departmentLogin'][$lang]); ?></a>
                         <a href="/contractor/login.php" class="secondary"><?= sanitize($publicNav['contractorLogin'][$lang]); ?></a>
-                        <a href="/auth/login.php" class="primary"><?= sanitize($publicNav['yojakLogin'][$lang]); ?></a>
                     <?php endif; ?>
                 </div>
             </div>
