@@ -218,6 +218,21 @@ safe_page(function () {
             .dash-link:hover {
                 text-decoration: underline;
             }
+            .suggestion-cta {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 16px;
+                flex-wrap: wrap;
+            }
+            .suggestion-cta p {
+                margin: 0;
+                color: var(--muted);
+            }
+            .suggestion-cta h3 {
+                margin: 0 0 6px 0;
+                color: #0f172a;
+            }
         </style>
 
         <div class="card" style="display:grid; gap:12px;">
@@ -228,6 +243,16 @@ safe_page(function () {
                 <a class="btn secondary" href="/contractor/pack_create.php"><?= sanitize('Create Pack'); ?></a>
                 <a class="btn secondary" href="/contractor/vault.php#vault-upload"><?= sanitize('Upload to Vault'); ?></a>
                 <a class="btn secondary" href="/contractor/profile.php"><?= sanitize('My Profile'); ?></a>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+            <div class="suggestion-cta">
+                <div>
+                    <h3><?= sanitize('Help us improve YOJAK'); ?></h3>
+                    <p><?= sanitize('We’re building YOJAK to fulfill all your needs. Please share what features you want, or what is confusing, so we can improve.'); ?></p>
+                </div>
+                <a class="btn" href="/suggestions/new.php?page=/contractor/dashboard.php"><?= sanitize('Share a Suggestion'); ?></a>
             </div>
         </div>
 
