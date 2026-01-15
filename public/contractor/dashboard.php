@@ -227,6 +227,7 @@ safe_page(function () {
                 <a class="btn" href="/contractor/offline_tender_create.php"><?= sanitize('Create Offline Tender'); ?></a>
                 <a class="btn secondary" href="/contractor/pack_create.php"><?= sanitize('Create Pack'); ?></a>
                 <a class="btn secondary" href="/contractor/vault.php#vault-upload"><?= sanitize('Upload to Vault'); ?></a>
+                <a class="btn secondary" href="/contractor/profile.php"><?= sanitize('My Profile'); ?></a>
             </div>
         </div>
 
