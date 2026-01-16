@@ -179,34 +179,6 @@ function render_layout(string $title, callable $content): void
                 justify-content: space-between;
             }
             .top-contact a { color: var(--text); }
-            .top-contact-icons {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
-            .top-contact-icon {
-                width: 34px;
-                height: 34px;
-                border-radius: 999px;
-                border: 1px solid var(--border);
-                background: #ffffff;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                color: var(--muted);
-                transition: all 0.2s ease;
-            }
-            .top-contact-icon svg {
-                width: 16px;
-                height: 16px;
-                fill: currentColor;
-            }
-            .top-contact-icon:hover,
-            .top-contact-icon:focus-visible {
-                color: var(--primary);
-                border-color: rgba(31,111,235,0.4);
-                box-shadow: 0 4px 12px rgba(31,111,235,0.18);
-            }
             .nav {
                 display: flex;
                 align-items: center;
@@ -628,21 +600,15 @@ function render_layout(string $title, callable $content): void
             <?php if ($isPublicVisitor && $contactDetails): ?>
                 <div class="top-contact">
                     <div class="wrap top-contact-inner">
-                        <div class="top-contact-icons">
-                            <a class="top-contact-icon" href="tel:<?= sanitize($contactDetails['mobile']); ?>" aria-label="Call YOJAK" title="Call <?= sanitize($contactDetails['mobile']); ?>">
-                                <?= public_contact_icon_svg('phone'); ?>
-                            </a>
-                            <a class="top-contact-icon" href="mailto:<?= sanitize($contactDetails['email']); ?>" aria-label="Email YOJAK" title="Email <?= sanitize($contactDetails['email']); ?>">
-                                <?= public_contact_icon_svg('email'); ?>
-                            </a>
+                        <div>
+                            <strong><?= sanitize($publicNav['call'][$lang]); ?>:</strong> <a href="tel:<?= sanitize($contactDetails['mobile']); ?>"><?= sanitize($contactDetails['mobile']); ?></a>
+                            <span class="muted">•</span>
+                            <strong><?= sanitize($publicNav['email'][$lang]); ?>:</strong> <a href="mailto:<?= sanitize($contactDetails['email']); ?>"><?= sanitize($contactDetails['email']); ?></a>
                         </div>
-                        <div class="top-contact-icons">
-                            <a class="top-contact-icon" href="<?= sanitize($contactDetails['instagramUrl']); ?>" target="_blank" rel="noopener noreferrer" aria-label="YOJAK on Instagram" title="Instagram: <?= sanitize($contactDetails['instagram']); ?>">
-                                <?= public_contact_icon_svg('instagram'); ?>
-                            </a>
-                            <a class="top-contact-icon" href="<?= sanitize($contactDetails['facebookUrl']); ?>" target="_blank" rel="noopener noreferrer" aria-label="YOJAK on Facebook" title="Facebook: <?= sanitize($contactDetails['facebook']); ?>">
-                                <?= public_contact_icon_svg('facebook'); ?>
-                            </a>
+                        <div>
+                            <a href="<?= sanitize($contactDetails['instagramUrl']); ?>" target="_blank" rel="noopener">Instagram: <?= sanitize($contactDetails['instagram']); ?></a>
+                            <span class="muted">•</span>
+                            <a href="<?= sanitize($contactDetails['facebookUrl']); ?>" target="_blank" rel="noopener">Facebook: <?= sanitize($contactDetails['facebook']); ?></a>
                         </div>
                     </div>
                 </div>
