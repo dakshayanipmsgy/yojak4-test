@@ -600,15 +600,21 @@ function render_layout(string $title, callable $content): void
             <?php if ($isPublicVisitor && $contactDetails): ?>
                 <div class="top-contact">
                     <div class="wrap top-contact-inner">
-                        <div>
-                            <strong><?= sanitize($publicNav['call'][$lang]); ?>:</strong> <a href="tel:<?= sanitize($contactDetails['mobile']); ?>"><?= sanitize($contactDetails['mobile']); ?></a>
-                            <span class="muted">•</span>
-                            <strong><?= sanitize($publicNav['email'][$lang]); ?>:</strong> <a href="mailto:<?= sanitize($contactDetails['email']); ?>"><?= sanitize($contactDetails['email']); ?></a>
+                        <div class="contact-icon-row">
+                            <a class="contact-icon-link" href="tel:<?= sanitize($contactDetails['mobile']); ?>" aria-label="Call YOJAK" title="Call <?= sanitize($contactDetails['mobile']); ?>">
+                                <?= public_icon_svg('phone'); ?>
+                            </a>
+                            <a class="contact-icon-link" href="mailto:<?= sanitize($contactDetails['email']); ?>" aria-label="Email YOJAK" title="Email <?= sanitize($contactDetails['email']); ?>">
+                                <?= public_icon_svg('email'); ?>
+                            </a>
                         </div>
-                        <div>
-                            <a href="<?= sanitize($contactDetails['instagramUrl']); ?>" target="_blank" rel="noopener">Instagram: <?= sanitize($contactDetails['instagram']); ?></a>
-                            <span class="muted">•</span>
-                            <a href="<?= sanitize($contactDetails['facebookUrl']); ?>" target="_blank" rel="noopener">Facebook: <?= sanitize($contactDetails['facebook']); ?></a>
+                        <div class="contact-icon-row">
+                            <a class="contact-icon-link" href="<?= sanitize($contactDetails['instagramUrl']); ?>" target="_blank" rel="noopener noreferrer" aria-label="YOJAK on Instagram" title="Instagram: <?= sanitize($contactDetails['instagram']); ?>">
+                                <?= public_icon_svg('instagram'); ?>
+                            </a>
+                            <a class="contact-icon-link" href="<?= sanitize($contactDetails['facebookUrl']); ?>" target="_blank" rel="noopener noreferrer" aria-label="YOJAK on Facebook" title="Facebook: <?= sanitize($contactDetails['facebook']); ?>">
+                                <?= public_icon_svg('facebook'); ?>
+                            </a>
                         </div>
                     </div>
                 </div>
