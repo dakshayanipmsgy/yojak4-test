@@ -20,6 +20,21 @@ safe_page(function () {
         return;
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'log_toc') {
+        require_csrf();
+        $reason = trim((string)($_POST['reason'] ?? 'unknown'));
+        logEvent(PACK_PRINT_LOG, [
+            'event' => 'TOC_CALC_FAIL',
+            'at' => now_kolkata()->format(DateTime::ATOM),
+            'yojId' => $yojId,
+            'packId' => $packId,
+            'reason' => $reason,
+        ]);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode(['ok' => true]);
+        return;
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_csrf();
         $pageSize = trim((string)($_POST['pageSize'] ?? 'A4'));
