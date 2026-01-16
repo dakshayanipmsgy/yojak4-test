@@ -35,7 +35,7 @@ safe_page(function () {
 
     $contractor = load_contractor($yojId) ?? [];
     $vaultFiles = contractor_vault_index($yojId);
-    $zip->addFromString('pack_index.html', pack_index_html($pack, $contractor, ['mode' => 'print'], $vaultFiles));
+    $zip->addFromString('pack_index.html', pack_index_html($pack, $contractor, [], $vaultFiles));
 
     $baseUpload = packs_upload_root($yojId, $context);
     foreach ($pack['items'] ?? [] as $item) {
