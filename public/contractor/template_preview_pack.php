@@ -35,9 +35,12 @@ safe_page(function () {
 
     logEvent(PACK_PRINT_LOG, [
         'event' => 'PACK_PRINT',
+        'at' => now_kolkata()->format(DateTime::ATOM),
         'yojId' => $yojId,
         'packId' => $packId,
         'doc' => 'template_preview',
+        'mode' => 'preview',
+        'autoprint' => 0,
         'letterhead' => $letterhead,
         'tplId' => $tplId,
     ]);

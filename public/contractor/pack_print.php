@@ -15,7 +15,30 @@ safe_page(function () {
     ensure_packs_env($yojId, $context);
 
     $pack = $packId !== '' ? load_pack($yojId, $packId, $context) : null;
+    $mode = trim((string)($_GET['mode'] ?? 'preview'));
+    if (!in_array($mode, ['preview', 'print'], true)) {
+        $mode = 'preview';
+    }
     if (!$pack || ($pack['yojId'] ?? '') !== $yojId) {
+        logEvent(PACK_PRINT_LOG, [
+            'event' => 'PACK_PRINT_ERROR',
+            'at' => now_kolkata()->format(DateTime::ATOM),
+            'yojId' => $yojId,
+            'packId' => $packId,
+            'doc' => $doc,
+            'mode' => $mode,
+            'autoprint' => 0,
+        ]);
+        if ($mode === 'print') {
+            header('Content-Type: text/html; charset=UTF-8');
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack not found</title>'
+                . '<link rel="stylesheet" href="/assets/css/print.css"></head>'
+                . '<body class="print-mode"><div class="print-area" style="padding:24px;">'
+                . '<h1 style="margin:0 0 8px 0;">Pack not found</h1>'
+                . '<p style="margin:0;">The requested tender pack could not be located.</p>'
+                . '</div></body></html>';
+            return;
+        }
         render_error_page('Pack not found.');
         return;
     }
@@ -68,10 +91,6 @@ safe_page(function () {
         return;
     }
 
-    $mode = trim((string)($_GET['mode'] ?? 'preview'));
-    if (!in_array($mode, ['preview', 'print'], true)) {
-        $mode = 'preview';
-    }
     $autoPrint = $mode === 'print' && (($_GET['autoprint'] ?? '') === '1');
     $printPrefs = array_merge(default_pack_print_prefs(), $pack['printPrefs'] ?? []);
     $pageSize = trim((string)($_GET['pageSize'] ?? $printPrefs['pageSize']));
