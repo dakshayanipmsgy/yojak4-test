@@ -2404,6 +2404,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;background:var(--surface-2);}
     .page-break{page-break-before:always;}
     footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
+    footer .page-number::after{content:'1';}
     .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
@@ -2413,6 +2414,35 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .print-settings select,.print-settings input{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);}
     .print-settings button{background:var(--primary);border:none;color:var(--primary-contrast);padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
     .print-settings .hint{font-size:12px;color:var(--muted);}
+    .print-actions{display:none;margin-bottom:12px;padding:12px;border:1px solid #d0d7de;border-radius:10px;background:#fff;color:#000;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+    .print-actions .btn{background:var(--primary);color:var(--primary-contrast);border:none;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
+    .print-actions .hint{font-size:12px;color:#444;}
+    body.print-mode{background:#fff !important;color:#000 !important;}
+    body.print-mode .page{background:#fff;border:1px solid #ddd;border-radius:0;box-shadow:none;padding:0;}
+    body.print-mode h1,body.print-mode h2,body.print-mode h3,body.print-mode h4,body.print-mode strong{color:#000;}
+    body.print-mode .muted{color:#444;}
+    body.print-mode a{color:#000;text-decoration:none;}
+    body.print-mode .print-settings{display:none;}
+    body.print-mode .print-actions{display:flex;}
+    body.print-mode .card-sm,body.print-mode .template-block,body.print-mode .warning{background:#fff;border:1px solid #ddd;}
+    body.print-mode .pill{background:#fff;border:1px solid #bbb;color:#000;}
+    body.print-mode th,body.print-mode td{border:1px solid #ddd;color:#000;}
+    body.print-mode th{background:#f7f7f7;}
+    body.print-mode .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
+    body.print-mode hr{border-top:1px solid #000 !important;}
+    @media print{
+        body{background:#fff !important;color:#000 !important;}
+        .page{box-shadow:none;border:1px solid #ddd;padding:0;background:#fff;}
+        a{color:#000;text-decoration:none;}
+        .print-settings,.print-actions{display:none;}
+        .card-sm,.template-block,.warning{background:#fff;border:1px solid #ddd;box-shadow:none;}
+        th,td{border:1px solid #ddd;color:#000;}
+        th{background:#f7f7f7;}
+        .pill{background:#fff;border:1px solid #bbb;color:#000;}
+        .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
+        hr{border-top:1px solid #000 !important;}
+        footer .page-number::after{content: counter(page);}
+    }
     </style>";
 
     $printSettings = load_contractor_print_settings($pack['yojId']);
@@ -2434,15 +2464,11 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $headerText = '<div class="blank" style="flex:1;"></div>';
     }
     $headerNote = $useLetterhead ? 'Using saved letterhead' : 'Letterhead space reserved (pre-printed)';
-    $headerLabel = $mode === 'preview' ? '<div class="muted" style="font-size:12px;">YOJAK Tender Pack</div>' : '';
-    $headerNoteHtml = $mode === 'preview'
-        ? '<div class="muted" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div>'
-        : '';
     $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
         . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
-        . '<div>' . $headerLabel . '<h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack'), ENT_QUOTES, 'UTF-8') . '</h1>'
+        . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack'), ENT_QUOTES, 'UTF-8') . '</h1>'
         . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></div>'
-        . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div>' . $headerNoteHtml . '</div>'
+        . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div><div class="muted" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div></div>'
         . '</div>';
 
     $footerText = '';
@@ -2451,8 +2477,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     } else {
         $footerText = '<div style="min-height:20mm;"></div>';
     }
-    $footerLabel = $mode === 'preview' ? 'Printed via YOJAK • Page ' : 'Page ';
-    $footer = '<footer>' . $footerText . '<div>' . $footerLabel . '<span class="page-number"></span></div></footer>';
+    $footer = '<footer>' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
 
     $settingsPanel = '';
     if ($mode === 'preview') {
@@ -2493,6 +2518,14 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '</form>';
     }
 
+    $printActions = '';
+    if ($mode === 'print') {
+        $printActions = '<div class="print-actions">'
+            . '<div><strong>Print mode</strong><div class="hint">In print dialog, keep Scale = 100% for exact sizing.</div></div>'
+            . '<button type="button" class="btn" data-print-now>Print now</button>'
+            . '</div>';
+    }
+
     $rateScript = "<script>
     (() => {
         const rateInputs = Array.from(document.querySelectorAll('.financial-rate'));
@@ -2524,6 +2557,10 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $autoPrintScript = "<script>
         (() => {
             const printNow = () => window.print();
+            const btn = document.querySelector('[data-print-now]');
+            if (btn) {
+                btn.addEventListener('click', printNow);
+            }
             if (" . ($autoPrint ? 'true' : 'false') . ") {
                 window.addEventListener('load', () => setTimeout(printNow, 300));
             }
@@ -2532,25 +2569,10 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     }
 
     $bodyClass = $mode === 'print' ? ' class="print-mode"' : '';
-    $sectionOutput = '';
-    foreach ($sections as $idx => $section) {
-        if ($docType === 'full') {
-            if ($idx > 0) {
-                $sectionOutput .= '<div class="page-break"></div>';
-            }
-        } elseif ($idx > 0) {
-            $sectionOutput .= '<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">';
-        }
-        $sectionOutput .= $section;
-    }
-    $printArea = '<div class="print-area">' . $header . $sectionOutput . $footer . '</div>';
-    $bodyContent = $mode === 'preview'
-        ? '<div class="page"><div class="no-print">' . $settingsPanel . '</div>' . $printArea . '</div>'
-        : $printArea;
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
         . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'
-        . '<link rel="stylesheet" href="/assets/css/print.css">'
-        . $styles . '</head><body' . $bodyClass . '>' . $bodyContent
+        . $styles . '</head><body' . $bodyClass . '><div class="page">' . $printActions . $settingsPanel . $header
+        . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sections) . $footer . '</div>'
         . $rateScript . $autoPrintScript . '</body></html>';
 
     return $html;
