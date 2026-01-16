@@ -8,7 +8,6 @@ safe_page(function (): void {
     $packId = trim((string)($_GET['packId'] ?? ''));
     $density = trim((string)($_GET['density'] ?? 'normal'));
     $autoprint = ($_GET['autoprint'] ?? '') === '1';
-    $mode = $autoprint ? 'print' : 'preview';
 
     $context = detect_pack_context($packId);
     ensure_packs_env($yojId, $context);
@@ -48,15 +47,6 @@ safe_page(function (): void {
         'packId' => $packId,
         'density' => $density,
         'autoprint' => $autoprint ? 1 : 0,
-    ]);
-    logEvent(DATA_PATH . '/logs/print_fix.log', [
-        'event' => 'PRINT_RENDER',
-        'at' => now_kolkata()->format(DateTime::ATOM),
-        'yojId' => $yojId,
-        'packId' => $packId,
-        'doc' => 'full',
-        'mode' => $mode,
-        'density' => $density,
     ]);
 
     header('Content-Type: text/html; charset=UTF-8');

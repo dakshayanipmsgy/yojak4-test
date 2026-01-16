@@ -49,7 +49,6 @@ safe_page(function () {
         $orientation = trim((string)($_POST['orientation'] ?? 'portrait'));
         $letterheadMode = trim((string)($_POST['letterheadMode'] ?? 'use_saved_letterhead'));
         $includeSnippets = ($_POST['includeSnippets'] ?? '1') !== '0';
-        $density = trim((string)($_POST['density'] ?? 'normal'));
         if (!in_array($pageSize, ['A4', 'Letter', 'Legal'], true)) {
             $pageSize = 'A4';
         }
@@ -59,16 +58,12 @@ safe_page(function () {
         if (!in_array($letterheadMode, ['blank_space', 'use_saved_letterhead'], true)) {
             $letterheadMode = 'use_saved_letterhead';
         }
-        if (!in_array($density, ['normal', 'compact', 'dense'], true)) {
-            $density = 'normal';
-        }
 
         $pack['printPrefs'] = [
             'pageSize' => $pageSize,
             'orientation' => $orientation,
             'letterheadMode' => $letterheadMode,
             'includeSnippets' => $includeSnippets,
-            'density' => $density,
         ];
         $pack['audit'][] = [
             'at' => now_kolkata()->format(DateTime::ATOM),
@@ -101,7 +96,6 @@ safe_page(function () {
     $pageSize = trim((string)($_GET['pageSize'] ?? $printPrefs['pageSize']));
     $orientation = trim((string)($_GET['orientation'] ?? $printPrefs['orientation']));
     $letterheadMode = trim((string)($_GET['letterheadMode'] ?? $printPrefs['letterheadMode']));
-    $density = trim((string)($_GET['density'] ?? $printPrefs['density']));
     if (!in_array($pageSize, ['A4', 'Letter', 'Legal'], true)) {
         $pageSize = 'A4';
     }
@@ -110,9 +104,6 @@ safe_page(function () {
     }
     if (!in_array($letterheadMode, ['blank_space', 'use_saved_letterhead'], true)) {
         $letterheadMode = 'use_saved_letterhead';
-    }
-    if (!in_array($density, ['normal', 'compact', 'dense'], true)) {
-        $density = 'normal';
     }
     if (isset($_GET['letterhead'])) {
         $letterheadMode = ($_GET['letterhead'] ?? '1') === '0' ? 'blank_space' : 'use_saved_letterhead';
@@ -133,7 +124,6 @@ safe_page(function () {
         'annexurePreview' => ($_GET['annexurePreview'] ?? '') === '1',
         'mode' => $mode,
         'autoprint' => $autoPrint,
-        'density' => $density,
     ];
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
     $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles, $annexureTemplates);
@@ -149,15 +139,6 @@ safe_page(function () {
         'pageSize' => $pageSize,
         'orientation' => $orientation,
         'annexureId' => $options['annexureId'],
-    ]);
-    logEvent(DATA_PATH . '/logs/print_fix.log', [
-        'event' => 'PRINT_RENDER',
-        'at' => now_kolkata()->format(DateTime::ATOM),
-        'yojId' => $yojId,
-        'packId' => $packId,
-        'doc' => $doc,
-        'mode' => $mode,
-        'density' => $density,
     ]);
     header('Content-Type: text/html; charset=UTF-8');
     echo $html;

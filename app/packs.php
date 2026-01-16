@@ -165,7 +165,6 @@ function default_pack_print_prefs(): array
         'orientation' => 'portrait',
         'letterheadMode' => 'use_saved_letterhead',
         'includeSnippets' => true,
-        'density' => 'normal',
     ];
 }
 
@@ -2092,7 +2091,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         'annexurePreview' => false,
         'mode' => 'preview',
         'autoprint' => false,
-        'density' => 'normal',
     ], $options);
     $mode = $options['mode'] === 'print' ? 'print' : 'preview';
     $autoPrint = !empty($options['autoprint']);
@@ -2110,7 +2108,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     $letterheadMode = in_array($options['letterheadMode'], ['blank_space', 'use_saved_letterhead'], true)
         ? $options['letterheadMode']
         : 'use_saved_letterhead';
-    $density = in_array($options['density'], ['normal', 'compact', 'dense'], true) ? $options['density'] : 'normal';
     $prefill = static function ($value, int $minLength = 8): string {
         $trim = trim((string)$value);
         return $trim === '' ? str_repeat('_', $minLength) : htmlspecialchars($trim, ENT_QUOTES, 'UTF-8');
@@ -2377,9 +2374,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
 
     $styles = "<style>
     @page{size:{$pageSize} {$orientation};margin:30mm 18mm 20mm;}
-    body{font-family:'Segoe UI',Arial,sans-serif;background:var(--surface);color:var(--text);margin:0;padding:24px;font-size:11pt;line-height:1.5;}
-    body.density-compact{font-size:10pt;}
-    body.density-dense{font-size:9pt;}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:var(--surface);color:var(--text);margin:0;padding:24px;}
     .page{max-width:960px;margin:0 auto;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;}
     h1,h2,h3,h4{margin:0 0 8px;}
     .muted{color:var(--muted);}
@@ -2408,7 +2403,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .plain li{margin:4px 0;}
     .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;background:var(--surface-2);}
     .page-break{page-break-before:always;}
-    footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;}
+    footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
     .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
@@ -2446,12 +2441,18 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
         . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
         . '<div>' . $headerLabel . '<h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack'), ENT_QUOTES, 'UTF-8') . '</h1>'
-        . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div>'
-        . '<div class="muted">Printed on: ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div></div>'
-        . ($headerNoteHtml !== '' ? '<div style="text-align:right;">' . $headerNoteHtml . '</div>' : '')
+        . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></div>'
+        . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div>' . $headerNoteHtml . '</div>'
         . '</div>';
 
-    $footer = '<footer><span class="page-number"></span></footer>';
+    $footerText = '';
+    if (!empty($printSettings['footerEnabled']) && trim((string)$printSettings['footerText']) !== '') {
+        $footerText = '<div style="white-space:pre-wrap;">' . nl2br(htmlspecialchars($printSettings['footerText'], ENT_QUOTES, 'UTF-8')) . '</div>';
+    } else {
+        $footerText = '<div style="min-height:20mm;"></div>';
+    }
+    $footerLabel = $mode === 'preview' ? 'Printed via YOJAK • Page ' : 'Page ';
+    $footer = '<footer>' . $footerText . '<div>' . $footerLabel . '<span class="page-number"></span></div></footer>';
 
     $settingsPanel = '';
     if ($mode === 'preview') {
@@ -2487,12 +2488,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '<select name="includeSnippets">'
         . '<option value="1"' . (!empty($options['includeSnippets']) ? ' selected' : '') . '>Include source snippets</option>'
         . '<option value="0"' . (empty($options['includeSnippets']) ? ' selected' : '') . '>Hide snippets</option>'
-        . '</select></label>'
-        . '<label>Text density'
-        . '<select name="density">'
-        . '<option value="normal"' . ($density === 'normal' ? ' selected' : '') . '>Normal</option>'
-        . '<option value="compact"' . ($density === 'compact' ? ' selected' : '') . '>Compact</option>'
-        . '<option value="dense"' . ($density === 'dense' ? ' selected' : '') . '>Dense</option>'
         . '</select></label>'
         . '</div>'
         . '</form>';
@@ -2536,11 +2531,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         </script>";
     }
 
-    $bodyClasses = ['density-' . $density];
-    if ($mode === 'print') {
-        $bodyClasses[] = 'print-mode';
-    }
-    $bodyClass = ' class="' . implode(' ', $bodyClasses) . '"';
+    $bodyClass = $mode === 'print' ? ' class="print-mode"' : '';
     $sectionOutput = '';
     foreach ($sections as $idx => $section) {
         if ($docType === 'full') {
