@@ -178,6 +178,44 @@ function render_layout(string $title, callable $content): void
                 align-items: center;
                 justify-content: space-between;
             }
+            .top-contact-icons {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                width: 100%;
+            }
+            .icon-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .contact-icon-link {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                border: 1px solid var(--border);
+                background: #ffffff;
+                color: var(--text);
+                transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            }
+            .contact-icon-link svg {
+                width: 18px;
+                height: 18px;
+                display: block;
+            }
+            .contact-icon-link:hover {
+                background: #eef2ff;
+                border-color: #d6e0ff;
+                color: var(--primary);
+            }
+            .contact-icon-link:focus-visible {
+                outline: 2px solid rgba(31,111,235,0.4);
+                outline-offset: 2px;
+            }
             .top-contact a { color: var(--text); }
             .nav {
                 display: flex;
@@ -600,15 +638,34 @@ function render_layout(string $title, callable $content): void
             <?php if ($isPublicVisitor && $contactDetails): ?>
                 <div class="top-contact">
                     <div class="wrap top-contact-inner">
-                        <div>
-                            <strong><?= sanitize($publicNav['call'][$lang]); ?>:</strong> <a href="tel:<?= sanitize($contactDetails['mobile']); ?>"><?= sanitize($contactDetails['mobile']); ?></a>
-                            <span class="muted">•</span>
-                            <strong><?= sanitize($publicNav['email'][$lang]); ?>:</strong> <a href="mailto:<?= sanitize($contactDetails['email']); ?>"><?= sanitize($contactDetails['email']); ?></a>
-                        </div>
-                        <div>
-                            <a href="<?= sanitize($contactDetails['instagramUrl']); ?>" target="_blank" rel="noopener">Instagram: <?= sanitize($contactDetails['instagram']); ?></a>
-                            <span class="muted">•</span>
-                            <a href="<?= sanitize($contactDetails['facebookUrl']); ?>" target="_blank" rel="noopener">Facebook: <?= sanitize($contactDetails['facebook']); ?></a>
+                        <div class="top-contact-icons">
+                            <div class="icon-row">
+                                <a class="contact-icon-link" href="tel:<?= sanitize($contactDetails['mobile']); ?>" aria-label="Call YOJAK" title="Call <?= sanitize($contactDetails['mobile']); ?>">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M2.25 6.75c0 7.56 6.19 13.75 13.75 13.75h2.25a1.5 1.5 0 0 0 1.5-1.5v-2.27a1.5 1.5 0 0 0-1.06-1.44l-3.12-.93a1.5 1.5 0 0 0-1.56.4l-1.3 1.3a12.35 12.35 0 0 1-5.18-5.18l1.3-1.3a1.5 1.5 0 0 0 .4-1.56l-.93-3.12A1.5 1.5 0 0 0 6.27 2.25H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z"/>
+                                    </svg>
+                                </a>
+                                <a class="contact-icon-link" href="mailto:<?= sanitize($contactDetails['email']); ?>" aria-label="Email YOJAK" title="Email <?= sanitize($contactDetails['email']); ?>">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M3 7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v9a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 16.5v-9Z"/>
+                                        <path d="m3.75 7.5 8.25 6 8.25-6"/>
+                                    </svg>
+                                </a>
+                            </div>
+                            <div class="icon-row">
+                                <a class="contact-icon-link" href="<?= sanitize($contactDetails['instagramUrl']); ?>" target="_blank" rel="noopener noreferrer" aria-label="Instagram YOJAK" title="Instagram: <?= sanitize($contactDetails['instagram']); ?>">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <rect x="3.5" y="3.5" width="17" height="17" rx="4"/>
+                                        <circle cx="12" cy="12" r="4"/>
+                                        <circle cx="17.25" cy="6.75" r="1"/>
+                                    </svg>
+                                </a>
+                                <a class="contact-icon-link" href="<?= sanitize($contactDetails['facebookUrl']); ?>" target="_blank" rel="noopener noreferrer" aria-label="Facebook YOJAK" title="Facebook: <?= sanitize($contactDetails['facebook']); ?>">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                        <path d="M13.5 8.5h2V6h-2c-1.66 0-3 1.34-3 3v2h-2v2.5h2v6h2.5v-6h2l.5-2.5h-2.5V9c0-.28.22-.5.5-.5Z"/>
+                                    </svg>
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
