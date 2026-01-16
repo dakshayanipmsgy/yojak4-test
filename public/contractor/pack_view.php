@@ -85,7 +85,7 @@ safe_page(function () {
                     </div>
                     <div class="buttons" style="gap:8px;">
                         <a class="btn secondary" href="/contractor/packs.php"><?= sanitize('Back to packs'); ?></a>
-                        <a class="btn secondary" href="/contractor/pack_print_full_v3.php?packId=<?= sanitize($pack['packId']); ?>&density=normal&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Print pack (opens dialog)'); ?></a>
+                        <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=full&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Print pack (opens dialog)'); ?></a>
                         <a class="btn" href="/contractor/pack_export_zip.php?packId=<?= sanitize($pack['packId']); ?>&token=<?= sanitize($signedToken); ?>"><?= sanitize('Export ZIP'); ?></a>
                     </div>
                 </div>
@@ -648,14 +648,6 @@ safe_page(function () {
                         <option value="0"><?= sanitize('OFF — reserve blank space'); ?></option>
                     </select>
                 </label>
-                <label class="field" style="margin:0;">
-                    <span class="muted" style="font-size:12px;"><?= sanitize('Text density'); ?></span>
-                    <select id="density-select">
-                        <option value="normal"><?= sanitize('Normal'); ?></option>
-                        <option value="compact"><?= sanitize('Compact'); ?></option>
-                        <option value="dense"><?= sanitize('Dense'); ?></option>
-                    </select>
-                </label>
                 <div class="muted" style="font-size:12px;"><?= sanitize('Header (30mm) and footer (20mm) space are always reserved for printing.'); ?></div>
                 <div class="muted" style="font-size:12px;"><?= sanitize('In print dialog, keep Scale = 100% for exact layout.'); ?></div>
                 <div style="display:grid; gap:8px;">
@@ -675,13 +667,8 @@ safe_page(function () {
                                 <div class="muted" style="margin-top:4px;"><?= sanitize($docLink['desc']); ?></div>
                             </div>
                             <div class="buttons" style="gap:6px;">
-                                <?php if ($docLink['id'] === 'full'): ?>
-                                    <a class="btn secondary" href="/contractor/pack_print_full_v3.php?packId=<?= sanitize($pack['packId']); ?>&density=normal" data-print-base="/contractor/pack_print_full_v3.php?packId=<?= sanitize($pack['packId']); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
-                                    <a class="btn" href="/contractor/pack_print_full_v3.php?packId=<?= sanitize($pack['packId']); ?>&density=normal&autoprint=1" data-print-base="/contractor/pack_print_full_v3.php?packId=<?= sanitize($pack['packId']); ?>&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Print (opens dialog)'); ?></a>
-                                <?php else: ?>
-                                    <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=preview&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=preview" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
-                                    <a class="btn" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=print&autoprint=1&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Print (opens dialog)'); ?></a>
-                                <?php endif; ?>
+                                <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=preview&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=preview" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
+                                <a class="btn" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=print&autoprint=1&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Print (opens dialog)'); ?></a>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -741,23 +728,25 @@ safe_page(function () {
         </div>
         <script>
             (() => {
-                const letterheadSelect = document.getElementById('letterhead-select');
-                const densitySelect = document.getElementById('density-select');
+                const select = document.getElementById('letterhead-select');
                 const updateLinks = () => {
-                    const letterheadValue = encodeURIComponent(letterheadSelect?.value || '1');
-                    const densityValue = encodeURIComponent(densitySelect?.value || 'normal');
+                    if (!select) {
+                        return;
+                    }
+                    const value = encodeURIComponent(select.value || '1');
                     document.querySelectorAll('[data-print-base]').forEach((link) => {
                         const base = link.getAttribute('data-print-base');
                         if (!base) {
                             return;
                         }
                         const joiner = base.includes('?') ? '&' : '?';
-                        link.setAttribute('href', `${base}${joiner}letterhead=${letterheadValue}&density=${densityValue}`);
+                        link.setAttribute('href', `${base}${joiner}letterhead=${value}`);
                     });
                 };
-                letterheadSelect?.addEventListener('change', updateLinks);
-                densitySelect?.addEventListener('change', updateLinks);
-                updateLinks();
+                if (select) {
+                    select.addEventListener('change', updateLinks);
+                    updateLinks();
+                }
             })();
             (() => {
                 const rateInputs = Array.from(document.querySelectorAll('.financial-rate'));
