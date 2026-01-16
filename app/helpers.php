@@ -134,6 +134,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/templates.log',
         DATA_PATH . '/logs/site.log',
         DATA_PATH . '/logs/suggestions.log',
+        DATA_PATH . '/logs/print_v3.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {
