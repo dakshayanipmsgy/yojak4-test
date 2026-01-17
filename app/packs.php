@@ -2183,7 +2183,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         return $html;
     };
 
-    $render_annexure_overview = static function () use ($pack, $options, $annexureTemplates, $contractor): string {
+    $render_annexures = static function () use ($pack, $options, $annexureTemplates, $contractor): string {
         $annexures = $pack['annexures'] ?? [];
         $formats = $pack['formats'] ?? [];
         $restricted = $pack['restrictedAnnexures'] ?? [];
@@ -2222,7 +2222,22 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         }
 
         $catalog = pack_field_meta_catalog($pack, $annexureTemplates);
-        if (!$annexureTemplates) {
+        if ($annexureTemplates) {
+            $html .= '<div class="subsection"><h3>Generated Annexure Templates</h3>';
+            foreach ($annexureTemplates as $idx => $tpl) {
+                $bodyHtml = pack_render_annexure_body_html($tpl, $pack, $contractor, $catalog, true);
+                $tablesHtml = pack_render_template_tables_html($tpl, $pack, $contractor, $catalog, true);
+                $html .= '<div class="template-block' . ($idx > 0 ? ' page-break' : '') . '">';
+                $html .= '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">';
+                $html .= '<div><div class="muted">' . htmlspecialchars($tpl['annexureCode'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</div><h3 style="margin:4px 0 6px 0;">' . htmlspecialchars($tpl['title'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</h3></div>';
+                $html .= '<span class="pill">' . htmlspecialchars(ucwords(str_replace('_', ' ', $tpl['type'] ?? 'other')), ENT_QUOTES, 'UTF-8') . '</span>';
+                $html .= '</div>';
+                $html .= '<div class="template-body">' . $bodyHtml . '</div>';
+                $html .= $tablesHtml;
+                $html .= '</div>';
+            }
+            $html .= '</div>';
+        } else {
             $html .= '<p class="muted">No annexure formats generated yet.</p>';
         }
 
@@ -2235,34 +2250,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         }
         $html .= '</div>';
         return $html;
-    };
-
-    $render_annexure_templates = static function () use ($pack, $annexureTemplates, $contractor): array {
-        $sections = [];
-        if (!$annexureTemplates) {
-            return $sections;
-        }
-        $catalog = pack_field_meta_catalog($pack, $annexureTemplates);
-        foreach ($annexureTemplates as $tpl) {
-            $bodyHtml = pack_render_annexure_body_html($tpl, $pack, $contractor, $catalog, true);
-            $tablesHtml = pack_render_template_tables_html($tpl, $pack, $contractor, $catalog, true);
-            $title = htmlspecialchars($tpl['title'] ?? 'Annexure', ENT_QUOTES, 'UTF-8');
-            $subtitle = htmlspecialchars($tpl['annexureCode'] ?? 'Annexure', ENT_QUOTES, 'UTF-8');
-            $pill = htmlspecialchars(ucwords(str_replace('_', ' ', $tpl['type'] ?? 'other')), ENT_QUOTES, 'UTF-8');
-            $html = '<div class="template-block annexure-template-block">';
-            $html .= '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">';
-            $html .= '<div><div class="muted">' . $subtitle . '</div><h3 style="margin:4px 0 6px 0;">' . $title . '</h3></div>';
-            $html .= '<span class="pill">' . $pill . '</span>';
-            $html .= '</div>';
-            $html .= '<div class="template-body">' . $bodyHtml . '</div>';
-            $html .= $tablesHtml;
-            $html .= '</div>';
-            $sections[] = [
-                'title' => 'Annexure: ' . html_entity_decode($title, ENT_QUOTES, 'UTF-8'),
-                'html' => $html,
-            ];
-        }
-        return $sections;
     };
 
     $render_templates = static function () use ($pack, $contractor, $options): string {
@@ -2288,35 +2275,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         }
         $html .= '</div>';
         return $html;
-    };
-
-    $render_template_sections = static function () use ($pack, $contractor, $options): array {
-        $templates = pack_template_payloads($pack, $contractor);
-        $templateId = is_string($options['templateId'] ?? null) ? trim((string)$options['templateId']) : '';
-        if ($templateId !== '') {
-            $templates = array_values(array_filter($templates, static function (array $tpl) use ($templateId) {
-                return ($tpl['tplId'] ?? '') === $templateId;
-            }));
-        }
-        $sections = [];
-        if (!$templates) {
-            return $sections;
-        }
-        foreach ($templates as $tpl) {
-            $title = htmlspecialchars($tpl['name'] ?? 'Template', ENT_QUOTES, 'UTF-8');
-            $html = '<div class="template-block">';
-            $html .= '<h3>' . $title . '</h3>';
-            if (!empty($tpl['lastGeneratedAt'])) {
-                $html .= '<p class="muted" style="margin-top:-6px;">Updated: ' . htmlspecialchars($tpl['lastGeneratedAt'], ENT_QUOTES, 'UTF-8') . '</p>';
-            }
-            $html .= '<pre>' . htmlspecialchars($tpl['body'] ?? '', ENT_QUOTES, 'UTF-8') . '</pre>';
-            $html .= '</div>';
-            $sections[] = [
-                'title' => 'Template: ' . html_entity_decode($title, ENT_QUOTES, 'UTF-8'),
-                'html' => $html,
-            ];
-        }
-        return $sections;
     };
 
     $render_attachments_plan = static function () use ($checklist, $attachments): string {
@@ -2347,7 +2305,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             return (string)($tpl['name'] ?? 'Template');
         }, $pack['generatedTemplates'] ?? []);
         $restricted = $pack['restrictedAnnexures'] ?? [];
-        $html = '<div class="section"><h2>Pack Summary</h2>';
+        $html = '<div class="section"><h2>Pack Index</h2>';
         $html .= '<div class="cards"><div class="card-sm"><div class="muted">Tender</div><div class="large">' . htmlspecialchars($pack['tenderTitle'] ?? $pack['title'] ?? 'Tender Pack', ENT_QUOTES, 'UTF-8') . '</div><div class="muted">No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div><div class="muted">' . htmlspecialchars($pack['departmentName'] ?? ($pack['deptName'] ?? ''), ENT_QUOTES, 'UTF-8') . '</div></div>';
         $html .= '<div class="card-sm"><div class="muted">Contractor</div><div class="large">' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? 'Contractor'), ENT_QUOTES, 'UTF-8') . '</div><div class="muted">YOJ ID: ' . htmlspecialchars($pack['yojId'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></div>';
         $html .= '<div class="card-sm"><div class="muted">Progress</div><div class="large">' . $stats['doneRequired'] . ' / ' . $stats['requiredItems'] . '</div><div class="muted">Generated docs: ' . $stats['generatedDocs'] . '</div></div></div>';
@@ -2389,131 +2347,35 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             }
             $html .= '</ul>';
         }
-        $html .= '<h4>Contents</h4><ul class="plain"><li>Index / Table of Contents</li><li>Checklist</li><li>Annexures & Formats</li><li>Templates</li></ul></div></div>';
+        $html .= '<h4>Contents</h4><ul class="plain"><li>Index</li><li>Checklist</li><li>Annexures & Formats</li><li>Templates</li></ul></div></div>';
         $html .= '</div>';
         return $html;
     };
 
-    $sectionBlocks = [];
-    $tocEntries = [];
-    $sectionId = 1;
-    $add_section = static function (array &$blocks, array &$tocEntries, string $title, string $html, bool $addToToc = true, bool $breakBefore = true) use (&$sectionId): void {
-        $tocId = $addToToc ? (string)$sectionId : '';
-        if ($addToToc) {
-            $tocEntries[] = [
-                'id' => $tocId,
-                'title' => $title,
-            ];
-            $sectionId++;
-        }
-        $blocks[] = [
-            'tocId' => $tocId,
-            'title' => $title,
-            'html' => $html,
-            'includeInToc' => $addToToc,
-            'breakBefore' => $breakBefore,
-        ];
-    };
-
-    $defaultBreak = $docType === 'full';
+    $sections = [];
     if (in_array($docType, ['index', 'full'], true)) {
-        $add_section($sectionBlocks, $tocEntries, 'Pack Summary', $render_index(), true, $defaultBreak);
+        $sections[] = $render_index();
     }
     if ($docType === 'index') {
-        $attachmentsHtml = $render_attachments_plan();
-        if ($attachmentsHtml !== '') {
-            $add_section($sectionBlocks, $tocEntries, 'Attachments Plan', $attachmentsHtml, true, $defaultBreak);
-        }
+        $sections[] = $render_attachments_plan();
     }
     if (in_array($docType, ['checklist', 'full'], true)) {
-        $add_section($sectionBlocks, $tocEntries, 'Checklist', $render_checklist(), true, $defaultBreak);
+        $sections[] = $render_checklist();
     }
     if (in_array($docType, ['annexures', 'full'], true)) {
-        $breakAnnexure = $docType !== 'index';
-        $add_section($sectionBlocks, $tocEntries, 'Annexures & Formats', $render_annexure_overview(), true, $defaultBreak || $breakAnnexure);
-        foreach ($render_annexure_templates() as $annexSection) {
-            $add_section($sectionBlocks, $tocEntries, $annexSection['title'], $annexSection['html'], true, true);
-        }
+        $sections[] = $render_annexures();
     }
     if (in_array($docType, ['templates', 'full'], true)) {
-        if ($docType !== 'templates') {
-            $templateSections = $render_template_sections();
-        } else {
-            $templateSections = [];
-        }
-        if ($docType === 'templates') {
-            $add_section($sectionBlocks, $tocEntries, 'Templates', $render_templates(), true, $defaultBreak);
-        } else {
-            foreach ($templateSections as $templateSection) {
-                $add_section($sectionBlocks, $tocEntries, $templateSection['title'], $templateSection['html'], true, true);
-            }
-            if (!$templateSections) {
-                $add_section($sectionBlocks, $tocEntries, 'Templates', $render_templates(), true, $defaultBreak);
-            }
-        }
+        $sections[] = $render_templates();
     }
     if ($docType === 'full') {
-        $attachmentsHtml = $render_attachments_plan();
-        if ($attachmentsHtml !== '') {
-            $add_section($sectionBlocks, $tocEntries, 'Attachments Plan', $attachmentsHtml, true, $defaultBreak);
-        }
+        $sections[] = $render_attachments_plan();
     }
 
-    $render_toc = static function () use ($pack, $tocEntries): string {
-        $rows = '';
-        foreach ($tocEntries as $entry) {
-            $rows .= '<tr data-toc-id="' . htmlspecialchars($entry['id'], ENT_QUOTES, 'UTF-8') . '">'
-                . '<td>' . htmlspecialchars($entry['title'], ENT_QUOTES, 'UTF-8') . '</td>'
-                . '<td class="toc-page">—</td>'
-                . '</tr>';
-        }
-        $html = '<div class="section toc-section">'
-            . '<h2>Index / Table of Contents</h2>'
-            . '<div class="muted" style="margin-bottom:8px;">'
-            . htmlspecialchars($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack'), ENT_QUOTES, 'UTF-8')
-            . ' • Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8')
-            . ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8')
-            . '</div>'
-            . '<table class="toc-table"><thead><tr><th>Section</th><th style="width:120px;">Start Page</th></tr></thead>'
-            . '<tbody>' . $rows . '</tbody></table>'
-            . '<div class="toc-note muted" data-toc-note hidden>Page numbers will appear in print preview.</div>'
-            . '</div>';
-        return $html;
-    };
-
-    $sections = [];
-    if ($docType === 'full') {
-        $sections[] = [
-            'tocId' => '',
-            'title' => 'Index / Table of Contents',
-            'html' => $render_toc(),
-            'includeInToc' => false,
-            'isToc' => true,
-        ];
-    }
-    foreach ($sectionBlocks as $block) {
-        $sections[] = $block;
-    }
-
-    $pageHeightMap = [
-        'A4' => 297,
-        'Letter' => 279.4,
-        'Legal' => 355.6,
-    ];
-    $pageWidthMap = [
-        'A4' => 210,
-        'Letter' => 215.9,
-        'Legal' => 215.9,
-    ];
-    $pageHeightMm = $pageHeightMap[$pageSize] ?? 297;
-    $pageWidthMm = $pageWidthMap[$pageSize] ?? 210;
-    $effectivePageHeight = $orientation === 'landscape' ? $pageWidthMm : $pageHeightMm;
     $styles = "<style>
-    :root{--page-height:{$effectivePageHeight}mm;--page-margin-top:30mm;--page-margin-bottom:20mm;--footer-height:18mm;}
-    @page{size:{$pageSize} {$orientation};margin:30mm 18mm 20mm;counter-increment:page;}
+    @page{size:{$pageSize} {$orientation};margin:30mm 18mm 20mm;}
     body{font-family:'Segoe UI',Arial,sans-serif;background:var(--surface);color:var(--text);margin:0;padding:24px;}
     .page{max-width:960px;margin:0 auto;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;}
-    .print-content{position:relative;padding-bottom:calc(var(--footer-height) + 8mm);}
     h1,h2,h3,h4{margin:0 0 8px;}
     .muted{color:var(--muted);}
     table{width:100%;border-collapse:collapse;margin-top:8px;}
@@ -2541,14 +2403,8 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .plain li{margin:4px 0;}
     .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;background:var(--surface-2);}
     .page-break{page-break-before:always;}
-    .print-footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
-    .print-footer .page-number::after{content:'1';}
-    .print-section{page-break-before:always;break-before:page;break-inside:avoid;page-break-inside:avoid;}
-    .print-section--no-break{page-break-before:auto;break-before:auto;}
-    .toc-table td{font-weight:600;}
-    .toc-table .toc-page{text-align:right;}
-    .toc-note{margin-top:8px;}
-    .print-page-ruler{position:absolute;visibility:hidden;pointer-events:none;height:calc(var(--page-height) - var(--page-margin-top) - var(--page-margin-bottom));width:1px;left:-9999px;top:0;}
+    footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
+    footer .page-number::after{content:'1';}
     .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
@@ -2585,12 +2441,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         .pill{background:#fff;border:1px solid #bbb;color:#000;}
         .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
         hr{border-top:1px solid #000 !important;}
-        .print-footer{position:fixed;left:0;right:0;bottom:0;margin:0;padding:4mm 8mm;height:var(--footer-height);background:#fff;}
-        .print-footer .page-number::after{content: counter(page);}
-        table{page-break-inside:auto;}
-        thead{display:table-header-group;}
-        tr{break-inside:avoid;page-break-inside:avoid;}
-        h2,h3,.subsection,.template-block,.warning,.cards,.grid-2{break-inside:avoid;page-break-inside:avoid;}
+        footer .page-number::after{content: counter(page);}
     }
     </style>";
 
@@ -2626,7 +2477,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     } else {
         $footerText = '<div style="min-height:20mm;"></div>';
     }
-    $footer = '<footer class="print-footer">' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
+    $footer = '<footer>' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
 
     $settingsPanel = '';
     if ($mode === 'preview') {
@@ -2717,103 +2568,12 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         </script>";
     }
 
-    $tocScript = '';
-    if ($docType === 'full') {
-        $tocScript = "<script>
-        (() => {
-            const runToc = () => {
-                const rows = Array.from(document.querySelectorAll('[data-toc-id]'));
-                const sections = Array.from(document.querySelectorAll('.print-section[data-toc-id]'));
-                const note = document.querySelector('[data-toc-note]');
-                const ruler = document.querySelector('.print-page-ruler');
-                if (!rows.length || !sections.length || !ruler) {
-                    if (note) {
-                        note.hidden = false;
-                    }
-                    return false;
-                }
-                const pageHeight = ruler.offsetHeight;
-                const start = document.querySelector('.print-page-start');
-                if (!pageHeight || !start) {
-                    if (note) {
-                        note.hidden = false;
-                    }
-                    return false;
-                }
-                const baseOffset = start.getBoundingClientRect().top + window.scrollY;
-                const pageMap = new Map();
-                sections.forEach((section) => {
-                    const id = section.dataset.tocId || '';
-                    if (!id) {
-                        return;
-                    }
-                    const offset = section.getBoundingClientRect().top + window.scrollY;
-                    const pageNumber = 1 + Math.floor((offset - baseOffset) / pageHeight);
-                    pageMap.set(id, Math.max(pageNumber, 1));
-                });
-                rows.forEach((row) => {
-                    const pageCell = row.querySelector('.toc-page');
-                    const id = row.dataset.tocId || '';
-                    if (pageCell && pageMap.has(id)) {
-                        pageCell.textContent = pageMap.get(id);
-                    }
-                });
-                if (note) {
-                    note.hidden = true;
-                }
-                return true;
-            };
-            const logFailure = (reason) => {
-                const payload = new URLSearchParams();
-                payload.set('csrf_token', document.body.dataset.csrfToken || '');
-                payload.set('action', 'log_toc');
-                payload.set('packId', document.body.dataset.packId || '');
-                payload.set('reason', reason);
-                if (navigator.sendBeacon) {
-                    navigator.sendBeacon('/contractor/pack_print.php', payload);
-                } else {
-                    fetch('/contractor/pack_print.php', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: payload.toString()});
-                }
-            };
-            const attempt = () => {
-                const ok = runToc();
-                if (!ok) {
-                    logFailure('toc_calc_failed');
-                }
-            };
-            window.addEventListener('load', () => {
-                attempt();
-                setTimeout(attempt, 300);
-            });
-        })();
-        </script>";
-    }
-
     $bodyClass = $mode === 'print' ? ' class="print-mode"' : '';
-    $bodyAttrs = ' data-pack-id="' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . '" data-csrf-token="' . htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') . '"';
-    $sectionsHtml = [];
-    $firstSection = true;
-    foreach ($sections as $section) {
-        $classes = ['print-section'];
-        if ($firstSection || empty($section['breakBefore'])) {
-            $classes[] = 'print-section--no-break';
-        }
-        if (!empty($section['isToc'])) {
-            $classes[] = 'toc-page';
-        }
-        $attrs = '';
-        if (!empty($section['tocId'])) {
-            $attrs .= ' data-toc-id="' . htmlspecialchars($section['tocId'], ENT_QUOTES, 'UTF-8') . '"';
-        }
-        $sectionsHtml[] = '<section class="' . implode(' ', $classes) . '"' . $attrs . '>' . $section['html'] . '</section>';
-        $firstSection = false;
-    }
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
         . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'
-        . $styles . '</head><body' . $bodyClass . $bodyAttrs . '><div class="page"><div class="print-content">' . $printActions . $settingsPanel . $header
-        . '<div class="print-page-start"></div><div class="print-page-ruler" aria-hidden="true"></div>'
-        . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sectionsHtml) . '</div>' . $footer . '</div>'
-        . $rateScript . $autoPrintScript . $tocScript . '</body></html>';
+        . $styles . '</head><body' . $bodyClass . '><div class="page">' . $printActions . $settingsPanel . $header
+        . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sections) . $footer . '</div>'
+        . $rateScript . $autoPrintScript . '</body></html>';
 
     return $html;
 }
