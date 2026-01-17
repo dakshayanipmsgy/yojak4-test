@@ -32,15 +32,21 @@ safe_page(function () {
     $title = get_app_config()['appName'] . ' | ' . ($doc['docTitle'] ?? 'Doc');
     render_layout($title, function () use ($doc) {
         ?>
-        <div class="card">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <style>
+            @media print{
+                .ui-only,.no-print,header,nav,footer,.topbar,.actions,.btn,.controls,.toolbar,.sidebar,.panel,.sticky-header,[data-ui="true"]{display:none !important;}
+                .card{box-shadow:none;border:none;background:#fff;padding:0;}
+            }
+        </style>
+        <div class="card printable">
+            <div class="ui-only" data-ui="true" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                 <div>
                     <h2 style="margin-bottom:4px;"><?= sanitize($doc['docTitle'] ?? 'Document'); ?></h2>
                     <p class="muted" style="margin:0;"><?= sanitize('Template: ' . ($doc['templateId'] ?? '')); ?></p>
                 </div>
-                <div class="buttons">
-                    <button class="btn secondary" type="button" onclick="window.print();"><?= sanitize('Print'); ?></button>
-                    <a class="btn secondary" href="/department/quick_doc.php"><?= sanitize('Back'); ?></a>
+                <div class="buttons ui-only no-print" data-ui="true">
+                    <button class="btn secondary no-print" type="button" onclick="window.print();"><?= sanitize('Print'); ?></button>
+                    <a class="btn secondary no-print" href="/department/quick_doc.php"><?= sanitize('Back'); ?></a>
                 </div>
             </div>
             <div style="margin-top:12px;border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface);">
