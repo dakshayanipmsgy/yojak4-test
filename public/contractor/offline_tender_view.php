@@ -160,7 +160,8 @@ safe_page(function () {
                 <?php endif; ?>
                 <?php if ($packId): ?>
                     <a class="btn secondary" href="/contractor/pack_view.php?packId=<?= sanitize($packId); ?>"><?= sanitize('View Pack'); ?></a>
-                    <a class="btn" href="/contractor/pack_print.php?packId=<?= sanitize($packId); ?>&doc=full&mode=print&autoprint=1&letterhead=1" target="_blank" rel="noopener"><?= sanitize('Print Full Pack (opens dialog)'); ?></a>
+                    <a class="btn" href="/contractor/pack_pdf.php?packId=<?= sanitize($packId); ?>&doc=full"><?= sanitize('Download Clean PDF (recommended)'); ?></a>
+                    <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($packId); ?>&doc=full&mode=print&autoprint=1&letterhead=1" target="_blank" rel="noopener"><?= sanitize('Browser Print (may include browser headers/footers)'); ?></a>
                 <?php endif; ?>
                 <a class="btn secondary" href="/contractor/assisted_v2/requests.php"><?= sanitize('View all requests'); ?></a>
             </div>
