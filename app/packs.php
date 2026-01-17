@@ -2101,7 +2101,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         }));
     }
 
-    $printedAt = now_kolkata()->format('d M Y, h:i A');
     $pageSizes = ['A4', 'Letter', 'Legal'];
     $pageSize = in_array($options['pageSize'], $pageSizes, true) ? $options['pageSize'] : 'A4';
     $orientation = in_array($options['orientation'], ['portrait', 'landscape'], true) ? $options['orientation'] : 'portrait';
@@ -2267,9 +2266,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         foreach ($templates as $idx => $tpl) {
             $html .= '<div class="template-block' . ($idx > 0 ? ' page-break' : '') . '">';
             $html .= '<h3>' . htmlspecialchars($tpl['name'] ?? 'Template', ENT_QUOTES, 'UTF-8') . '</h3>';
-            if (!empty($tpl['lastGeneratedAt'])) {
-                $html .= '<p class="muted" style="margin-top:-6px;">Updated: ' . htmlspecialchars($tpl['lastGeneratedAt'], ENT_QUOTES, 'UTF-8') . '</p>';
-            }
             $html .= '<pre>' . htmlspecialchars($tpl['body'] ?? '', ENT_QUOTES, 'UTF-8') . '</pre>';
             $html .= '</div>';
         }
@@ -2298,7 +2294,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         return $html;
     };
 
-    $render_index = static function () use ($pack, $contractor, $prefill, $printedAt): string {
+    $render_index = static function () use ($pack, $contractor, $prefill): string {
         $stats = pack_stats($pack);
         $annexureList = $pack['annexureList'] ?? ($pack['annexures'] ?? []);
         $templateList = array_map(static function (array $tpl): string {
@@ -2320,7 +2316,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $html .= '<li>Opening: ' . $prefill($pack['openingDate'] ?? ($pack['dates']['opening'] ?? '')) . '</li>';
         $html .= '<li>Completion: ' . $prefill((string)($pack['completionMonths'] ?? ''), 2) . ' months</li>';
         $html .= '<li>Bid validity: ' . $prefill((string)($pack['bidValidityDays'] ?? ''), 2) . ' days</li>';
-        $html .= '<li>Generated: ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</li>';
         $html .= '</ul><h4>Checklist Summary</h4><ul class="plain"><li>Done: ' . $stats['doneRequired'] . '</li><li>Pending: ' . $stats['pendingRequired'] . '</li></ul>';
         $html .= '<h4>Included Annexures</h4><ul class="plain">';
         if ($annexureList) {

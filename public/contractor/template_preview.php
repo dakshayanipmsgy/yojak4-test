@@ -94,6 +94,7 @@ safe_page(function () {
             <div>
                 <div style="font-size:18px;font-weight:700;"><?= sanitize($template['name'] ?? 'Template'); ?></div>
                 <div class="meta"><?= sanitize('Preview uses your saved profile + tender fields. Missing values print as blanks.'); ?></div>
+                <div class="meta no-print"><?= sanitize('For clean PDF/print: In print dialog, turn OFF “Headers and footers”.'); ?></div>
             </div>
             <a class="btn no-print" href="#" onclick="window.print();return false;">Print</a>
         </div>
