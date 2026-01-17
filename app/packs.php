@@ -2376,6 +2376,8 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     @page{size:{$pageSize} {$orientation};margin:30mm 18mm 20mm;}
     body{font-family:'Segoe UI',Arial,sans-serif;background:var(--surface);color:var(--text);margin:0;padding:24px;}
     .page{max-width:960px;margin:0 auto;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;}
+    .printable{display:block;}
+    .ui-only{display:block;}
     h1,h2,h3,h4{margin:0 0 8px;}
     .muted{color:var(--muted);}
     table{width:100%;border-collapse:collapse;margin-top:8px;}
@@ -2434,6 +2436,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         body{background:#fff !important;color:#000 !important;}
         .page{box-shadow:none;border:1px solid #ddd;padding:0;background:#fff;}
         a{color:#000;text-decoration:none;}
+        .ui-only,.no-print,header,nav,footer,.topbar,.actions,.btn,.controls,.toolbar,.sidebar,.panel,.sticky-header,[data-ui=\"true\"]{display:none !important;}
         .print-settings,.print-actions{display:none;}
         .card-sm,.template-block,.warning{background:#fff;border:1px solid #ddd;box-shadow:none;}
         th,td{border:1px solid #ddd;color:#000;}
@@ -2463,12 +2466,17 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     } else {
         $headerText = '<div class="blank" style="flex:1;"></div>';
     }
-    $headerNote = $useLetterhead ? 'Using saved letterhead' : 'Letterhead space reserved (pre-printed)';
+    $offtdId = $pack['sourceTender']['id'] ?? ($pack['offtdId'] ?? '');
+    $deptName = $pack['departmentName'] ?? ($pack['deptName'] ?? '');
     $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
         . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
         . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack'), ENT_QUOTES, 'UTF-8') . '</h1>'
-        . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></div>'
-        . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div><div class="muted" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div></div>'
+        . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8')
+        . ($offtdId !== '' ? ' • OFFTD ID: ' . htmlspecialchars($offtdId, ENT_QUOTES, 'UTF-8') : '')
+        . ($pack['tenderNumber'] ?? '' ? ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'], ENT_QUOTES, 'UTF-8') : '')
+        . '</div>'
+        . ($deptName !== '' ? '<div class="muted">Department: ' . htmlspecialchars($deptName, ENT_QUOTES, 'UTF-8') . '</div>' : '')
+        . '</div>'
         . '</div>';
 
     $footerText = '';
@@ -2481,7 +2489,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
 
     $settingsPanel = '';
     if ($mode === 'preview') {
-        $settingsPanel = '<form class="print-settings" method="post" action="/contractor/pack_print.php">'
+        $settingsPanel = '<form class="print-settings ui-only" method="post" action="/contractor/pack_print.php" data-ui="true">'
         . '<input type="hidden" name="csrf_token" value="' . htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') . '">'
         . '<input type="hidden" name="packId" value="' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . '">'
         . '<input type="hidden" name="doc" value="' . htmlspecialchars($docType, ENT_QUOTES, 'UTF-8') . '">'
@@ -2519,12 +2527,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     }
 
     $printActions = '';
-    if ($mode === 'print') {
-        $printActions = '<div class="print-actions">'
-            . '<div><strong>Print mode</strong><div class="hint">In print dialog, keep Scale = 100% for exact sizing.</div></div>'
-            . '<button type="button" class="btn" data-print-now>Print now</button>'
-            . '</div>';
-    }
 
     $rateScript = "<script>
     (() => {
@@ -2557,10 +2559,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $autoPrintScript = "<script>
         (() => {
             const printNow = () => window.print();
-            const btn = document.querySelector('[data-print-now]');
-            if (btn) {
-                btn.addEventListener('click', printNow);
-            }
             if (" . ($autoPrint ? 'true' : 'false') . ") {
                 window.addEventListener('load', () => setTimeout(printNow, 300));
             }
@@ -2571,8 +2569,10 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     $bodyClass = $mode === 'print' ? ' class="print-mode"' : '';
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
         . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'
-        . $styles . '</head><body' . $bodyClass . '><div class="page">' . $printActions . $settingsPanel . $header
-        . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sections) . $footer . '</div>'
+        . $styles . '</head><body' . $bodyClass . '><div class="page">'
+        . '<div class="ui-only" data-ui="true">' . $printActions . $settingsPanel . '</div>'
+        . '<div class="printable">' . $header
+        . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sections) . $footer . '</div></div>'
         . $rateScript . $autoPrintScript . '</body></html>';
 
     return $html;

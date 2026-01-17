@@ -82,7 +82,7 @@ safe_page(function () {
             .print-footer{min-height:60px;border-top:1px solid var(--border);padding-top:10px;white-space:pre-wrap;font-size:13px;color:var(--muted);}
             @media print{
                 body{background:#fff;}
-                .toolbar{display:none;}
+                .ui-only,.no-print,header,nav,footer,.topbar,.actions,.btn,.controls,.toolbar,.sidebar,.panel,.sticky-header,[data-ui="true"]{display:none !important;}
                 .page{box-shadow:none;border-radius:0;margin:0;padding:0 18mm;}
                 .print-header{min-height:30mm;border-bottom:1px solid #cbd5f5;}
                 .print-footer{min-height:20mm;border-top:1px solid #cbd5f5;}
@@ -90,12 +90,12 @@ safe_page(function () {
         </style>
     </head>
     <body>
-        <div class="toolbar">
+        <div class="toolbar ui-only" data-ui="true">
             <div>
                 <div style="font-size:18px;font-weight:700;"><?= sanitize($template['name'] ?? 'Template'); ?></div>
                 <div class="meta"><?= sanitize('Preview uses your saved profile + tender fields. Missing values print as blanks.'); ?></div>
             </div>
-            <a class="btn" href="#" onclick="window.print();return false;">Print</a>
+            <a class="btn no-print" href="#" onclick="window.print();return false;">Print</a>
         </div>
         <div class="page">
             <div class="print-header">
