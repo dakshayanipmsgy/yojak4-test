@@ -2063,7 +2063,7 @@ function verify_pack_token(string $packId, string $yojId, string $token): bool
     return hash_equals($expected, $token);
 }
 
-function pack_collect_print_sections(array $pack, array $contractor, string $docType = 'index', array $options = [], array $vaultFiles = [], array $annexureTemplates = []): array
+function pack_print_html(array $pack, array $contractor, string $docType = 'index', array $options = [], array $vaultFiles = [], array $annexureTemplates = []): string
 {
     $pack = pack_apply_schema_defaults($pack);
     $contractor = normalize_contractor_profile($contractor);
@@ -2092,6 +2092,8 @@ function pack_collect_print_sections(array $pack, array $contractor, string $doc
         'mode' => 'preview',
         'autoprint' => false,
     ], $options);
+    $mode = $options['mode'] === 'print' ? 'print' : 'preview';
+    $autoPrint = !empty($options['autoprint']);
     $singleAnnexureId = is_string($options['annexureId']) ? trim($options['annexureId']) : '';
     if ($singleAnnexureId !== '') {
         $annexureTemplates = array_values(array_filter($annexureTemplates, static function ($tpl) use ($singleAnnexureId) {
@@ -2100,6 +2102,12 @@ function pack_collect_print_sections(array $pack, array $contractor, string $doc
     }
 
     $printedAt = now_kolkata()->format('d M Y, h:i A');
+    $pageSizes = ['A4', 'Letter', 'Legal'];
+    $pageSize = in_array($options['pageSize'], $pageSizes, true) ? $options['pageSize'] : 'A4';
+    $orientation = in_array($options['orientation'], ['portrait', 'landscape'], true) ? $options['orientation'] : 'portrait';
+    $letterheadMode = in_array($options['letterheadMode'], ['blank_space', 'use_saved_letterhead'], true)
+        ? $options['letterheadMode']
+        : 'use_saved_letterhead';
     $prefill = static function ($value, int $minLength = 8): string {
         $trim = trim((string)$value);
         return $trim === '' ? str_repeat('_', $minLength) : htmlspecialchars($trim, ENT_QUOTES, 'UTF-8');
@@ -2468,6 +2476,7 @@ function pack_collect_print_sections(array $pack, array $contractor, string $doc
             . '</div>'
             . '<table class="toc-table"><thead><tr><th>Section</th><th style="width:120px;">Start Page</th></tr></thead>'
             . '<tbody>' . $rows . '</tbody></table>'
+            . '<div class="toc-note muted" data-toc-note hidden>Page numbers will appear in print preview.</div>'
             . '</div>';
         return $html;
     };
@@ -2485,34 +2494,6 @@ function pack_collect_print_sections(array $pack, array $contractor, string $doc
     foreach ($sectionBlocks as $block) {
         $sections[] = $block;
     }
-
-    return [
-        'pack' => $pack,
-        'contractor' => $contractor,
-        'options' => $options,
-        'sections' => $sections,
-        'tocEntries' => $tocEntries,
-        'printedAt' => $printedAt,
-    ];
-}
-
-function pack_print_html(array $pack, array $contractor, string $docType = 'index', array $options = [], array $vaultFiles = [], array $annexureTemplates = []): string
-{
-    $data = pack_collect_print_sections($pack, $contractor, $docType, $options, $vaultFiles, $annexureTemplates);
-    $pack = $data['pack'];
-    $contractor = $data['contractor'];
-    $options = $data['options'];
-    $sections = $data['sections'];
-    $printedAt = $data['printedAt'];
-    $mode = ($options['mode'] ?? 'preview') === 'print' ? 'print' : 'preview';
-    $autoPrint = !empty($options['autoprint']);
-
-    $pageSizes = ['A4', 'Letter', 'Legal'];
-    $pageSize = in_array($options['pageSize'] ?? 'A4', $pageSizes, true) ? $options['pageSize'] : 'A4';
-    $orientation = in_array($options['orientation'] ?? 'portrait', ['portrait', 'landscape'], true) ? $options['orientation'] : 'portrait';
-    $letterheadMode = in_array($options['letterheadMode'] ?? 'use_saved_letterhead', ['blank_space', 'use_saved_letterhead'], true)
-        ? $options['letterheadMode']
-        : 'use_saved_letterhead';
 
     $pageHeightMap = [
         'A4' => 297,
@@ -2566,6 +2547,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .print-section--no-break{page-break-before:auto;break-before:auto;}
     .toc-table td{font-weight:600;}
     .toc-table .toc-page{text-align:right;}
+    .toc-note{margin-top:8px;}
     .print-page-ruler{position:absolute;visibility:hidden;pointer-events:none;height:calc(var(--page-height) - var(--page-margin-top) - var(--page-margin-bottom));width:1px;left:-9999px;top:0;}
     .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
@@ -2576,12 +2558,16 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .print-settings select,.print-settings input{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);}
     .print-settings button{background:var(--primary);border:none;color:var(--primary-contrast);padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
     .print-settings .hint{font-size:12px;color:var(--muted);}
+    .print-actions{display:none;margin-bottom:12px;padding:12px;border:1px solid #d0d7de;border-radius:10px;background:#fff;color:#000;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+    .print-actions .btn{background:var(--primary);color:var(--primary-contrast);border:none;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
+    .print-actions .hint{font-size:12px;color:#444;}
     body.print-mode{background:#fff !important;color:#000 !important;}
     body.print-mode .page{background:#fff;border:1px solid #ddd;border-radius:0;box-shadow:none;padding:0;}
     body.print-mode h1,body.print-mode h2,body.print-mode h3,body.print-mode h4,body.print-mode strong{color:#000;}
     body.print-mode .muted{color:#444;}
     body.print-mode a{color:#000;text-decoration:none;}
     body.print-mode .print-settings{display:none;}
+    body.print-mode .print-actions{display:flex;}
     body.print-mode .card-sm,body.print-mode .template-block,body.print-mode .warning{background:#fff;border:1px solid #ddd;}
     body.print-mode .pill{background:#fff;border:1px solid #bbb;color:#000;}
     body.print-mode th,body.print-mode td{border:1px solid #ddd;color:#000;}
@@ -2592,8 +2578,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         body{background:#fff !important;color:#000 !important;}
         .page{box-shadow:none;border:1px solid #ddd;padding:0;background:#fff;}
         a{color:#000;text-decoration:none;}
-        a[href]:after{content:'' !important;}
-        .print-settings{display:none;}
+        .print-settings,.print-actions{display:none;}
         .card-sm,.template-block,.warning{background:#fff;border:1px solid #ddd;box-shadow:none;}
         th,td{border:1px solid #ddd;color:#000;}
         th{background:#f7f7f7;}
@@ -2605,7 +2590,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         table{page-break-inside:auto;}
         thead{display:table-header-group;}
         tr{break-inside:avoid;page-break-inside:avoid;}
-        h2,h3,.subsection,.template-block,.warning,.cards,.grid-2,.signature-block,.checklist-item,.annexure-block,.template-block{break-inside:avoid;page-break-inside:avoid;}
+        h2,h3,.subsection,.template-block,.warning,.cards,.grid-2{break-inside:avoid;page-break-inside:avoid;}
     }
     </style>";
 
@@ -2632,7 +2617,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
         . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack'), ENT_QUOTES, 'UTF-8') . '</h1>'
         . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></div>'
-        . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div>' . ($mode === 'preview' ? '<div class="muted" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div>' : '') . '</div>'
+        . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div><div class="muted" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div></div>'
         . '</div>';
 
     $footerText = '';
@@ -2641,7 +2626,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     } else {
         $footerText = '<div style="min-height:20mm;"></div>';
     }
-    $footer = '<footer class="print-footer">' . $footerText . '<div>Page <span class="page-number"></span></div></footer>';
+    $footer = '<footer class="print-footer">' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
 
     $settingsPanel = '';
     if ($mode === 'preview') {
@@ -2682,6 +2667,14 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '</form>';
     }
 
+    $printActions = '';
+    if ($mode === 'print') {
+        $printActions = '<div class="print-actions">'
+            . '<div><strong>Print mode</strong><div class="hint">In print dialog, keep Scale = 100% for exact sizing.</div></div>'
+            . '<button type="button" class="btn" data-print-now>Print now</button>'
+            . '</div>';
+    }
+
     $rateScript = "<script>
     (() => {
         const rateInputs = Array.from(document.querySelectorAll('.financial-rate'));
@@ -2713,6 +2706,10 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $autoPrintScript = "<script>
         (() => {
             const printNow = () => window.print();
+            const btn = document.querySelector('[data-print-now]');
+            if (btn) {
+                btn.addEventListener('click', printNow);
+            }
             if (" . ($autoPrint ? 'true' : 'false') . ") {
                 window.addEventListener('load', () => setTimeout(printNow, 300));
             }
@@ -2727,13 +2724,20 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             const runToc = () => {
                 const rows = Array.from(document.querySelectorAll('[data-toc-id]'));
                 const sections = Array.from(document.querySelectorAll('.print-section[data-toc-id]'));
+                const note = document.querySelector('[data-toc-note]');
                 const ruler = document.querySelector('.print-page-ruler');
                 if (!rows.length || !sections.length || !ruler) {
+                    if (note) {
+                        note.hidden = false;
+                    }
                     return false;
                 }
                 const pageHeight = ruler.offsetHeight;
                 const start = document.querySelector('.print-page-start');
                 if (!pageHeight || !start) {
+                    if (note) {
+                        note.hidden = false;
+                    }
                     return false;
                 }
                 const baseOffset = start.getBoundingClientRect().top + window.scrollY;
@@ -2754,6 +2758,9 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
                         pageCell.textContent = pageMap.get(id);
                     }
                 });
+                if (note) {
+                    note.hidden = true;
+                }
                 return true;
             };
             const logFailure = (reason) => {
@@ -2803,7 +2810,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     }
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
         . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'
-        . $styles . '</head><body' . $bodyClass . $bodyAttrs . '><div class="page"><div class="print-content">' . $settingsPanel . $header
+        . $styles . '</head><body' . $bodyClass . $bodyAttrs . '><div class="page"><div class="print-content">' . $printActions . $settingsPanel . $header
         . '<div class="print-page-start"></div><div class="print-page-ruler" aria-hidden="true"></div>'
         . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sectionsHtml) . '</div>' . $footer . '</div>'
         . $rateScript . $autoPrintScript . $tocScript . '</body></html>';
