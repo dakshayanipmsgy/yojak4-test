@@ -33,6 +33,7 @@ safe_page(function () {
     render_layout($title, function () use ($doc) {
         ?>
         <style>
+            .print-hint{font-size:12px;color:var(--muted);}
             @media print{
                 .ui-only,.no-print,header,nav,footer,.topbar,.actions,.btn,.controls,.toolbar,.sidebar,.panel,.sticky-header,[data-ui="true"]{display:none !important;}
                 .card{box-shadow:none;border:none;background:#fff;padding:0;}
@@ -47,6 +48,7 @@ safe_page(function () {
                 <div class="buttons ui-only no-print" data-ui="true">
                     <button class="btn secondary no-print" type="button" onclick="window.print();"><?= sanitize('Print'); ?></button>
                     <a class="btn secondary no-print" href="/department/quick_doc.php"><?= sanitize('Back'); ?></a>
+                    <div class="print-hint no-print"><?= sanitize('For clean PDF/print: In print dialog, turn OFF “Headers and footers”.'); ?></div>
                 </div>
             </div>
             <div style="margin-top:12px;border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface);">

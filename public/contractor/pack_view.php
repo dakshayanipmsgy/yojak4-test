@@ -650,6 +650,7 @@ safe_page(function () {
                 </label>
                 <div class="muted" style="font-size:12px;"><?= sanitize('Header (30mm) and footer (20mm) space are always reserved for printing.'); ?></div>
                 <div class="muted" style="font-size:12px;"><?= sanitize('In print dialog, keep Scale = 100% for exact layout.'); ?></div>
+                <div class="muted no-print" style="font-size:12px;"><?= sanitize('For clean PDF/print: In print dialog, turn OFF “Headers and footers”.'); ?></div>
                 <div style="display:grid; gap:8px;">
                     <?php
                     $docLinks = [
