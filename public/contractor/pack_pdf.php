@@ -1,12 +1,16 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../../app/bootstrap.php';
+require_once BASE_PATH . '/lib/vendor/dompdf/autoload.inc.php';
+
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 safe_page(function () {
     $user = require_role('contractor');
     $yojId = $user['yojId'];
-    $packId = trim((string)($_REQUEST['packId'] ?? ''));
-    $doc = trim((string)($_REQUEST['doc'] ?? 'index'));
+    $packId = trim((string)($_GET['packId'] ?? ''));
+    $doc = trim((string)($_GET['doc'] ?? 'index'));
     $allowedDocs = ['index', 'checklist', 'annexures', 'templates', 'full'];
     if (!in_array($doc, $allowedDocs, true)) {
         $doc = 'index';
@@ -20,61 +24,6 @@ safe_page(function () {
         return;
     }
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        require_csrf();
-        $pageSize = trim((string)($_POST['pageSize'] ?? 'A4'));
-        $orientation = trim((string)($_POST['orientation'] ?? 'portrait'));
-        $letterheadMode = trim((string)($_POST['letterheadMode'] ?? 'use_saved_letterhead'));
-        $includeSnippets = ($_POST['includeSnippets'] ?? '1') !== '0';
-        $includeBranding = ($_POST['includeBranding'] ?? '1') !== '0';
-        if (!in_array($pageSize, ['A4', 'Letter', 'Legal'], true)) {
-            $pageSize = 'A4';
-        }
-        if (!in_array($orientation, ['portrait', 'landscape'], true)) {
-            $orientation = 'portrait';
-        }
-        if (!in_array($letterheadMode, ['blank_space', 'use_saved_letterhead'], true)) {
-            $letterheadMode = 'use_saved_letterhead';
-        }
-
-        $pack['printPrefs'] = [
-            'pageSize' => $pageSize,
-            'orientation' => $orientation,
-            'letterheadMode' => $letterheadMode,
-            'includeSnippets' => $includeSnippets,
-            'includeBranding' => $includeBranding,
-        ];
-        $pack['audit'][] = [
-            'at' => now_kolkata()->format(DateTime::ATOM),
-            'event' => 'PRINT_PREFS_UPDATED',
-            'yojId' => $yojId,
-        ];
-        save_pack($pack, $context);
-
-        $redirectParams = [
-            'packId' => $packId,
-            'doc' => $doc,
-        ];
-        $annexId = trim((string)($_POST['annexId'] ?? ''));
-        $tplId = trim((string)($_POST['tplId'] ?? ''));
-        if ($annexId !== '') {
-            $redirectParams['annexId'] = $annexId;
-        }
-        if ($tplId !== '') {
-            $redirectParams['tplId'] = $tplId;
-        }
-        if (!empty($_POST['annexurePreview'])) {
-            $redirectParams['annexurePreview'] = '1';
-        }
-        redirect('/contractor/pack_print.php?' . http_build_query($redirectParams));
-        return;
-    }
-
-    $mode = trim((string)($_GET['mode'] ?? 'preview'));
-    if (!in_array($mode, ['preview', 'print'], true)) {
-        $mode = 'preview';
-    }
-    $autoPrint = $mode === 'print' && (($_GET['autoprint'] ?? '') === '1');
     $printPrefs = array_merge(default_pack_print_prefs(), $pack['printPrefs'] ?? []);
     $pageSize = trim((string)($_GET['pageSize'] ?? $printPrefs['pageSize']));
     $orientation = trim((string)($_GET['orientation'] ?? $printPrefs['orientation']));
@@ -106,22 +55,37 @@ safe_page(function () {
         'annexureId' => trim((string)($_GET['annexId'] ?? '')) ?: null,
         'templateId' => trim((string)($_GET['tplId'] ?? '')) ?: null,
         'annexurePreview' => ($_GET['annexurePreview'] ?? '') === '1',
-        'mode' => $mode,
-        'autoprint' => $autoPrint,
+        'mode' => 'print',
+        'autoprint' => false,
         'includeBranding' => $includeBranding,
+        'pdfMode' => true,
     ];
+
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
-    $manifest = build_print_manifest($pack, $contractor, $doc, $options, $annexureTemplates);
     $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles, $annexureTemplates);
+
+    $dompdfOptions = new Options();
+    $dompdfOptions->set('isRemoteEnabled', true);
+    $dompdfOptions->set('defaultFont', 'DejaVu Sans');
+    $dompdf = new Dompdf($dompdfOptions);
+    $dompdf->setPaper($pageSize, $orientation);
+    $dompdf->loadHtml($html);
+    $dompdf->render();
+
+    $now = now_kolkata()->format('Ymd');
+    $filename = 'Pack_' . $packId . '_' . $doc . '_' . $now . '.pdf';
+    $pdf = $dompdf->output();
+
     logEvent(PACK_PRINT_LOG, [
-        'event' => 'PACK_PRINT_HTML',
+        'event' => 'PACK_PRINT_PDF',
         'at' => now_kolkata()->format(DateTime::ATOM),
         'yojId' => $yojId,
         'packId' => $packId,
         'doc' => $doc,
-        'mode' => $mode,
-        'sectionsCount' => count($manifest),
     ]);
-    header('Content-Type: text/html; charset=UTF-8');
-    echo $html;
+
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . strlen($pdf));
+    echo $pdf;
 });
