@@ -165,7 +165,6 @@ function default_pack_print_prefs(): array
         'orientation' => 'portrait',
         'letterheadMode' => 'use_saved_letterhead',
         'includeSnippets' => true,
-        'includeBranding' => true,
     ];
 }
 
@@ -2092,7 +2091,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         'annexurePreview' => false,
         'mode' => 'preview',
         'autoprint' => false,
-        'includeBranding' => true,
     ], $options);
     $mode = $options['mode'] === 'print' ? 'print' : 'preview';
     $autoPrint = !empty($options['autoprint']);
@@ -2137,7 +2135,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
 
     $render_checklist = static function () use ($checklist, $attachments, $render_badge, $options): string {
         if (!$checklist) {
-            return '<p class="muted">No data available.</p>';
+            return '<div class="section"><h2>Checklist</h2><p class="muted">No data available.</p></div>';
         }
         $grouped = [];
         foreach ($checklist as $item) {
@@ -2155,7 +2153,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             }
             return $posA <=> $posB;
         });
-        $html = '';
+        $html = '<div class="section"><h2>Checklist</h2>';
         foreach ($grouped as $group => $items) {
             $html .= '<div class="subsection"><h3>' . htmlspecialchars($group, ENT_QUOTES, 'UTF-8') . '</h3>';
             $html .= '<table><thead><tr><th>Item</th><th>Required</th><th>Status</th><th>Notes</th><th>Attachment</th></tr></thead><tbody>';
@@ -2166,7 +2164,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
                 if ($options['includeSnippets'] && trim((string)($item['sourceSnippet'] ?? '')) !== '') {
                     $notes .= ($notes !== '' ? ' | ' : '') . trim((string)$item['sourceSnippet']);
                 }
-                $html .= '<tr class="checklist-item">';
+                $html .= '<tr>';
                 $html .= '<td><strong>' . htmlspecialchars($item['title'] ?? '', ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">' . htmlspecialchars($item['description'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></td>';
                 $html .= '<td>' . (!empty($item['required']) ? 'Required' : 'Optional') . '</td>';
                 $html .= '<td>' . $render_badge($item['status'] ?? 'pending') . '</td>';
@@ -2181,6 +2179,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             }
             $html .= '</tbody></table></div>';
         }
+        $html .= '</div>';
         return $html;
     };
 
@@ -2189,7 +2188,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $formats = $pack['formats'] ?? [];
         $restricted = $pack['restrictedAnnexures'] ?? [];
         $showCatalog = empty($options['annexurePreview']);
-        $html = '';
+        $html = '<div class="section"><h2>Annexures & Formats</h2>';
         if ($showCatalog) {
             if (!$annexures && !$formats) {
                 $html .= '<p class="muted">No annexures listed.</p>';
@@ -2228,7 +2227,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             foreach ($annexureTemplates as $idx => $tpl) {
                 $bodyHtml = pack_render_annexure_body_html($tpl, $pack, $contractor, $catalog, true);
                 $tablesHtml = pack_render_template_tables_html($tpl, $pack, $contractor, $catalog, true);
-                $html .= '<div class="template-block annexure-block' . ($idx > 0 ? ' page-break' : '') . '">';
+                $html .= '<div class="template-block' . ($idx > 0 ? ' page-break' : '') . '">';
                 $html .= '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">';
                 $html .= '<div><div class="muted">' . htmlspecialchars($tpl['annexureCode'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</div><h3 style="margin:4px 0 6px 0;">' . htmlspecialchars($tpl['title'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</h3></div>';
                 $html .= '<span class="pill">' . htmlspecialchars(ucwords(str_replace('_', ' ', $tpl['type'] ?? 'other')), ENT_QUOTES, 'UTF-8') . '</span>';
@@ -2249,6 +2248,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             }
             $html .= '</ul></div>';
         }
+        $html .= '</div>';
         return $html;
     };
 
@@ -2260,9 +2260,9 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
                 return ($tpl['tplId'] ?? '') === $templateId;
             }));
         }
-        $html = '';
+        $html = '<div class="section"><h2>Templates</h2>';
         if (!$templates) {
-            return $html . '<p class="muted">No templates available.</p>';
+            return $html . '<p class="muted">No templates available.</p></div>';
         }
         foreach ($templates as $idx => $tpl) {
             $html .= '<div class="template-block' . ($idx > 0 ? ' page-break' : '') . '">';
@@ -2273,6 +2273,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             $html .= '<pre>' . htmlspecialchars($tpl['body'] ?? '', ENT_QUOTES, 'UTF-8') . '</pre>';
             $html .= '</div>';
         }
+        $html .= '</div>';
         return $html;
     };
 
@@ -2280,7 +2281,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         if (!$checklist) {
             return '';
         }
-        $html = '<table><thead><tr><th>Checklist Item</th><th>Vault Document</th></tr></thead><tbody>';
+        $html = '<div class="section"><h2>Attachments Plan</h2><table><thead><tr><th>Checklist Item</th><th>Vault Document</th></tr></thead><tbody>';
         foreach ($checklist as $item) {
             $itemId = $item['itemId'] ?? ($item['id'] ?? '');
             $attach = $attachments[$itemId] ?? null;
@@ -2293,21 +2294,28 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             }
             $html .= '</tr>';
         }
-        $html .= '</tbody></table>';
+        $html .= '</tbody></table></div>';
         return $html;
     };
 
-    $render_index = static function (array $tocItems, bool $includeBranding) use ($pack, $prefill, $printedAt): string {
+    $render_index = static function () use ($pack, $contractor, $prefill, $printedAt): string {
         $stats = pack_stats($pack);
         $annexureList = $pack['annexureList'] ?? ($pack['annexures'] ?? []);
         $templateList = array_map(static function (array $tpl): string {
             return (string)($tpl['name'] ?? 'Template');
         }, $pack['generatedTemplates'] ?? []);
         $restricted = $pack['restrictedAnnexures'] ?? [];
-        $html = '';
+        $html = '<div class="section"><h2>Pack Index</h2>';
         $html .= '<div class="cards"><div class="card-sm"><div class="muted">Tender</div><div class="large">' . htmlspecialchars($pack['tenderTitle'] ?? $pack['title'] ?? 'Tender Pack', ENT_QUOTES, 'UTF-8') . '</div><div class="muted">No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div><div class="muted">' . htmlspecialchars($pack['departmentName'] ?? ($pack['deptName'] ?? ''), ENT_QUOTES, 'UTF-8') . '</div></div>';
+        $html .= '<div class="card-sm"><div class="muted">Contractor</div><div class="large">' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? 'Contractor'), ENT_QUOTES, 'UTF-8') . '</div><div class="muted">YOJ ID: ' . htmlspecialchars($pack['yojId'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></div>';
         $html .= '<div class="card-sm"><div class="muted">Progress</div><div class="large">' . $stats['doneRequired'] . ' / ' . $stats['requiredItems'] . '</div><div class="muted">Generated docs: ' . $stats['generatedDocs'] . '</div></div></div>';
-        $html .= '<div class="grid-2"><div><h4>Key Dates</h4><ul class="plain">';
+        $html .= '<div class="grid-2"><div><h4>Contractor Summary</h4><ul class="plain">';
+        $html .= '<li>Address: ' . $prefill(contractor_profile_address($contractor)) . '</li>';
+        $html .= '<li>PAN: ' . $prefill($contractor['panNumber'] ?? '') . ' • GST: ' . $prefill($contractor['gstNumber'] ?? '') . '</li>';
+        $html .= '<li>Signatory: ' . $prefill($contractor['authorizedSignatoryName'] ?? '') . ' (' . $prefill($contractor['authorizedSignatoryDesignation'] ?? '', 5) . ')</li>';
+        $html .= '<li>Contact: ' . $prefill($contractor['mobile'] ?? '', 6) . ' • ' . $prefill($contractor['email'] ?? '', 6) . '</li>';
+        $html .= '</ul></div>';
+        $html .= '<div><h4>Key Dates</h4><ul class="plain">';
         $html .= '<li>Submission: ' . $prefill($pack['submissionDeadline'] ?? ($pack['dates']['submission'] ?? '')) . '</li>';
         $html .= '<li>Opening: ' . $prefill($pack['openingDate'] ?? ($pack['dates']['opening'] ?? '')) . '</li>';
         $html .= '<li>Completion: ' . $prefill((string)($pack['completionMonths'] ?? ''), 2) . ' months</li>';
@@ -2339,89 +2347,29 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             }
             $html .= '</ul>';
         }
-        $html .= '<h4>Contents</h4>';
-        if ($tocItems) {
-            $html .= '<ul class="toc">';
-            foreach ($tocItems as $item) {
-                $html .= '<li><a href="#' . htmlspecialchars($item['id'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($item['label'], ENT_QUOTES, 'UTF-8') . '</a><span class="toc-page">Starts on next page</span></li>';
-            }
-            $html .= '</ul>';
-        } else {
-            $html .= '<p class="muted">No sections available.</p>';
-        }
-        $html .= '</div></div>';
-        if ($includeBranding) {
-            $html .= '<div class="brand-note">Prepared using YOJAK — yojak.co.in</div>';
-        }
-        return $html;
-    };
-
-    $packTitle = $pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack');
-    $packNumber = $pack['tenderNumber'] ?? '';
-    $packIdLabel = $pack['packId'] ?? '';
-    $render_section_header = static function (string $sectionTitle) use ($packTitle, $packNumber, $packIdLabel): string {
-        $metaParts = [];
-        if ($packNumber !== '') {
-            $metaParts[] = 'Tender No: ' . htmlspecialchars($packNumber, ENT_QUOTES, 'UTF-8');
-        }
-        if ($packIdLabel !== '') {
-            $metaParts[] = 'Pack ID: ' . htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8');
-        }
-        $metaLine = $metaParts ? implode(' • ', $metaParts) : '';
-        $html = '<div class="section-header">';
-        $html .= '<div class="section-kicker">Tender Document</div>';
-        $html .= '<div class="section-title">' . htmlspecialchars($packTitle, ENT_QUOTES, 'UTF-8') . '</div>';
-        if ($metaLine !== '') {
-            $html .= '<div class="section-meta">' . $metaLine . '</div>';
-        }
-        $html .= '<h2>' . htmlspecialchars($sectionTitle, ENT_QUOTES, 'UTF-8') . '</h2>';
+        $html .= '<h4>Contents</h4><ul class="plain"><li>Index</li><li>Checklist</li><li>Annexures & Formats</li><li>Templates</li></ul></div></div>';
         $html .= '</div>';
         return $html;
     };
 
-    $sectionMeta = [];
+    $sections = [];
     if (in_array($docType, ['index', 'full'], true)) {
-        $sectionMeta[] = ['id' => 'section-index', 'label' => 'Index'];
+        $sections[] = $render_index();
     }
     if ($docType === 'index') {
-        $sectionMeta[] = ['id' => 'section-attachments', 'label' => 'Attachments Plan'];
+        $sections[] = $render_attachments_plan();
     }
     if (in_array($docType, ['checklist', 'full'], true)) {
-        $sectionMeta[] = ['id' => 'section-checklist', 'label' => 'Checklist'];
+        $sections[] = $render_checklist();
     }
     if (in_array($docType, ['annexures', 'full'], true)) {
-        $sectionMeta[] = ['id' => 'section-annexures', 'label' => 'Annexures & Formats'];
+        $sections[] = $render_annexures();
     }
     if (in_array($docType, ['templates', 'full'], true)) {
-        $sectionMeta[] = ['id' => 'section-templates', 'label' => 'Templates'];
+        $sections[] = $render_templates();
     }
     if ($docType === 'full') {
-        $sectionMeta[] = ['id' => 'section-attachments', 'label' => 'Attachments Plan'];
-    }
-
-    $sections = [];
-    foreach ($sectionMeta as $meta) {
-        $content = '';
-        switch ($meta['id']) {
-            case 'section-index':
-                $content = $render_index($sectionMeta, !empty($options['includeBranding']));
-                break;
-            case 'section-attachments':
-                $content = $render_attachments_plan();
-                break;
-            case 'section-checklist':
-                $content = $render_checklist();
-                break;
-            case 'section-annexures':
-                $content = $render_annexures();
-                break;
-            case 'section-templates':
-                $content = $render_templates();
-                break;
-        }
-        $sections[] = '<section id="' . htmlspecialchars($meta['id'], ENT_QUOTES, 'UTF-8') . '" class="section-page">'
-            . $render_section_header($meta['label'])
-            . '<div class="section-body">' . $content . '</div></section>';
+        $sections[] = $render_attachments_plan();
     }
 
     $styles = "<style>
@@ -2455,19 +2403,8 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .plain li{margin:4px 0;}
     .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;background:var(--surface-2);}
     .page-break{page-break-before:always;}
-    .section-page + .section-page{page-break-before:always;break-before:page;}
-    .section-header{padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:12px;}
-    .section-kicker{font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);}
-    .section-title{font-size:20px;font-weight:700;margin-top:4px;}
-    .section-meta{font-size:12px;color:var(--muted);}
-    .section-body{margin-top:12px;}
-    .brand-note{margin-top:18px;font-size:12px;color:var(--muted);text-align:right;}
-    .toc{list-style:none;padding:0;margin:8px 0 0 0;display:grid;gap:6px;}
-    .toc li{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dotted var(--border);padding-bottom:4px;}
-    .toc a{color:inherit;text-decoration:none;}
-    .toc-page{font-size:12px;color:var(--muted);}
     footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
-    footer .page-number::after{content:'Page ' counter(page);}
+    footer .page-number::after{content:'1';}
     .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
@@ -2477,34 +2414,34 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .print-settings select,.print-settings input{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);}
     .print-settings button{background:var(--primary);border:none;color:var(--primary-contrast);padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
     .print-settings .hint{font-size:12px;color:var(--muted);}
+    .print-actions{display:none;margin-bottom:12px;padding:12px;border:1px solid #d0d7de;border-radius:10px;background:#fff;color:#000;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+    .print-actions .btn{background:var(--primary);color:var(--primary-contrast);border:none;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
+    .print-actions .hint{font-size:12px;color:#444;}
     body.print-mode{background:#fff !important;color:#000 !important;}
     body.print-mode .page{background:#fff;border:1px solid #ddd;border-radius:0;box-shadow:none;padding:0;}
     body.print-mode h1,body.print-mode h2,body.print-mode h3,body.print-mode h4,body.print-mode strong{color:#000;}
     body.print-mode .muted{color:#444;}
     body.print-mode a{color:#000;text-decoration:none;}
     body.print-mode .print-settings{display:none;}
+    body.print-mode .print-actions{display:flex;}
     body.print-mode .card-sm,body.print-mode .template-block,body.print-mode .warning{background:#fff;border:1px solid #ddd;}
     body.print-mode .pill{background:#fff;border:1px solid #bbb;color:#000;}
     body.print-mode th,body.print-mode td{border:1px solid #ddd;color:#000;}
     body.print-mode th{background:#f7f7f7;}
     body.print-mode .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
     body.print-mode hr{border-top:1px solid #000 !important;}
-    .avoid-break,table,tr,th,td,.template-block,.signature-block,.annexure-block,.checklist-item{break-inside:avoid;page-break-inside:avoid;}
-    h2,h3{break-after:avoid;page-break-after:avoid;}
-    .no-print{display:none !important;}
     @media print{
         body{background:#fff !important;color:#000 !important;}
         .page{box-shadow:none;border:1px solid #ddd;padding:0;background:#fff;}
         a{color:#000;text-decoration:none;}
-        .print-settings{display:none;}
+        .print-settings,.print-actions{display:none;}
         .card-sm,.template-block,.warning{background:#fff;border:1px solid #ddd;box-shadow:none;}
         th,td{border:1px solid #ddd;color:#000;}
         th{background:#f7f7f7;}
         .pill{background:#fff;border:1px solid #bbb;color:#000;}
         .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
         hr{border-top:1px solid #000 !important;}
-        footer .page-number::after{content:'Page ' counter(page) ' of ' counter(pages);}
-        .no-print{display:none !important;}
+        footer .page-number::after{content: counter(page);}
     }
     </style>";
 
@@ -2529,9 +2466,9 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     $headerNote = $useLetterhead ? 'Using saved letterhead' : 'Letterhead space reserved (pre-printed)';
     $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
         . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
-        . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($packTitle, ENT_QUOTES, 'UTF-8') . '</h1>'
-        . '<div class="muted">Pack ID: ' . htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($packNumber, ENT_QUOTES, 'UTF-8') . '</div></div>'
-        . '<div style="text-align:right;"><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div><div class="muted" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div></div>'
+        . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack'), ENT_QUOTES, 'UTF-8') . '</h1>'
+        . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div></div>'
+        . '<div style="text-align:right;"><div class="muted">Contractor</div><strong>' . htmlspecialchars($contractor['firmName'] ?? ($contractor['name'] ?? ''), ENT_QUOTES, 'UTF-8') . '</strong><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div><div class="muted" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div></div>'
         . '</div>';
 
     $footerText = '';
@@ -2577,13 +2514,16 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '<option value="1"' . (!empty($options['includeSnippets']) ? ' selected' : '') . '>Include source snippets</option>'
         . '<option value="0"' . (empty($options['includeSnippets']) ? ' selected' : '') . '>Hide snippets</option>'
         . '</select></label>'
-        . '<label>YOJAK attribution'
-        . '<select name="includeBranding">'
-        . '<option value="1"' . (!empty($options['includeBranding']) ? ' selected' : '') . '>Include on Index page</option>'
-        . '<option value="0"' . (empty($options['includeBranding']) ? ' selected' : '') . '>Hide</option>'
-        . '</select></label>'
         . '</div>'
         . '</form>';
+    }
+
+    $printActions = '';
+    if ($mode === 'print') {
+        $printActions = '<div class="print-actions">'
+            . '<div><strong>Print mode</strong><div class="hint">In print dialog, keep Scale = 100% for exact sizing.</div></div>'
+            . '<button type="button" class="btn" data-print-now>Print now</button>'
+            . '</div>';
     }
 
     $rateScript = "<script>
@@ -2613,21 +2553,29 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     </script>";
 
     $autoPrintScript = '';
-    if ($mode === 'print' && $autoPrint) {
+    if ($mode === 'print') {
         $autoPrintScript = "<script>
-        window.addEventListener('load', () => setTimeout(() => window.print(), 300));
+        (() => {
+            const printNow = () => window.print();
+            const btn = document.querySelector('[data-print-now]');
+            if (btn) {
+                btn.addEventListener('click', printNow);
+            }
+            if (" . ($autoPrint ? 'true' : 'false') . ") {
+                window.addEventListener('load', () => setTimeout(printNow, 300));
+            }
+        })();
         </script>";
     }
 
-    $bodyClass = $mode === 'print' ? 'print-mode' : '';
-    $bodyHtml = '<div class="page">' . $settingsPanel . $header
-        . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sections) . $footer . '</div>';
+    $bodyClass = $mode === 'print' ? ' class="print-mode"' : '';
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
+        . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'
+        . $styles . '</head><body' . $bodyClass . '><div class="page">' . $printActions . $settingsPanel . $header
+        . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sections) . $footer . '</div>'
+        . $rateScript . $autoPrintScript . '</body></html>';
 
-    return render_print_layout('Pack ' . ($pack['packId'] ?? 'Pack'), $bodyHtml, [
-        'styles' => $styles,
-        'scripts' => $rateScript . $autoPrintScript,
-        'bodyClass' => $bodyClass,
-    ]);
+    return $html;
 }
 
 function pack_index_html(array $pack, ?array $contractor = null, array $options = [], array $vaultFiles = [], array $annexureTemplates = []): string
