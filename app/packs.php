@@ -2624,9 +2624,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .toc a{color:inherit;text-decoration:none;}
     .toc-page{font-size:12px;color:var(--muted);}
     footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
-    .page-number{display:none;}
-    body.pdf-mode .page-number{display:block;}
-    body.pdf-mode footer .page-number::after{content:'Page ' counter(page) ' of ' counter(pages);}
+    footer .page-number::after{content:'Page ' counter(page);}
     .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
@@ -2652,11 +2650,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     h2,h3{break-after:avoid;page-break-after:avoid;}
     .signature-block{margin-top:12px;}
     body.print-mode .no-print{display:none !important;}
-    .debug-only{display:none !important;}
-    @media print{
-        .page-number{display:block;}
-        footer .page-number::after{content:'Page ' counter(page) ' of ' counter(pages);}
-    }
     @media print{
         body{background:#fff !important;color:#000 !important;}
         .page{box-shadow:none;border:1px solid #ddd;padding:0;background:#fff;}
@@ -2668,10 +2661,10 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         .pill{background:#fff;border:1px solid #bbb;color:#000;}
         .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
         hr{border-top:1px solid #000 !important;}
+        footer .page-number::after{content:'Page ' counter(page);}
         thead{display:table-header-group;}
         tfoot{display:table-footer-group;}
         .no-print{display:none !important;}
-        .debug-only{display:none !important;}
     }
     </style>";
 
@@ -2787,9 +2780,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     }
 
     $bodyClass = $mode === 'print' ? 'print-mode' : '';
-    if (!empty($options['pdfMode'])) {
-        $bodyClass = trim($bodyClass . ' pdf-mode');
-    }
     $bodyHtml = '<div class="page">' . $settingsPanel . $header
         . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sections) . $footer . '</div>';
 

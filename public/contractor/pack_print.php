@@ -112,15 +112,28 @@ safe_page(function () {
     ];
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
     $manifest = build_print_manifest($pack, $contractor, $doc, $options, $annexureTemplates);
+    logEvent(PACK_PRINT_LOG, [
+        'event' => 'PACK_PRINT_RENDER',
+        'at' => now_kolkata()->format(DateTime::ATOM),
+        'yojId' => $yojId,
+        'packId' => $packId,
+        'mode' => $mode,
+        'doc' => $doc,
+        'sectionsCount' => count($manifest),
+    ]);
     $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles, $annexureTemplates);
     logEvent(PACK_PRINT_LOG, [
-        'event' => 'PACK_PRINT_HTML',
+        'event' => 'PACK_PRINT',
         'at' => now_kolkata()->format(DateTime::ATOM),
         'yojId' => $yojId,
         'packId' => $packId,
         'doc' => $doc,
         'mode' => $mode,
-        'sectionsCount' => count($manifest),
+        'autoprint' => $autoPrint ? 1 : 0,
+        'letterhead' => $letterheadMode,
+        'pageSize' => $pageSize,
+        'orientation' => $orientation,
+        'annexureId' => $options['annexureId'],
     ]);
     header('Content-Type: text/html; charset=UTF-8');
     echo $html;
