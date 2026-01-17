@@ -10,7 +10,13 @@ safe_page(function () {
     $user = require_role('contractor');
     $yojId = $user['yojId'];
     $packId = trim((string)($_GET['packId'] ?? ''));
-    $doc = trim((string)($_GET['doc'] ?? 'index'));
+    $docRaw = trim((string)($_GET['doc'] ?? 'index'));
+    $doc = $docRaw;
+    $annexureFromDoc = '';
+    if (stripos($docRaw, 'annexure:') === 0) {
+        $annexureFromDoc = trim(substr($docRaw, strlen('annexure:')));
+        $doc = 'annexures';
+    }
     $allowedDocs = ['index', 'checklist', 'annexures', 'templates', 'full'];
     if (!in_array($doc, $allowedDocs, true)) {
         $doc = 'index';
@@ -44,6 +50,7 @@ safe_page(function () {
 
     $contractor = load_contractor($yojId) ?? [];
     $vaultFiles = contractor_vault_index($yojId);
+    $annexureId = trim((string)($_GET['annexId'] ?? '')) ?: $annexureFromDoc;
     $options = [
         'includeSnippets' => ($_GET['snippets'] ?? ($printPrefs['includeSnippets'] ? '1' : '0')) !== '0',
         'includeRestricted' => ($_GET['restricted'] ?? '1') !== '0',
@@ -52,7 +59,7 @@ safe_page(function () {
         'letterheadMode' => $letterheadMode,
         'pageSize' => $pageSize,
         'orientation' => $orientation,
-        'annexureId' => trim((string)($_GET['annexId'] ?? '')) ?: null,
+        'annexureId' => $annexureId !== '' ? $annexureId : null,
         'templateId' => trim((string)($_GET['tplId'] ?? '')) ?: null,
         'annexurePreview' => ($_GET['annexurePreview'] ?? '') === '1',
         'mode' => 'print',
@@ -71,6 +78,15 @@ safe_page(function () {
     $dompdf->setPaper($pageSize, $orientation);
     $dompdf->loadHtml($html);
     $dompdf->render();
+    $canvas = $dompdf->getCanvas();
+    $fontMetrics = $dompdf->getFontMetrics();
+    $font = $fontMetrics->getFont('Helvetica', 'normal');
+    $text = 'Page {PAGE_NUM} of {PAGE_COUNT}';
+    $fontSize = 9;
+    $textWidth = $fontMetrics->getTextWidth($text, $font, $fontSize);
+    $x = ($canvas->get_width() - $textWidth) / 2;
+    $y = $canvas->get_height() - 32;
+    $canvas->page_text($x, $y, $text, $font, $fontSize, [90, 90, 90]);
 
     $now = now_kolkata()->format('Ymd');
     $filename = 'Pack_' . $packId . '_' . $doc . '_' . $now . '.pdf';

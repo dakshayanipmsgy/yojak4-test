@@ -2635,8 +2635,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .toc-page{font-size:12px;color:var(--muted);}
     footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
     .page-number{display:none;}
-    body.pdf-mode .page-number{display:block;}
-    body.pdf-mode footer .page-number::after{content:'Page ' counter(page) ' of ' counter(pages);}
+    body.pdf-mode .page-number{display:none;}
     .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
@@ -2666,6 +2665,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     @media print{
         .page-number{display:block;}
         footer .page-number::after{content:'Page ' counter(page) ' of ' counter(pages);}
+        body.pdf-mode .page-number{display:none;}
     }
     @media print{
         body{background:#fff !important;color:#000 !important;}
