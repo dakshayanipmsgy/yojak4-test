@@ -10,7 +10,6 @@ require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/staff.php';
 require_once __DIR__ . '/layout.php';
-require_once __DIR__ . '/print_layout.php';
 require_once __DIR__ . '/departments.php';
 require_once __DIR__ . '/login_debug.php';
 require_once __DIR__ . '/contractors.php';

@@ -26,7 +26,6 @@ safe_page(function () {
         $orientation = trim((string)($_POST['orientation'] ?? 'portrait'));
         $letterheadMode = trim((string)($_POST['letterheadMode'] ?? 'use_saved_letterhead'));
         $includeSnippets = ($_POST['includeSnippets'] ?? '1') !== '0';
-        $includeBranding = ($_POST['includeBranding'] ?? '1') !== '0';
         if (!in_array($pageSize, ['A4', 'Letter', 'Legal'], true)) {
             $pageSize = 'A4';
         }
@@ -42,7 +41,6 @@ safe_page(function () {
             'orientation' => $orientation,
             'letterheadMode' => $letterheadMode,
             'includeSnippets' => $includeSnippets,
-            'includeBranding' => $includeBranding,
         ];
         $pack['audit'][] = [
             'at' => now_kolkata()->format(DateTime::ATOM),
@@ -79,7 +77,6 @@ safe_page(function () {
     $pageSize = trim((string)($_GET['pageSize'] ?? $printPrefs['pageSize']));
     $orientation = trim((string)($_GET['orientation'] ?? $printPrefs['orientation']));
     $letterheadMode = trim((string)($_GET['letterheadMode'] ?? $printPrefs['letterheadMode']));
-    $includeBranding = ($_GET['branding'] ?? ($printPrefs['includeBranding'] ? '1' : '0')) !== '0';
     if (!in_array($pageSize, ['A4', 'Letter', 'Legal'], true)) {
         $pageSize = 'A4';
     }
@@ -108,7 +105,6 @@ safe_page(function () {
         'annexurePreview' => ($_GET['annexurePreview'] ?? '') === '1',
         'mode' => $mode,
         'autoprint' => $autoPrint,
-        'includeBranding' => $includeBranding,
     ];
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
     $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles, $annexureTemplates);
