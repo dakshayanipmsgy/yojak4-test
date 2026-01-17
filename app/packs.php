@@ -1658,33 +1658,8 @@ function pack_render_template_table_html(array $table, array $pack, array $contr
     if ($title !== '') {
         $html .= '<div class="table-title">' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</div>';
     }
-    $classes = ['annexure-table'];
-    if ($templateKind === 'financial_manual') {
-        $classes[] = 'financial-manual-table';
-        $classes[] = 'financial-table';
-    }
-    if ($templateKind === 'compliance') {
-        $classes[] = 'compliance-table';
-    }
-    $tableClass = implode(' ', $classes);
-    $html .= '<table class="' . $tableClass . '">';
-    if ($templateKind === 'financial_manual') {
-        $widthMap = [
-            'item_description' => '45%',
-            'qty' => '10%',
-            'unit' => '10%',
-            'rate' => '15%',
-            'amount' => '20%',
-        ];
-        $html .= '<colgroup>';
-        foreach ($columns as $column) {
-            $key = pack_normalize_placeholder_key((string)($column['key'] ?? ''));
-            $width = $widthMap[$key] ?? '';
-            $html .= $width !== '' ? '<col style="width:' . $width . ';">' : '<col>';
-        }
-        $html .= '</colgroup>';
-    }
-    $html .= '<thead><tr>';
+    $tableClass = $templateKind === 'financial_manual' ? 'annexure-table financial-manual-table' : 'annexure-table';
+    $html .= '<table class="' . $tableClass . '"><thead><tr>';
     foreach ($columns as $column) {
         $label = $column['label'] ?? $column['key'] ?? '';
         $html .= '<th>' . htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') . '</th>';
@@ -1758,7 +1733,7 @@ function pack_render_annexure_body_html(array $template, array $pack, array $con
         return $match[0];
     }, $body) ?? $body;
     if (!str_contains($body, '{{field:signatory.name}}') && stripos($body, 'authorized signatory') === false) {
-        $body .= "\n\n[[SIGNATURE_BLOCK_START]]\nAuthorized Signatory\n{{field:signatory.name}}\n{{field:signatory.designation}}\n{{field:firm.name}}\nPlace: {{field:place}}\nDate: {{field:date}}\n[[SIGNATURE_BLOCK_END]]";
+        $body .= "\n\nAuthorized Signatory\n{{field:signatory.name}}\n{{field:signatory.designation}}\n{{field:firm.name}}\nPlace: {{field:place}}\nDate: {{field:date}}";
     }
     $tableMap = [];
     foreach ((array)($template['tables'] ?? []) as $table) {
@@ -1800,11 +1775,6 @@ function pack_render_annexure_body_html(array $template, array $pack, array $con
         }
         $html .= '<span class="field-blank">' . pack_field_blank_text($catalog, $raw) . '</span>';
     }
-    $html = str_replace(
-        ['[[SIGNATURE_BLOCK_START]]', '[[SIGNATURE_BLOCK_END]]'],
-        ['<div class="signature-block">', '</div>'],
-        $html
-    );
     return $html;
 }
 
@@ -1854,7 +1824,7 @@ function pack_financial_manual_templates(array $pack): array
             $code = 'Annexure-' . strtoupper($matches[1]) . '-Manual';
         }
         $body = "Financial/Commercial Bid (Manual Entry)\n"
-            . "The system does not calculate or suggest rates. Fill this table manually.\n";
+            . "YOJAK does not calculate or suggest rates. Fill this table manually.\n";
         $rows = [];
         for ($i = 1; $i <= 5; $i++) {
             $rows[] = [
@@ -2094,131 +2064,6 @@ function verify_pack_token(string $packId, string $yojId, string $token): bool
     return hash_equals($expected, $token);
 }
 
-function build_print_manifest(
-    array $pack,
-    array $contractor = [],
-    string $docType = 'index',
-    array $options = [],
-    array $annexureTemplates = []
-): array {
-    $allowedDocs = ['index', 'checklist', 'annexures', 'templates', 'full'];
-    if (!in_array($docType, $allowedDocs, true)) {
-        $docType = 'index';
-    }
-    $options = array_merge([
-        'includeRestricted' => true,
-        'annexurePreview' => false,
-        'annexureId' => null,
-        'templateId' => null,
-    ], $options);
-
-    $manifest = [];
-    $add = static function (array $item) use (&$manifest): void {
-        $manifest[] = $item;
-    };
-
-    $showIndex = in_array($docType, ['index', 'full'], true);
-    $showChecklist = in_array($docType, ['checklist', 'full'], true);
-    $showAnnexures = in_array($docType, ['annexures', 'full'], true);
-    $showTemplates = in_array($docType, ['templates', 'full'], true);
-
-    if ($showIndex) {
-        $add([
-            'id' => 'section-index',
-            'title' => 'Index',
-            'type' => 'index',
-            'startsOnNewPage' => false,
-        ]);
-    }
-    if ($docType === 'index') {
-        $add([
-            'id' => 'section-attachments',
-            'title' => 'Attachments Plan',
-            'type' => 'attachments',
-            'startsOnNewPage' => true,
-        ]);
-    }
-    if ($showChecklist) {
-        $add([
-            'id' => 'section-checklist',
-            'title' => 'Checklist',
-            'type' => 'checklist',
-            'startsOnNewPage' => true,
-        ]);
-    }
-    if ($showAnnexures) {
-        if (empty($options['annexurePreview'])) {
-            $add([
-                'id' => 'section-annexures',
-                'title' => 'Annexures & Formats',
-                'type' => 'annexure_catalog',
-                'startsOnNewPage' => true,
-            ]);
-        }
-        foreach ($annexureTemplates as $tpl) {
-            if (!is_array($tpl)) {
-                continue;
-            }
-            $code = trim((string)($tpl['annexureCode'] ?? $tpl['annexId'] ?? 'Annexure'));
-            $title = trim((string)($tpl['title'] ?? 'Annexure'));
-            $label = $title !== '' ? $title : $code;
-            $add([
-                'id' => 'annexure_' . strtolower(preg_replace('/[^a-z0-9]+/i', '-', $code ?: $label)),
-                'title' => 'Annexure: ' . ($label !== '' ? $label : 'Annexure'),
-                'type' => 'annexure_template',
-                'template' => $tpl,
-                'startsOnNewPage' => true,
-            ]);
-        }
-        if (!$annexureTemplates && empty($options['annexurePreview'])) {
-            $add([
-                'id' => 'section-annexures-empty',
-                'title' => 'Annexures',
-                'type' => 'annexure_empty',
-                'startsOnNewPage' => true,
-            ]);
-        }
-    }
-    if ($showTemplates) {
-        $templates = pack_template_payloads($pack, $contractor);
-        $templateId = is_string($options['templateId'] ?? null) ? trim((string)$options['templateId']) : '';
-        if ($templateId !== '') {
-            $templates = array_values(array_filter($templates, static function (array $tpl) use ($templateId) {
-                return ($tpl['tplId'] ?? '') === $templateId;
-            }));
-        }
-        if (!$templates) {
-            $add([
-                'id' => 'section-templates',
-                'title' => 'Templates',
-                'type' => 'templates_empty',
-                'startsOnNewPage' => true,
-            ]);
-        } else {
-            foreach ($templates as $tpl) {
-                $name = trim((string)($tpl['name'] ?? 'Template'));
-                $add([
-                    'id' => 'template_' . strtolower(preg_replace('/[^a-z0-9]+/i', '-', $tpl['tplId'] ?? $name)),
-                    'title' => 'Template: ' . ($name !== '' ? $name : 'Template'),
-                    'type' => 'template',
-                    'template' => $tpl,
-                    'startsOnNewPage' => true,
-                ]);
-            }
-        }
-    }
-    if ($docType === 'full') {
-        $add([
-            'id' => 'section-attachments',
-            'title' => 'Attachments Plan',
-            'type' => 'attachments',
-            'startsOnNewPage' => true,
-        ]);
-    }
-
-    return $manifest;
-}
-
 function pack_print_html(array $pack, array $contractor, string $docType = 'index', array $options = [], array $vaultFiles = [], array $annexureTemplates = []): string
 {
     $pack = pack_apply_schema_defaults($pack);
@@ -2339,52 +2184,66 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         return $html;
     };
 
-    $render_annexure_catalog = static function () use ($pack, $options, $annexureTemplates): string {
+    $render_annexures = static function () use ($pack, $options, $annexureTemplates, $contractor): string {
         $annexures = $pack['annexures'] ?? [];
         $formats = $pack['formats'] ?? [];
         $restricted = $pack['restrictedAnnexures'] ?? [];
+        $showCatalog = empty($options['annexurePreview']);
         $html = '';
-        if (!$annexures && !$formats) {
-            $html .= '<p class="muted">No annexures listed.</p>';
-        } else {
-            if ($annexures) {
-                $html .= '<h3>Annexures</h3><ol>';
-                foreach ($annexures as $annex) {
-                    $label = is_array($annex) ? ($annex['name'] ?? $annex['title'] ?? 'Annexure') : (string)$annex;
-                    $notes = is_array($annex) ? ($annex['notes'] ?? '') : '';
-                    $restrictedLabel = pack_is_restricted_annexure_label($label);
-                    $html .= '<li><strong>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</strong>';
-                    if ($restrictedLabel) {
-                        $html .= '<div class="muted" style="color:#f85149;">Financial/price annexure — manual entry template included.</div>';
+        if ($showCatalog) {
+            if (!$annexures && !$formats) {
+                $html .= '<p class="muted">No annexures listed.</p>';
+            } else {
+                if ($annexures) {
+                    $html .= '<h3>Annexures</h3><ol>';
+                    foreach ($annexures as $annex) {
+                        $label = is_array($annex) ? ($annex['name'] ?? $annex['title'] ?? 'Annexure') : (string)$annex;
+                        $notes = is_array($annex) ? ($annex['notes'] ?? '') : '';
+                        $restrictedLabel = pack_is_restricted_annexure_label($label);
+                        $html .= '<li><strong>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</strong>';
+                        if ($restrictedLabel) {
+                            $html .= '<div class="muted" style="color:#f85149;">Financial/price annexure — manual entry template included.</div>';
+                        }
+                        if ($notes !== '') {
+                            $html .= '<div class="muted">' . htmlspecialchars($notes, ENT_QUOTES, 'UTF-8') . '</div>';
+                        }
+                        $html .= '</li>';
                     }
-                    if ($notes !== '') {
-                        $html .= '<div class="muted">' . htmlspecialchars($notes, ENT_QUOTES, 'UTF-8') . '</div>';
+                    $html .= '</ol>';
+                }
+                if ($formats) {
+                    $html .= '<h3>Formats</h3><ul>';
+                    foreach ($formats as $fmt) {
+                        $label = is_array($fmt) ? ($fmt['name'] ?? $fmt['title'] ?? 'Format') : (string)$fmt;
+                        $html .= '<li>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</li>';
                     }
-                    $html .= '</li>';
+                    $html .= '</ul>';
                 }
-                $html .= '</ol>';
-            }
-            if ($formats) {
-                $html .= '<h3>Formats</h3><ul>';
-                foreach ($formats as $fmt) {
-                    $label = is_array($fmt) ? ($fmt['name'] ?? $fmt['title'] ?? 'Format') : (string)$fmt;
-                    $html .= '<li>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</li>';
-                }
-                $html .= '</ul>';
             }
         }
+
+        $catalog = pack_field_meta_catalog($pack, $annexureTemplates);
         if ($annexureTemplates) {
-            $html .= '<h3>Generated Annexure Templates</h3><ul class="plain">';
-            foreach ($annexureTemplates as $tpl) {
-                $html .= '<li>' . htmlspecialchars($tpl['title'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</li>';
+            $html .= '<div class="subsection"><h3>Generated Annexure Templates</h3>';
+            foreach ($annexureTemplates as $idx => $tpl) {
+                $bodyHtml = pack_render_annexure_body_html($tpl, $pack, $contractor, $catalog, true);
+                $tablesHtml = pack_render_template_tables_html($tpl, $pack, $contractor, $catalog, true);
+                $html .= '<div class="template-block annexure-block' . ($idx > 0 ? ' page-break' : '') . '">';
+                $html .= '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">';
+                $html .= '<div><div class="muted">' . htmlspecialchars($tpl['annexureCode'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</div><h3 style="margin:4px 0 6px 0;">' . htmlspecialchars($tpl['title'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</h3></div>';
+                $html .= '<span class="pill">' . htmlspecialchars(ucwords(str_replace('_', ' ', $tpl['type'] ?? 'other')), ENT_QUOTES, 'UTF-8') . '</span>';
+                $html .= '</div>';
+                $html .= '<div class="template-body">' . $bodyHtml . '</div>';
+                $html .= $tablesHtml;
+                $html .= '</div>';
             }
-            $html .= '</ul>';
+            $html .= '</div>';
         } else {
             $html .= '<p class="muted">No annexure formats generated yet.</p>';
         }
 
-        if ($options['includeRestricted'] && $restricted) {
-            $html .= '<div class="warning"><strong>Financial/Price Annexures</strong><p>Manual entry formats are included. The system does not calculate or suggest rates.</p><ul>';
+        if ($showCatalog && $options['includeRestricted'] && $restricted) {
+            $html .= '<div class="warning"><strong>Financial/Price Annexures</strong><p>Manual entry formats are included. YOJAK does not calculate or suggest rates.</p><ul>';
             foreach ($restricted as $rest) {
                 $html .= '<li>' . htmlspecialchars(is_array($rest) ? ($rest['name'] ?? $rest['title'] ?? 'Restricted') : (string)$rest, ENT_QUOTES, 'UTF-8') . '</li>';
             }
@@ -2393,34 +2252,28 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         return $html;
     };
 
-    $render_annexure_template = static function (array $tpl) use ($pack, $annexureTemplates, $contractor): string {
-        $catalog = pack_field_meta_catalog($pack, $annexureTemplates);
-        $bodyHtml = pack_render_annexure_body_html($tpl, $pack, $contractor, $catalog, true);
-        $tablesHtml = pack_render_template_tables_html($tpl, $pack, $contractor, $catalog, true);
-        $html = '<div class="template-block annexure-block">';
-        $html .= '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">';
-        $html .= '<div><div class="muted">' . htmlspecialchars($tpl['annexureCode'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</div><h3 style="margin:4px 0 6px 0;">' . htmlspecialchars($tpl['title'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</h3></div>';
-        $html .= '<span class="pill">' . htmlspecialchars(ucwords(str_replace('_', ' ', $tpl['type'] ?? 'other')), ENT_QUOTES, 'UTF-8') . '</span>';
-        $html .= '</div>';
-        $html .= '<div class="template-body">' . $bodyHtml . '</div>';
-        $html .= $tablesHtml;
-        $html .= '</div>';
-        return $html;
-    };
-
-    $render_template_doc = static function (array $tpl): string {
-        $html = '<div class="template-block">';
-        $html .= '<h3>' . htmlspecialchars($tpl['name'] ?? 'Template', ENT_QUOTES, 'UTF-8') . '</h3>';
-        if (!empty($tpl['lastGeneratedAt'])) {
-            $html .= '<p class="muted" style="margin-top:-6px;">Updated: ' . htmlspecialchars($tpl['lastGeneratedAt'], ENT_QUOTES, 'UTF-8') . '</p>';
+    $render_templates = static function () use ($pack, $contractor, $options): string {
+        $templates = pack_template_payloads($pack, $contractor);
+        $templateId = is_string($options['templateId'] ?? null) ? trim((string)$options['templateId']) : '';
+        if ($templateId !== '') {
+            $templates = array_values(array_filter($templates, static function (array $tpl) use ($templateId) {
+                return ($tpl['tplId'] ?? '') === $templateId;
+            }));
         }
-        $html .= '<pre>' . htmlspecialchars($tpl['body'] ?? '', ENT_QUOTES, 'UTF-8') . '</pre>';
-        $html .= '</div>';
+        $html = '';
+        if (!$templates) {
+            return $html . '<p class="muted">No templates available.</p>';
+        }
+        foreach ($templates as $idx => $tpl) {
+            $html .= '<div class="template-block' . ($idx > 0 ? ' page-break' : '') . '">';
+            $html .= '<h3>' . htmlspecialchars($tpl['name'] ?? 'Template', ENT_QUOTES, 'UTF-8') . '</h3>';
+            if (!empty($tpl['lastGeneratedAt'])) {
+                $html .= '<p class="muted" style="margin-top:-6px;">Updated: ' . htmlspecialchars($tpl['lastGeneratedAt'], ENT_QUOTES, 'UTF-8') . '</p>';
+            }
+            $html .= '<pre>' . htmlspecialchars($tpl['body'] ?? '', ENT_QUOTES, 'UTF-8') . '</pre>';
+            $html .= '</div>';
+        }
         return $html;
-    };
-
-    $render_templates_empty = static function (): string {
-        return '<p class="muted">No templates available.</p>';
     };
 
     $render_attachments_plan = static function () use ($checklist, $attachments): string {
@@ -2444,24 +2297,15 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         return $html;
     };
 
-    $packTitle = $pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack');
-    $packNumber = trim((string)($pack['tenderNumber'] ?? ''));
-    $packNumberLabel = $packNumber !== '' ? $packNumber : 'N/A';
-    $packIdLabel = trim((string)($pack['packId'] ?? ''));
-    $packIdLabel = $packIdLabel !== '' ? $packIdLabel : 'N/A';
-
-    $render_index = static function (array $manifest, bool $includeBranding) use ($pack, $prefill, $printedAt, $packNumberLabel): string {
+    $render_index = static function (array $tocItems, bool $includeBranding) use ($pack, $prefill, $printedAt): string {
         $stats = pack_stats($pack);
-        $annexureItems = array_values(array_filter($manifest, static function (array $item): bool {
-            return ($item['type'] ?? '') === 'annexure_template';
-        }));
-        $templateItems = array_values(array_filter($manifest, static function (array $item): bool {
-            return ($item['type'] ?? '') === 'template';
-        }));
         $annexureList = $pack['annexureList'] ?? ($pack['annexures'] ?? []);
+        $templateList = array_map(static function (array $tpl): string {
+            return (string)($tpl['name'] ?? 'Template');
+        }, $pack['generatedTemplates'] ?? []);
         $restricted = $pack['restrictedAnnexures'] ?? [];
         $html = '';
-        $html .= '<div class="cards"><div class="card-sm"><div class="muted">Tender</div><div class="large">' . htmlspecialchars($pack['tenderTitle'] ?? $pack['title'] ?? 'Tender Pack', ENT_QUOTES, 'UTF-8') . '</div><div class="muted">No: ' . htmlspecialchars($packNumberLabel ?? '', ENT_QUOTES, 'UTF-8') . '</div><div class="muted">' . htmlspecialchars($pack['departmentName'] ?? ($pack['deptName'] ?? ''), ENT_QUOTES, 'UTF-8') . '</div></div>';
+        $html .= '<div class="cards"><div class="card-sm"><div class="muted">Tender</div><div class="large">' . htmlspecialchars($pack['tenderTitle'] ?? $pack['title'] ?? 'Tender Pack', ENT_QUOTES, 'UTF-8') . '</div><div class="muted">No: ' . htmlspecialchars($pack['tenderNumber'] ?? '', ENT_QUOTES, 'UTF-8') . '</div><div class="muted">' . htmlspecialchars($pack['departmentName'] ?? ($pack['deptName'] ?? ''), ENT_QUOTES, 'UTF-8') . '</div></div>';
         $html .= '<div class="card-sm"><div class="muted">Progress</div><div class="large">' . $stats['doneRequired'] . ' / ' . $stats['requiredItems'] . '</div><div class="muted">Generated docs: ' . $stats['generatedDocs'] . '</div></div></div>';
         $html .= '<div class="grid-2"><div><h4>Key Dates</h4><ul class="plain">';
         $html .= '<li>Submission: ' . $prefill($pack['submissionDeadline'] ?? ($pack['dates']['submission'] ?? '')) . '</li>';
@@ -2471,11 +2315,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $html .= '<li>Generated: ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</li>';
         $html .= '</ul><h4>Checklist Summary</h4><ul class="plain"><li>Done: ' . $stats['doneRequired'] . '</li><li>Pending: ' . $stats['pendingRequired'] . '</li></ul>';
         $html .= '<h4>Included Annexures</h4><ul class="plain">';
-        if ($annexureItems) {
-            foreach ($annexureItems as $item) {
-                $html .= '<li>' . htmlspecialchars($item['title'] ?? 'Annexure', ENT_QUOTES, 'UTF-8') . '</li>';
-            }
-        } elseif ($annexureList) {
+        if ($annexureList) {
             foreach ($annexureList as $annex) {
                 $label = is_array($annex) ? ($annex['title'] ?? ($annex['name'] ?? 'Annexure')) : (string)$annex;
                 $html .= '<li>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</li>';
@@ -2484,29 +2324,26 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
             $html .= '<li><span class="muted">None listed</span></li>';
         }
         $html .= '</ul><h4>Included Templates</h4><ul class="plain">';
-        if ($templateItems) {
-            foreach ($templateItems as $item) {
-                $html .= '<li>' . htmlspecialchars($item['title'] ?? 'Template', ENT_QUOTES, 'UTF-8') . '</li>';
+        if ($templateList) {
+            foreach ($templateList as $tplName) {
+                $html .= '<li>' . htmlspecialchars($tplName, ENT_QUOTES, 'UTF-8') . '</li>';
             }
         } else {
             $html .= '<li><span class="muted">None generated</span></li>';
         }
         $html .= '</ul>';
         if ($restricted) {
-            $html .= '<h4>Restricted (Not supported)</h4><ul class="plain">';
+            $html .= '<h4>Restricted (Not supported in YOJAK)</h4><ul class="plain">';
             foreach ($restricted as $rest) {
                 $html .= '<li>' . htmlspecialchars(is_array($rest) ? ($rest['name'] ?? $rest['title'] ?? 'Restricted') : (string)$rest, ENT_QUOTES, 'UTF-8') . '</li>';
             }
             $html .= '</ul>';
         }
         $html .= '<h4>Contents</h4>';
-        $tocItems = array_values(array_filter($manifest, static function (array $item): bool {
-            return ($item['type'] ?? '') !== 'index';
-        }));
         if ($tocItems) {
             $html .= '<ul class="toc">';
             foreach ($tocItems as $item) {
-                $html .= '<li><a href="#' . htmlspecialchars($item['id'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($item['title'] ?? '', ENT_QUOTES, 'UTF-8') . '</a><span class="toc-page">Starts on next section</span></li>';
+                $html .= '<li><a href="#' . htmlspecialchars($item['id'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($item['label'], ENT_QUOTES, 'UTF-8') . '</a><span class="toc-page">Starts on next page</span></li>';
             }
             $html .= '</ul>';
         } else {
@@ -2514,17 +2351,23 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         }
         $html .= '</div></div>';
         if ($includeBranding) {
-            $html .= '<div class="brand-note">Prepared using YOJAK (yojak.co.in)</div>';
+            $html .= '<div class="brand-note">Prepared using YOJAK — yojak.co.in</div>';
         }
         return $html;
     };
 
-    $render_section_header = static function (string $sectionTitle) use ($packTitle, $packNumberLabel, $packIdLabel): string {
-        $metaParts = [
-            'Tender No: ' . htmlspecialchars($packNumberLabel, ENT_QUOTES, 'UTF-8'),
-            'Pack ID: ' . htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8'),
-        ];
-        $metaLine = implode(' • ', $metaParts);
+    $packTitle = $pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack');
+    $packNumber = $pack['tenderNumber'] ?? '';
+    $packIdLabel = $pack['packId'] ?? '';
+    $render_section_header = static function (string $sectionTitle) use ($packTitle, $packNumber, $packIdLabel): string {
+        $metaParts = [];
+        if ($packNumber !== '') {
+            $metaParts[] = 'Tender No: ' . htmlspecialchars($packNumber, ENT_QUOTES, 'UTF-8');
+        }
+        if ($packIdLabel !== '') {
+            $metaParts[] = 'Pack ID: ' . htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8');
+        }
+        $metaLine = $metaParts ? implode(' • ', $metaParts) : '';
         $html = '<div class="section-header">';
         $html .= '<div class="section-kicker">Tender Document</div>';
         $html .= '<div class="section-title">' . htmlspecialchars($packTitle, ENT_QUOTES, 'UTF-8') . '</div>';
@@ -2536,41 +2379,48 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         return $html;
     };
 
-    $manifest = build_print_manifest($pack, $contractor, $docType, $options, $annexureTemplates);
+    $sectionMeta = [];
+    if (in_array($docType, ['index', 'full'], true)) {
+        $sectionMeta[] = ['id' => 'section-index', 'label' => 'Index'];
+    }
+    if ($docType === 'index') {
+        $sectionMeta[] = ['id' => 'section-attachments', 'label' => 'Attachments Plan'];
+    }
+    if (in_array($docType, ['checklist', 'full'], true)) {
+        $sectionMeta[] = ['id' => 'section-checklist', 'label' => 'Checklist'];
+    }
+    if (in_array($docType, ['annexures', 'full'], true)) {
+        $sectionMeta[] = ['id' => 'section-annexures', 'label' => 'Annexures & Formats'];
+    }
+    if (in_array($docType, ['templates', 'full'], true)) {
+        $sectionMeta[] = ['id' => 'section-templates', 'label' => 'Templates'];
+    }
+    if ($docType === 'full') {
+        $sectionMeta[] = ['id' => 'section-attachments', 'label' => 'Attachments Plan'];
+    }
 
     $sections = [];
-    foreach ($manifest as $item) {
+    foreach ($sectionMeta as $meta) {
         $content = '';
-        switch ($item['type']) {
-            case 'index':
-                $content = $render_index($manifest, !empty($options['includeBranding']));
+        switch ($meta['id']) {
+            case 'section-index':
+                $content = $render_index($sectionMeta, !empty($options['includeBranding']));
                 break;
-            case 'attachments':
+            case 'section-attachments':
                 $content = $render_attachments_plan();
                 break;
-            case 'checklist':
+            case 'section-checklist':
                 $content = $render_checklist();
                 break;
-            case 'annexure_catalog':
-                $content = $render_annexure_catalog();
+            case 'section-annexures':
+                $content = $render_annexures();
                 break;
-            case 'annexure_template':
-                $content = $render_annexure_template($item['template'] ?? []);
-                break;
-            case 'annexure_empty':
-                $content = '<p class="muted">No annexure formats generated yet.</p>';
-                break;
-            case 'template':
-                $content = $render_template_doc($item['template'] ?? []);
-                break;
-            case 'templates_empty':
-                $content = $render_templates_empty();
+            case 'section-templates':
+                $content = $render_templates();
                 break;
         }
-        $sectionId = $item['id'] ?? 'section';
-        $sectionTitle = $item['title'] ?? 'Section';
-        $sections[] = '<section id="' . htmlspecialchars($sectionId, ENT_QUOTES, 'UTF-8') . '" class="section-page">'
-            . $render_section_header($sectionTitle)
+        $sections[] = '<section id="' . htmlspecialchars($meta['id'], ENT_QUOTES, 'UTF-8') . '" class="section-page">'
+            . $render_section_header($meta['label'])
             . '<div class="section-body">' . $content . '</div></section>';
     }
 
@@ -2580,24 +2430,17 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .page{max-width:960px;margin:0 auto;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;}
     h1,h2,h3,h4{margin:0 0 8px;}
     .muted{color:var(--muted);}
-    table{width:100%;border-collapse:collapse;margin-top:8px;table-layout:fixed;}
-    th,td{padding:6px;border:1px solid var(--border);text-align:left;vertical-align:top;word-break:normal;overflow-wrap:break-word;}
-    th{color:var(--text);font-weight:600;background:#f7f7f7;font-size:12px;letter-spacing:0.02em;word-break:keep-all;overflow-wrap:normal;}
+    table{width:100%;border-collapse:collapse;margin-top:8px;}
+    th,td{padding:8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;}
+    th{color:var(--muted);text-transform:uppercase;font-size:12px;letter-spacing:0.04em;}
     .status{padding:6px 10px;border-radius:20px;font-size:12px;display:inline-block;}
     .section{margin-top:16px;}
     .subsection{margin-top:10px;}
     .warning{border:1px solid var(--danger);padding:10px;border-radius:10px;background:#fef2f2;color:#b91c1c;}
     .template-block{background:var(--surface-2);border:1px solid #1f6feb33;border-radius:12px;padding:14px;margin-top:12px;}
     .template-body{white-space:pre-wrap;line-height:1.6;font-family:inherit;margin-top:8px;}
-    .annexure-table{table-layout:fixed;}
-    .annexure-table th{word-break:keep-all;overflow-wrap:normal;}
-    .compliance-table th:nth-child(1),.compliance-table td:nth-child(1){width:70%;}
-    .compliance-table th:nth-child(2),.compliance-table td:nth-child(2){width:30%;}
-    .financial-table th:nth-child(1),.financial-table td:nth-child(1){width:45%;}
-    .financial-table th:nth-child(2),.financial-table td:nth-child(2){width:10%;}
-    .financial-table th:nth-child(3),.financial-table td:nth-child(3){width:10%;}
-    .financial-table th:nth-child(4),.financial-table td:nth-child(4){width:15%;}
-    .financial-table th:nth-child(5),.financial-table td:nth-child(5){width:20%;}
+    .annexure-table{table-layout:fixed;word-break:break-word;}
+    .annexure-table th,.annexure-table td{overflow-wrap:anywhere;}
     .financial-manual-table input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px;color:var(--text);}
     .financial-amount{font-weight:600;}
     .template-table{margin-top:12px;}
@@ -2613,7 +2456,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;background:var(--surface-2);}
     .page-break{page-break-before:always;}
     .section-page + .section-page{page-break-before:always;break-before:page;}
-    .section-header{padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:12px;break-after:avoid;page-break-after:avoid;}
+    .section-header{padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:12px;}
     .section-kicker{font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);}
     .section-title{font-size:20px;font-weight:700;margin-top:4px;}
     .section-meta{font-size:12px;color:var(--muted);}
@@ -2646,24 +2489,21 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     body.print-mode th{background:#f7f7f7;}
     body.print-mode .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
     body.print-mode hr{border-top:1px solid #000 !important;}
-    .avoid-break,.signature-block,.checklist-item{break-inside:avoid;page-break-inside:avoid;}
+    .avoid-break,table,tr,th,td,.template-block,.signature-block,.annexure-block,.checklist-item{break-inside:avoid;page-break-inside:avoid;}
     h2,h3{break-after:avoid;page-break-after:avoid;}
-    .signature-block{margin-top:12px;}
-    body.print-mode .no-print{display:none !important;}
+    .no-print{display:none !important;}
     @media print{
         body{background:#fff !important;color:#000 !important;}
         .page{box-shadow:none;border:1px solid #ddd;padding:0;background:#fff;}
         a{color:#000;text-decoration:none;}
         .print-settings{display:none;}
         .card-sm,.template-block,.warning{background:#fff;border:1px solid #ddd;box-shadow:none;}
-        th,td{border:1px solid #ccc;color:#000;}
-        th{background:#f3f3f3;}
+        th,td{border:1px solid #ddd;color:#000;}
+        th{background:#f7f7f7;}
         .pill{background:#fff;border:1px solid #bbb;color:#000;}
         .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
         hr{border-top:1px solid #000 !important;}
-        footer .page-number::after{content:'Page ' counter(page);}
-        thead{display:table-header-group;}
-        tfoot{display:table-footer-group;}
+        footer .page-number::after{content:'Page ' counter(page) ' of ' counter(pages);}
         .no-print{display:none !important;}
     }
     </style>";
@@ -2689,9 +2529,9 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     $headerNote = $useLetterhead ? 'Using saved letterhead' : 'Letterhead space reserved (pre-printed)';
     $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
         . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
-        . '<div><div class="muted" style="font-size:12px;">Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($packTitle, ENT_QUOTES, 'UTF-8') . '</h1>'
-        . '<div class="muted">Pack ID: ' . htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($packNumberLabel, ENT_QUOTES, 'UTF-8') . '</div></div>'
-        . '<div style="text-align:right;"><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div><div class="muted no-print" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div></div>'
+        . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($packTitle, ENT_QUOTES, 'UTF-8') . '</h1>'
+        . '<div class="muted">Pack ID: ' . htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($packNumber, ENT_QUOTES, 'UTF-8') . '</div></div>'
+        . '<div style="text-align:right;"><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div><div class="muted" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div></div>'
         . '</div>';
 
     $footerText = '';
@@ -2700,7 +2540,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     } else {
         $footerText = '<div style="min-height:20mm;"></div>';
     }
-    $footer = '<footer>' . $footerText . '<div class="page-number"></div></footer>';
+    $footer = '<footer>' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
 
     $settingsPanel = '';
     if ($mode === 'preview') {
