@@ -111,16 +111,6 @@ safe_page(function () {
         'includeBranding' => $includeBranding,
     ];
     $annexureTemplates = load_pack_annexures($yojId, $packId, $context);
-    $manifest = build_print_manifest($pack, $contractor, $doc, $options, $annexureTemplates);
-    logEvent(PACK_PRINT_LOG, [
-        'event' => 'PACK_PRINT_RENDER',
-        'at' => now_kolkata()->format(DateTime::ATOM),
-        'yojId' => $yojId,
-        'packId' => $packId,
-        'mode' => $mode,
-        'doc' => $doc,
-        'sectionsCount' => count($manifest),
-    ]);
     $html = pack_print_html($pack, $contractor, $doc, $options, $vaultFiles, $annexureTemplates);
     logEvent(PACK_PRINT_LOG, [
         'event' => 'PACK_PRINT',
