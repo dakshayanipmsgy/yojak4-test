@@ -85,8 +85,8 @@ safe_page(function () {
                     </div>
                     <div class="buttons" style="gap:8px;">
                         <a class="btn secondary" href="/contractor/packs.php"><?= sanitize('Back to packs'); ?></a>
-                        <a class="btn" href="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=full"><?= sanitize('Download Clean PDF (Recommended)'); ?></a>
-                        <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=full&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Browser Print (May include URL/time)'); ?></a>
+                        <a class="btn" href="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=full"><?= sanitize('Download Clean PDF (recommended)'); ?></a>
+                        <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=full&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Browser Print (may include browser headers/footers)'); ?></a>
                         <a class="btn" href="/contractor/pack_export_zip.php?packId=<?= sanitize($pack['packId']); ?>&token=<?= sanitize($signedToken); ?>"><?= sanitize('Export ZIP'); ?></a>
                     </div>
                 </div>
@@ -502,8 +502,8 @@ safe_page(function () {
                                     <div class="buttons" style="gap:6px;">
                                         <?php if (!empty($tpl['tplId'])): ?>
                                             <a class="btn secondary" href="/contractor/template_preview_pack.php?packId=<?= sanitize($pack['packId']); ?>&tplId=<?= sanitize($tpl['tplId']); ?>&letterhead=1" data-print-base="/contractor/template_preview_pack.php?packId=<?= sanitize($pack['packId']); ?>&tplId=<?= sanitize($tpl['tplId']); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
-                                            <a class="btn" href="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=templates&tplId=<?= sanitize($tpl['tplId']); ?>&letterhead=1" data-print-base="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=templates&tplId=<?= sanitize($tpl['tplId']); ?>"><?= sanitize('Download Clean PDF (Recommended)'); ?></a>
-                                            <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=templates&tplId=<?= sanitize($tpl['tplId']); ?>&mode=print&autoprint=1&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=templates&tplId=<?= sanitize($tpl['tplId']); ?>&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Browser Print (May include URL/time)'); ?></a>
+                                            <a class="btn" href="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=templates&tplId=<?= sanitize($tpl['tplId']); ?>&letterhead=1" data-print-base="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=templates&tplId=<?= sanitize($tpl['tplId']); ?>"><?= sanitize('Download Clean PDF'); ?></a>
+                                            <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=templates&tplId=<?= sanitize($tpl['tplId']); ?>&mode=print&autoprint=1&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=templates&tplId=<?= sanitize($tpl['tplId']); ?>&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Browser Print (may include browser headers/footers)'); ?></a>
                                         <?php endif; ?>
                                         <?php if (!empty($tpl['storedPath'])): ?>
                                             <a class="btn secondary" href="<?= sanitize($tpl['storedPath']); ?>" target="_blank" rel="noopener"><?= sanitize('Open'); ?></a>
@@ -607,8 +607,8 @@ safe_page(function () {
                                             <?php else: ?>
                                                 <a class="btn secondary" href="/contractor/annexure_preview.php?packId=<?= sanitize($pack['packId']); ?>&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&letterhead=1" data-print-base="/contractor/annexure_preview.php?packId=<?= sanitize($pack['packId']); ?>&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
                                             <?php endif; ?>
-                                            <a class="btn" href="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1&letterhead=1" data-print-base="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1"><?= sanitize('Download Clean PDF (Recommended)'); ?></a>
-                                            <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1&mode=print&autoprint=1&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Browser Print (May include URL/time)'); ?></a>
+                                            <a class="btn" href="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1&letterhead=1" data-print-base="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1"><?= sanitize('Download Clean PDF'); ?></a>
+                                            <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1&mode=print&autoprint=1&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=annexures&annexId=<?= sanitize($tpl['annexId'] ?? ''); ?>&annexurePreview=1&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Browser Print (may include browser headers/footers)'); ?></a>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
@@ -635,7 +635,6 @@ safe_page(function () {
                 <div>
                     <h3 style="margin:0;"><?= sanitize('Print Center'); ?></h3>
                     <p class="muted" style="margin:0;">Download a clean PDF (recommended), preview, or use browser print for each section.</p>
-                    <p class="muted" style="margin:4px 0 0;font-size:12px;"><?= sanitize("If you use browser print, turn off 'Headers and footers' in print dialog."); ?></p>
                 </div>
                 <div class="flash" style="display:grid;gap:6px;background:var(--surface-2);border:1px solid #1f6feb;">
                     <strong><?= sanitize('Stepper'); ?></strong>
@@ -671,9 +670,9 @@ safe_page(function () {
                                 <div class="muted" style="margin-top:4px;"><?= sanitize($docLink['desc']); ?></div>
                             </div>
                             <div class="buttons" style="gap:6px;">
-                                <a class="btn" href="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&letterhead=1" data-print-base="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>"><?= sanitize('Download Clean PDF (Recommended)'); ?></a>
                                 <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=preview&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=preview" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
-                                <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=print&autoprint=1&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Browser Print (May include URL/time)'); ?></a>
+                                <a class="btn" href="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&letterhead=1" data-print-base="/contractor/pack_pdf.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>"><?= sanitize('Download Clean PDF'); ?></a>
+                                <a class="btn secondary" href="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=print&autoprint=1&letterhead=1" data-print-base="/contractor/pack_print.php?packId=<?= sanitize($pack['packId']); ?>&doc=<?= sanitize($docLink['id']); ?>&mode=print&autoprint=1" target="_blank" rel="noopener"><?= sanitize('Browser Print (may include browser headers/footers)'); ?></a>
                             </div>
                         </div>
                     <?php endforeach; ?>
