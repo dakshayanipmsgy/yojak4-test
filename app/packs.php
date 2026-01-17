@@ -2450,7 +2450,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     $packIdLabel = trim((string)($pack['packId'] ?? ''));
     $packIdLabel = $packIdLabel !== '' ? $packIdLabel : 'N/A';
 
-    $render_index = static function (array $manifest, bool $includeBranding) use ($pack, $prefill, $printedAt, $packNumberLabel, $packIdLabel): string {
+    $render_index = static function (array $manifest, bool $includeBranding) use ($pack, $prefill, $printedAt, $packNumberLabel): string {
         $stats = pack_stats($pack);
         $annexureItems = array_values(array_filter($manifest, static function (array $item): bool {
             return ($item['type'] ?? '') === 'annexure_template';
@@ -2461,14 +2461,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $annexureList = $pack['annexureList'] ?? ($pack['annexures'] ?? []);
         $restricted = $pack['restrictedAnnexures'] ?? [];
         $html = '';
-        $html .= '<div class="card-sm" style="margin-bottom:12px;">'
-            . '<div class="muted" style="font-size:12px;">Tender Pack</div>'
-            . '<h1 style="margin:2px 0 6px 0;">' . htmlspecialchars($pack['tenderTitle'] ?? $pack['title'] ?? 'Tender Pack', ENT_QUOTES, 'UTF-8') . '</h1>'
-            . '<div class="muted" style="display:flex;flex-wrap:wrap;gap:8px;">'
-            . '<span>Tender No: ' . htmlspecialchars($packNumberLabel, ENT_QUOTES, 'UTF-8') . '</span>'
-            . ($packIdLabel !== 'N/A' ? '<span>Pack ID: ' . htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8') . '</span>' : '')
-            . '<span>Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</span>'
-            . '</div></div>';
         $html .= '<div class="cards"><div class="card-sm"><div class="muted">Tender</div><div class="large">' . htmlspecialchars($pack['tenderTitle'] ?? $pack['title'] ?? 'Tender Pack', ENT_QUOTES, 'UTF-8') . '</div><div class="muted">No: ' . htmlspecialchars($packNumberLabel ?? '', ENT_QUOTES, 'UTF-8') . '</div><div class="muted">' . htmlspecialchars($pack['departmentName'] ?? ($pack['deptName'] ?? ''), ENT_QUOTES, 'UTF-8') . '</div></div>';
         $html .= '<div class="card-sm"><div class="muted">Progress</div><div class="large">' . $stats['doneRequired'] . ' / ' . $stats['requiredItems'] . '</div><div class="muted">Generated docs: ' . $stats['generatedDocs'] . '</div></div></div>';
         $html .= '<div class="grid-2"><div><h4>Key Dates</h4><ul class="plain">';
@@ -2530,10 +2522,8 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     $render_section_header = static function (string $sectionTitle) use ($packTitle, $packNumberLabel, $packIdLabel): string {
         $metaParts = [
             'Tender No: ' . htmlspecialchars($packNumberLabel, ENT_QUOTES, 'UTF-8'),
+            'Pack ID: ' . htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8'),
         ];
-        if ($packIdLabel !== 'N/A') {
-            $metaParts[] = 'Pack ID: ' . htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8');
-        }
         $metaLine = implode(' • ', $metaParts);
         $html = '<div class="section-header">';
         $html .= '<div class="section-kicker">Tender Document</div>';
@@ -2703,7 +2693,13 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     } else {
         $headerText = '<div class="blank" style="flex:1;"></div>';
     }
-    $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>';
+    $headerNote = $useLetterhead ? 'Using saved letterhead' : 'Letterhead space reserved (pre-printed)';
+    $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
+        . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
+        . '<div><div class="muted" style="font-size:12px;">Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($packTitle, ENT_QUOTES, 'UTF-8') . '</h1>'
+        . '<div class="muted">Pack ID: ' . htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8') . ' • Tender No: ' . htmlspecialchars($packNumberLabel, ENT_QUOTES, 'UTF-8') . '</div></div>'
+        . '<div style="text-align:right;"><div class="muted">Printed on ' . htmlspecialchars($printedAt, ENT_QUOTES, 'UTF-8') . '</div><div class="muted no-print" style="font-size:12px;">' . htmlspecialchars($headerNote, ENT_QUOTES, 'UTF-8') . '</div></div>'
+        . '</div>';
 
     $footerText = '';
     if (!empty($printSettings['footerEnabled']) && trim((string)$printSettings['footerText']) !== '') {
