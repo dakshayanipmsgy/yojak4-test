@@ -48,7 +48,6 @@ function render_layout(string $title, callable $content): void
             ['label' => t('nav_dashboard'), 'href' => '/superadmin/dashboard.php'],
             ['label' => 'Departments', 'href' => '/superadmin/departments.php'],
             ['label' => 'Contractors', 'href' => '/superadmin/contractors.php'],
-            ['label' => 'Schemes', 'href' => '/superadmin/schemes.php'],
             ['label' => 'Employees', 'href' => '/superadmin/employees.php'],
             ['label' => 'AI Studio', 'href' => '/superadmin/ai_studio.php'],
             ['label' => 'Tender Discovery', 'href' => '/superadmin/tender_discovery.php'],
@@ -90,7 +89,6 @@ function render_layout(string $title, callable $content): void
             ['label' => 'Vault', 'href' => '/contractor/vault.php'],
             ['label' => 'Bills', 'href' => '/contractor/bills.php'],
             ['label' => 'Workorders', 'href' => '/contractor/workorders.php'],
-            ['label' => 'Schemes', 'href' => '/contractor/schemes.php'],
             ['label' => 'Tenders', 'href' => '/contractor/tenders.php'],
             ['label' => 'Templates', 'href' => '/contractor/templates.php'],
             ['label' => 'Discovered', 'href' => '/contractor/discovered_tenders.php'],
@@ -119,9 +117,6 @@ function render_layout(string $title, callable $content): void
         }
         if (in_array('reset_approvals', $user['permissions'] ?? [], true)) {
             $navLinks[] = ['label' => 'Reset Approvals', 'href' => '/superadmin/reset_requests.php'];
-        }
-        if (in_array('scheme_builder', $user['permissions'] ?? [], true)) {
-            $navLinks[] = ['label' => 'Schemes', 'href' => '/superadmin/schemes.php'];
         }
         $logoutAction = '/auth/logout.php';
     } else {
