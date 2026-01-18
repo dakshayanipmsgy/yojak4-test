@@ -2368,7 +2368,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     }
 
     $styles = "<style>
-    @page{size:{$pageSize} {$orientation};margin:30mm 18mm 18mm;}
+    @page{size:{$pageSize} {$orientation};margin:30mm 18mm 20mm;}
     body{font-family:'Segoe UI',Arial,sans-serif;background:var(--surface);color:var(--text);margin:0;padding:24px;}
     .page{max-width:960px;margin:0 auto;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;}
     .printable{display:block;}
@@ -2400,9 +2400,8 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .plain li{margin:4px 0;}
     .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;background:var(--surface-2);}
     .page-break{page-break-before:always;}
-    .print-letterhead-footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
-    .print-footer-bar{display:none;}
-    .print-hint{font-size:12px;color:var(--muted);}
+    footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
+    footer .page-number::after{content:'1';}
     .print-header{min-height:24mm;margin-bottom:10px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:8px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
@@ -2443,9 +2442,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         th{background:#f7f7f7;}
         .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
         hr{border-top:1px solid #000 !important;}
-        .printable{padding-bottom:22mm;}
-        .print-footer-bar{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-end;font-size:10px;color:#9CA3AF;padding:0 18mm 6mm;}
-        .print-footer-bar .page-number::before{content:\"Page \" counter(page);}
+        footer .page-number::after{content: counter(page);}
     }
     </style>";
 
@@ -2489,9 +2486,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     } else {
         $footerText = '<div style="min-height:20mm;"></div>';
     }
-    $footer = '<div class="print-letterhead-footer">' . $footerText . '</div>';
-
-    $printHint = '<div class="print-hint no-print">For clean PDF: In print dialog, turn OFF “Headers and footers” to remove URL/date/time.</div>';
+    $footer = '<footer>' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
 
     $settingsPanel = '';
     if ($mode === 'preview') {
@@ -2503,7 +2498,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '<input type="hidden" name="tplId" value="' . htmlspecialchars((string)($options['templateId'] ?? ''), ENT_QUOTES, 'UTF-8') . '">'
         . '<input type="hidden" name="annexurePreview" value="' . htmlspecialchars(!empty($options['annexurePreview']) ? '1' : '0', ENT_QUOTES, 'UTF-8') . '">'
         . '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'
-        . '<div><strong>Print settings</strong><div class="hint">In print dialog, keep Scale = 100% for exact sizing.</div>' . $printHint . '</div>'
+        . '<div><strong>Print settings</strong><div class="hint">In print dialog, keep Scale = 100% for exact sizing.</div></div>'
         . '<button type="submit">Save settings</button>'
         . '</div>'
         . '<div class="grid">'
@@ -2533,9 +2528,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     }
 
     $printActions = '';
-    if ($mode === 'print') {
-        $printActions = '<div class="print-actions ui-only no-print" data-ui="true">' . $printHint . '</div>';
-    }
 
     $rateScript = "<script>
     (() => {
@@ -2582,7 +2574,6 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '<div class="ui-only" data-ui="true">' . $printActions . $settingsPanel . '</div>'
         . '<div class="printable">' . $header
         . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sections) . $footer . '</div></div>'
-        . '<div class="print-footer-bar" aria-hidden="true"><div>yojak.co.in</div><div class="page-number"></div></div>'
         . $rateScript . $autoPrintScript . '</body></html>';
 
     return $html;
