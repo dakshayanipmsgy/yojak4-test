@@ -42,8 +42,14 @@ safe_page(function () {
                         </div>
                         <p class="muted" style="margin:0;"><?= sanitize($scheme['shortDescription'] ?? ''); ?></p>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                            <a class="btn secondary" href="/superadmin/scheme_import.php?schemeId=<?= urlencode((string)($scheme['schemeId'] ?? '')); ?>">Import/Validate JSON</a>
+                            <a class="btn secondary" href="/superadmin/scheme_sections.php?schemeId=<?= urlencode((string)($scheme['schemeId'] ?? '')); ?>">Sections</a>
+                            <a class="btn secondary" href="/superadmin/scheme_import.php?schemeId=<?= urlencode((string)($scheme['schemeId'] ?? '')); ?>">Legacy Import</a>
                             <a class="btn secondary" href="/superadmin/scheme_templates.php?schemeId=<?= urlencode((string)($scheme['schemeId'] ?? '')); ?>">Template Sets</a>
+                            <form method="post" action="/superadmin/scheme_recompile.php" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeId" value="<?= sanitize((string)($scheme['schemeId'] ?? '')); ?>">
+                                <button class="btn secondary" type="submit">Recompile</button>
+                            </form>
                         </div>
                         <p class="muted" style="margin:0;">Updated: <?= sanitize($scheme['updatedAt'] ?? ''); ?></p>
                     </div>

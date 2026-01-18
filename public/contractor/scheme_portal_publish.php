@@ -21,7 +21,7 @@ safe_page(function () {
 
     $definition = scheme_load_definition($schemeId);
     if (!$definition) {
-        render_error_page('Scheme not available.');
+        render_error_page('Scheme not compiled.');
         return;
     }
 
