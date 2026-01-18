@@ -45,7 +45,7 @@ safe_page(function () {
             ?>
                 <div class="card">
                     <h3><?= sanitize($pack['label'] ?? ''); ?></h3>
-                    <p><span class="pill"><?= sanitize($runtime['status'] ?? ''); ?></span></p>
+                    <p><span class="pill"><?= sanitize(scheme_pack_status_label($runtime['status'] ?? '')); ?></span></p>
                     <p class="text-muted">Missing fields: <?= sanitize(implode(', ', $runtime['missingFields'] ?? [])); ?></p>
                     <a class="btn secondary" href="/contractor/scheme_pack.php?schemeCode=<?= urlencode($schemeCode); ?>&caseId=<?= urlencode($case['caseId'] ?? ''); ?>&packId=<?= urlencode($pack['packId'] ?? ''); ?>">Open Pack</a>
                 </div>

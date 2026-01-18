@@ -35,8 +35,9 @@ safe_page(function () {
     }
     $runtime = scheme_update_pack_runtime($schemeCode, $user['yojId'] ?? '', $caseId, $selectedPack, $values);
 
-    render_layout('Pack', function () use ($schemeCode, $caseId, $packId, $selectedPack, $values, $runtime, $scheme) {
-        $roleId = 'vendor_admin';
+    render_layout('Pack', function () use ($schemeCode, $caseId, $packId, $selectedPack, $values, $runtime, $scheme, $user) {
+        $roleId = $user['roleId'] ?? 'vendor_admin';
+        $documents = scheme_pack_documents($scheme, $selectedPack);
         ?>
         <style>
             .grid { display:grid; gap:16px; }
@@ -47,7 +48,7 @@ safe_page(function () {
             .muted { color: var(--muted); }
         </style>
         <h1><?= sanitize($selectedPack['label'] ?? ''); ?> · Pack</h1>
-        <p>Status: <span class="pill"><?= sanitize($runtime['status'] ?? ''); ?></span></p>
+        <p>Status: <span class="pill"><?= sanitize(scheme_pack_status_label($runtime['status'] ?? '')); ?></span></p>
 
         <div class="grid">
             <div class="card">
@@ -65,42 +66,19 @@ safe_page(function () {
 
             <div class="card">
                 <h3>Fields</h3>
-                <form method="post" action="/contractor/scheme_fields_save.php">
-                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                    <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
-                    <input type="hidden" name="caseId" value="<?= sanitize($caseId); ?>">
-                    <?php foreach ($scheme['fieldDictionary'] ?? [] as $field) {
-                        $viewRoles = $field['visibility']['view'] ?? [];
-                        $editRoles = $field['visibility']['edit'] ?? [];
-                        if ($viewRoles && !in_array($roleId, $viewRoles, true)) {
-                            continue;
-                        }
-                        $value = $values[$field['key']] ?? '';
-                        $readonly = ($editRoles && !in_array($roleId, $editRoles, true));
-                        $type = $field['type'] ?? 'text';
-                    ?>
-                        <div class="field">
-                            <label><?= sanitize($field['label'] ?? ''); ?></label>
-                            <?php if ($type === 'textarea') { ?>
-                                <textarea name="fields[<?= sanitize($field['key']); ?>]" <?= $readonly ? 'readonly' : ''; ?>><?= sanitize((string)$value); ?></textarea>
-                            <?php } else { ?>
-                                <input type="<?= $type === 'date' ? 'date' : 'text'; ?>" name="fields[<?= sanitize($field['key']); ?>]" value="<?= sanitize((string)$value); ?>" <?= $readonly ? 'readonly' : ''; ?>>
-                            <?php } ?>
-                        </div>
-                    <?php } ?>
-                    <button class="btn" type="submit">Save Fields</button>
-                </form>
+                <p class="muted">Update case data for this pack.</p>
+                <a class="btn" href="/contractor/scheme_fields.php?schemeCode=<?= urlencode($schemeCode); ?>&caseId=<?= urlencode($caseId); ?>">Open Fields Form</a>
             </div>
 
             <div class="card">
                 <h3>Documents</h3>
-                <?php if (empty($selectedPack['documents'])) { ?>
+                <?php if (empty($documents)) { ?>
                     <p class="muted">No documents configured.</p>
                 <?php } ?>
-                <?php foreach ($selectedPack['documents'] ?? [] as $doc) { ?>
+                <?php foreach ($documents as $doc) { ?>
                     <div style="margin-bottom:12px;">
                         <strong><?= sanitize($doc['label'] ?? ''); ?></strong>
-                        <form method="post" action="/contractor/scheme_pack_generate_doc.php" style="margin-top:8px;">
+                        <form method="post" action="/contractor/scheme_doc_generate.php" style="margin-top:8px;">
                             <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
                             <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
                             <input type="hidden" name="caseId" value="<?= sanitize($caseId); ?>">
@@ -108,6 +86,10 @@ safe_page(function () {
                             <input type="hidden" name="docId" value="<?= sanitize($doc['docId']); ?>">
                             <button class="btn secondary" type="submit">Generate</button>
                         </form>
+                        <?php $latest = scheme_document_latest_generation($schemeCode, $user['yojId'] ?? '', $caseId, $doc['docId']); ?>
+                        <?php if ($latest) { ?>
+                            <a class="btn secondary" style="margin-top:6px;" href="/contractor/scheme_doc_view.php?schemeCode=<?= urlencode($schemeCode); ?>&caseId=<?= urlencode($caseId); ?>&docId=<?= urlencode($doc['docId']); ?>">View Latest</a>
+                        <?php } ?>
                     </div>
                 <?php } ?>
             </div>
@@ -117,6 +99,15 @@ safe_page(function () {
                 <p class="muted">State: <?= sanitize($runtime['workflowState'] ?? 'Draft'); ?></p>
                 <?php if (!empty($selectedPack['workflow']['states'])) { ?>
                     <p class="muted">States: <?= sanitize(implode(', ', $selectedPack['workflow']['states'])); ?></p>
+                <?php } ?>
+                <?php if (!empty($selectedPack['workflow']['enabled'])) { ?>
+                    <form method="post" action="/contractor/scheme_workflow_transition.php" style="margin-top:8px;">
+                        <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                        <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                        <input type="hidden" name="caseId" value="<?= sanitize($caseId); ?>">
+                        <input type="hidden" name="packId" value="<?= sanitize($packId); ?>">
+                        <button class="btn secondary" type="submit">Move to Next State</button>
+                    </form>
                 <?php } ?>
             </div>
         </div>
