@@ -227,7 +227,7 @@ safe_page(function () {
                     <h2 style="margin-bottom:6px;"><?= sanitize('Saved Fields (Auto-fill Memory)'); ?></h2>
                     <p class="muted" style="margin:0;"><?= sanitize('Values learned from offline packs auto-fill future placeholders. Edit or delete saved fields as needed.'); ?></p>
                 </div>
-                <div class="pill" style="background:#13233a;color:#9cc4ff;font-weight:600;"><?= sanitize(count($memoryEntries) . ' saved'); ?></div>
+                <div class="pill" style="background:var(--surface-2);color:var(--text);font-weight:600;border:1px solid var(--border);"><?= sanitize(count($memoryEntries) . ' saved'); ?></div>
             </div>
             <details style="border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface-2);">
                 <summary style="cursor:pointer;font-weight:600;"><?= sanitize('Advanced'); ?></summary>
@@ -294,7 +294,7 @@ safe_page(function () {
                     <h2 style="margin-bottom:6px;"><?= sanitize('Password'); ?></h2>
                     <p class="muted" style="margin:0;"><?= sanitize('Set a strong password to keep your account secure.'); ?></p>
                 </div>
-                <div class="pill" style="background:#13233a;color:#9cc4ff;font-weight:600;"><?= sanitize('Min 8 characters'); ?></div>
+                <div class="pill" style="background:var(--surface-2);color:var(--text);font-weight:600;border:1px solid var(--border);"><?= sanitize('Min 8 characters'); ?></div>
             </div>
             <form method="post" action="/contractor/profile_password.php" style="display:grid;gap:12px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">

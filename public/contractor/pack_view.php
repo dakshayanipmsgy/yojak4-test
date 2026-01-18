@@ -110,7 +110,7 @@ safe_page(function () {
                 <div class="pill"><?= sanitize(($packFieldsInfo['filled'] ?? 0) . ' / ' . ($packFieldsInfo['total'] ?? 0) . ' filled'); ?></div>
             </div>
             <?php if ($packFieldsInfo['errors']): ?>
-                <div class="flash" style="background:#201012;border:1px solid #f85149;">
+                <div class="flash" style="background:var(--surface-2);border:1px solid #f85149;color:var(--text);">
                     <?= sanitize('Some fields could not be detected from templates. You can still edit known fields below.'); ?>
                 </div>
             <?php endif; ?>
@@ -613,7 +613,7 @@ safe_page(function () {
                         </div>
                     <?php endif; ?>
                     <?php if (!empty($pack['restrictedAnnexures'])): ?>
-                        <div class="flash" style="background:#201012;border:1px solid #f85149;">
+                        <div class="flash" style="background:var(--surface-2);border:1px solid #f85149;color:var(--text);">
                             <strong><?= sanitize('Financial/Price Annexures (Manual Entry)'); ?></strong>
                             <p class="muted" style="margin:6px 0 0;"><?= sanitize('YOJAK will not calculate or suggest rates. Manual entry formats are provided for print.'); ?></p>
                             <ul style="margin:6px 0 0 16px; padding:0;">

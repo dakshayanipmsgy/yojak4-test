@@ -32,7 +32,7 @@ safe_page(function () {
                         <h2 style="margin:6px 0 4px;"><?= sanitize('Login Debugger'); ?></h2>
                         <p class="muted" style="margin:0;"><?= sanitize('Check user id formatting and storage within your department.'); ?></p>
                     </div>
-                    <div class="pill" style="background:#13233a;color:#9cc4ff;"><?= sanitize('Department: ' . ($user['deptId'] ?? '')); ?></div>
+                    <div class="pill" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);"><?= sanitize('Department: ' . ($user['deptId'] ?? '')); ?></div>
                 </div>
                 <form method="post" style="display:grid;gap:12px;">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">

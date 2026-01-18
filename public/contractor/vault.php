@@ -209,7 +209,7 @@ safe_page(function () {
                                 <p class="muted" style="margin:4px 0 0;">${escapeHtml(item.fileId ?? '')} • ${escapeHtml(item.docType ?? 'Other')} • ${escapeHtml(sizeLabel)}</p>
                                 <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
                                     ${tags}
-                                    <span class="pill" style="background:#183d2f;color:#9ef0c0;">Uploaded</span>
+                                    <span class="pill" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);">Uploaded</span>
                                 </div>
                             </div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
