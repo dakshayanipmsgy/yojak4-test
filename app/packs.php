@@ -2187,13 +2187,13 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $formats = $pack['formats'] ?? [];
         $restricted = $pack['restrictedAnnexures'] ?? [];
         $showCatalog = empty($options['annexurePreview']);
-        $html = '<div class="section"><h2>Annexures & Formats</h2>';
+        $html = '<div class="section">';
         if ($showCatalog) {
             if (!$annexures && !$formats) {
                 $html .= '<p class="muted">No annexures listed.</p>';
             } else {
                 if ($annexures) {
-                    $html .= '<h3>Annexures</h3><ol>';
+                    $html .= '<ol>';
                     foreach ($annexures as $annex) {
                         $label = is_array($annex) ? ($annex['name'] ?? $annex['title'] ?? 'Annexure') : (string)$annex;
                         $notes = is_array($annex) ? ($annex['notes'] ?? '') : '';
@@ -2210,7 +2210,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
                     $html .= '</ol>';
                 }
                 if ($formats) {
-                    $html .= '<h3>Formats</h3><ul>';
+                    $html .= '<ul>';
                     foreach ($formats as $fmt) {
                         $label = is_array($fmt) ? ($fmt['name'] ?? $fmt['title'] ?? 'Format') : (string)$fmt;
                         $html .= '<li>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</li>';
@@ -2222,7 +2222,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
 
         $catalog = pack_field_meta_catalog($pack, $annexureTemplates);
         if ($annexureTemplates) {
-            $html .= '<div class="subsection"><h3>Generated Annexure Templates</h3>';
+            $html .= '<div class="subsection">';
             foreach ($annexureTemplates as $idx => $tpl) {
                 $bodyHtml = pack_render_annexure_body_html($tpl, $pack, $contractor, $catalog, true);
                 $tablesHtml = pack_render_template_tables_html($tpl, $pack, $contractor, $catalog, true);
@@ -2402,9 +2402,14 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .page-break{page-break-before:always;}
     footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
     footer .page-number::after{content:'1';}
-    .print-header{min-height:30mm;margin-bottom:12px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;}
+    .print-header{min-height:24mm;margin-bottom:10px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:8px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
+    .print-meta{margin-bottom:12px;}
+    .print-meta-line{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:11px;color:#9CA3AF;}
+    .print-meta-line .meta-right{text-align:right;flex:1 1 auto;}
+    .print-tender-no{margin-top:4px;font-size:13px;color:#000;}
+    .print-tender-title{margin-top:4px;font-size:15px;font-weight:600;color:#000;}
     .print-settings{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:16px;display:grid;gap:10px;}
     .print-settings .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
     .print-settings label{display:grid;gap:6px;font-size:12px;color:var(--muted);}
@@ -2462,16 +2467,19 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         $headerText = '<div class="blank" style="flex:1;"></div>';
     }
     $offtdId = $pack['sourceTender']['id'] ?? ($pack['offtdId'] ?? '');
-    $deptName = $pack['departmentName'] ?? ($pack['deptName'] ?? '');
+    $packIdLabel = trim((string)($pack['packId'] ?? ''));
+    $packIdDisplay = $packIdLabel !== '' ? htmlspecialchars($packIdLabel, ENT_QUOTES, 'UTF-8') : '—';
+    $metaRightParts = ['Pack ID: ' . $packIdDisplay];
+    if ($offtdId !== '') {
+        $metaRightParts[] = 'OFFTD ID: ' . htmlspecialchars($offtdId, ENT_QUOTES, 'UTF-8');
+    }
+    $tenderNumber = trim((string)($pack['tenderNumber'] ?? ''));
+    $tenderTitle = $pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack');
     $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
-        . '<div class="header" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
-        . '<div><div class="muted" style="font-size:12px;">YOJAK Tender Pack</div><h1 style="margin:2px 0 4px 0;">' . htmlspecialchars($pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack'), ENT_QUOTES, 'UTF-8') . '</h1>'
-        . '<div class="muted">Pack ID: ' . htmlspecialchars($pack['packId'] ?? '', ENT_QUOTES, 'UTF-8')
-        . ($offtdId !== '' ? ' • OFFTD ID: ' . htmlspecialchars($offtdId, ENT_QUOTES, 'UTF-8') : '')
-        . ($pack['tenderNumber'] ?? '' ? ' • Tender No: ' . htmlspecialchars($pack['tenderNumber'], ENT_QUOTES, 'UTF-8') : '')
-        . '</div>'
-        . ($deptName !== '' ? '<div class="muted">Department: ' . htmlspecialchars($deptName, ENT_QUOTES, 'UTF-8') . '</div>' : '')
-        . '</div>'
+        . '<div class="print-meta">'
+        . '<div class="print-meta-line"><div>Visit yojak.co.in</div><div class="meta-right">' . implode(' | ', $metaRightParts) . '</div></div>'
+        . ($tenderNumber !== '' ? '<div class="print-tender-no">Tender No: ' . htmlspecialchars($tenderNumber, ENT_QUOTES, 'UTF-8') . '</div>' : '')
+        . '<div class="print-tender-title">' . htmlspecialchars($tenderTitle, ENT_QUOTES, 'UTF-8') . '</div>'
         . '</div>';
 
     $footerText = '';
