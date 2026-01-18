@@ -54,6 +54,7 @@ function render_layout(string $title, callable $content): void
             ['label' => 'Backups', 'href' => '/superadmin/backup.php'],
             ['label' => 'Support Inbox', 'href' => '/superadmin/support_dashboard.php'],
             ['label' => 'Assisted Pack v2', 'href' => '/superadmin/assisted_v2/queue.php'],
+            ['label' => 'Schemes', 'href' => '/superadmin/schemes/index.php'],
             ['label' => 'Error Log', 'href' => '/superadmin/error_log.php'],
             ['label' => 'Factory Reset', 'href' => '/superadmin/factory_reset.php'],
             ['label' => 'Stats', 'href' => '/superadmin/stats.php'],
@@ -92,6 +93,7 @@ function render_layout(string $title, callable $content): void
             ['label' => 'Tenders', 'href' => '/contractor/tenders.php'],
             ['label' => 'Templates', 'href' => '/contractor/templates.php'],
             ['label' => 'Discovered', 'href' => '/contractor/discovered_tenders.php'],
+            ['label' => 'Schemes', 'href' => '/contractor/schemes.php'],
             ['label' => 'Offline Tenders', 'href' => '/contractor/offline_tenders.php'],
             ['label' => 'Tender Archive', 'href' => '/contractor/tender_archive.php'],
             ['label' => 'Notifications', 'href' => '/contractor/notifications.php'],
@@ -111,6 +113,9 @@ function render_layout(string $title, callable $content): void
         }
         if (in_array('audit_view', $user['permissions'] ?? [], true)) {
             $navLinks[] = ['label' => 'Audit', 'href' => '/staff/audit.php'];
+        }
+        if (in_array('scheme_builder', $user['permissions'] ?? [], true) || in_array('*', $user['permissions'] ?? [], true)) {
+            $navLinks[] = ['label' => 'Schemes', 'href' => '/superadmin/schemes/index.php'];
         }
         if (in_array('stats_view', $user['permissions'] ?? [], true)) {
             $navLinks[] = ['label' => 'Stats', 'href' => '/superadmin/stats.php'];

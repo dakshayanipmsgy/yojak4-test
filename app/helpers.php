@@ -29,14 +29,17 @@ function ensure_data_structure(): void
         DATA_PATH . '/staff/employees',
         DATA_PATH . '/backups',
         DATA_PATH . '/logs',
+        DATA_PATH . '/logs/runtime_errors',
         DATA_PATH . '/locks',
+        DATA_PATH . '/schemes',
+        DATA_PATH . '/contractor_scheme_activations',
+        DATA_PATH . '/scheme_cases',
         DATA_PATH . '/ai',
         DATA_PATH . '/discovery',
         DATA_PATH . '/discovery/discovered',
         DATA_PATH . '/support',
         DATA_PATH . '/support/tickets',
         DATA_PATH . '/support/uploads',
-        DATA_PATH . '/logs/runtime_errors',
         DATA_PATH . '/logs/public_tenders',
         DATA_PATH . '/assisted_v2',
         DATA_PATH . '/assisted_v2/requests',
@@ -134,6 +137,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/templates.log',
         DATA_PATH . '/logs/site.log',
         DATA_PATH . '/logs/suggestions.log',
+        DATA_PATH . '/logs/scheme_runtime.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {
