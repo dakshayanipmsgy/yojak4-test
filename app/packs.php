@@ -2420,28 +2420,26 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .print-actions .btn{background:var(--primary);color:var(--primary-contrast);border:none;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;}
     .print-actions .hint{font-size:12px;color:#444;}
     body.print-mode{background:#fff !important;color:#000 !important;}
-    body.print-mode .page{background:#fff;border:1px solid #ddd;border-radius:0;box-shadow:none;padding:0;}
+    body.print-mode .page,body.print-mode .print-page{background:#fff;border:0;border-radius:0;box-shadow:none;padding:0;}
     body.print-mode h1,body.print-mode h2,body.print-mode h3,body.print-mode h4,body.print-mode strong{color:#000;}
     body.print-mode .muted{color:#444;}
     body.print-mode a{color:#000;text-decoration:none;}
     body.print-mode .print-settings{display:none;}
     body.print-mode .print-actions{display:flex;}
-    body.print-mode .card-sm,body.print-mode .template-block,body.print-mode .warning{background:#fff;border:1px solid #ddd;}
-    body.print-mode .pill{background:#fff;border:1px solid #bbb;color:#000;}
+    body.print-mode .card-sm,body.print-mode .template-block,body.print-mode .warning,body.print-mode .pill{background:transparent;border:0;box-shadow:none;color:#000;}
     body.print-mode th,body.print-mode td{border:1px solid #ddd;color:#000;}
     body.print-mode th{background:#f7f7f7;}
     body.print-mode .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
     body.print-mode hr{border-top:1px solid #000 !important;}
     @media print{
-        body{background:#fff !important;color:#000 !important;}
-        .page{box-shadow:none;border:1px solid #ddd;padding:0;background:#fff;}
+        body{background:#fff !important;color:#000 !important;padding:0;}
+        .page,.print-page{box-shadow:none;border:0;padding:0;background:#fff;}
         a{color:#000;text-decoration:none;}
         .ui-only,.no-print,header,nav,footer,.topbar,.actions,.btn,.controls,.toolbar,.sidebar,.panel,.sticky-header,[data-ui=\"true\"]{display:none !important;}
         .print-settings,.print-actions{display:none;}
-        .card-sm,.template-block,.warning{background:#fff;border:1px solid #ddd;box-shadow:none;}
+        .card,.panel,.box,.paper,.shadow,.rounded,.bordered,.container,.section,.card-sm,.template-block,.warning,.pill{background:transparent;border:0 !important;box-shadow:none !important;border-radius:0 !important;}
         th,td{border:1px solid #ddd;color:#000;}
         th{background:#f7f7f7;}
-        .pill{background:#fff;border:1px solid #bbb;color:#000;}
         .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
         hr{border-top:1px solid #000 !important;}
         footer .page-number::after{content: counter(page);}
@@ -2572,7 +2570,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     $bodyClass = $mode === 'print' ? ' class="print-mode"' : '';
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pack '
         . htmlspecialchars($pack['packId'] ?? 'Pack', ENT_QUOTES, 'UTF-8') . '</title>'
-        . $styles . '</head><body' . $bodyClass . '><div class="page">'
+        . $styles . '</head><body' . $bodyClass . '><div class="page print-page">'
         . '<div class="ui-only" data-ui="true">' . $printActions . $settingsPanel . '</div>'
         . '<div class="printable">' . $header
         . implode('<hr class="muted" style="border:none;border-top:1px solid var(--border);margin:16px 0;">', $sections) . $footer . '</div></div>'
