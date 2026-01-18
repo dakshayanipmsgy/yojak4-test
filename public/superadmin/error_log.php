@@ -101,7 +101,7 @@ safe_page(function () {
                 <p class="muted">No entries for this filter.</p>
             <?php endif; ?>
             <?php foreach ($filtered as $entry): ?>
-                <div class="card" style="background:#0f1624;margin-bottom:10px;">
+                <div class="card" style="background:var(--surface-2);margin-bottom:10px;border:1px solid var(--border);">
                     <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;">
                         <div>
                             <strong><?= sanitize($entry['reference'] ?? ''); ?></strong>

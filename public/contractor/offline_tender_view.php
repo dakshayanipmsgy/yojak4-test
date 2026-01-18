@@ -142,7 +142,7 @@ safe_page(function () {
                     <?php endif; ?>
                 </div>
                 <?php if ($assistedRejected): ?>
-                    <div class="flash" style="background:#201012;border:1px solid #f85149;">
+                    <div class="flash" style="background:var(--surface-2);border:1px solid #f85149;color:var(--text);">
                         <?= sanitize('Rejected: ' . ($assistedRequest['reject']['reason'] ?? 'No reason provided.')); ?>
                     </div>
                 <?php endif; ?>

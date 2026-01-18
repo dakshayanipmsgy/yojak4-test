@@ -275,7 +275,7 @@ function render_layout(string $title, callable $content): void
             .mobile-menu-backdrop {
                 position: absolute;
                 inset: 0;
-                background: rgba(15, 23, 42, 0.45);
+                background: rgba(148, 163, 184, 0.4);
             }
             .mobile-menu-panel {
                 position: absolute;

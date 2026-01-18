@@ -28,7 +28,7 @@ safe_page(function () {
                         <h2 style="margin:6px 0 4px;"><?= sanitize('Department Login Debugger'); ?></h2>
                         <p class="muted" style="margin:0;"><?= sanitize('Paste a full user id to see where authentication fails.'); ?></p>
                     </div>
-                    <div class="pill" style="background:#13233a;color:#9cc4ff;"><?= sanitize('Timezone: Asia/Kolkata'); ?></div>
+                    <div class="pill" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);"><?= sanitize('Timezone: Asia/Kolkata'); ?></div>
                 </div>
                 <form method="post" style="display:grid;gap:12px;">
                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">

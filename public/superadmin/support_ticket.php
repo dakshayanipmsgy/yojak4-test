@@ -23,7 +23,7 @@ safe_page(function () {
                 <span class="pill" style="border-color:#2ea043;color:#8ce99a;">Status: <?= sanitize(ucwords(str_replace('_',' ', $ticket['status'] ?? ''))); ?></span>
             </div>
             <p style="margin-top:10px;white-space:pre-wrap;">Title: <?= sanitize($ticket['title'] ?? ''); ?></p>
-            <div class="card" style="background:#0f1624;margin-top:12px;">
+            <div class="card" style="background:var(--surface-2);margin-top:12px;border:1px solid var(--border);">
                 <h3 style="margin-top:0;">Message</h3>
                 <p style="white-space:pre-wrap;"><?= nl2br(sanitize($ticket['message'] ?? '')); ?></p>
             </div>
@@ -35,14 +35,14 @@ safe_page(function () {
                     <div class="pill">Closed: <?= sanitize($ticket['closedAt']); ?></div>
                 <?php endif; ?>
             </div>
-            <div class="card" style="background:#0f1624;margin-top:12px;">
+            <div class="card" style="background:var(--surface-2);margin-top:12px;border:1px solid var(--border);">
                 <h3 style="margin-top:0;">Context</h3>
                 <p class="muted" style="margin:0;">Page: <?= sanitize($ticket['pageContext']['url'] ?? ''); ?></p>
                 <p class="muted" style="margin:0;">Referrer: <?= sanitize($ticket['pageContext']['referrer'] ?? ''); ?></p>
                 <p class="muted" style="margin:0;">UA Hash: <?= sanitize($ticket['pageContext']['uaHash'] ?? ''); ?> • IP: <?= sanitize($ticket['pageContext']['ipMasked'] ?? ''); ?></p>
             </div>
             <?php if (!empty($ticket['attachments'])): ?>
-                <div class="card" style="background:#0f1624;margin-top:12px;">
+                <div class="card" style="background:var(--surface-2);margin-top:12px;border:1px solid var(--border);">
                     <h3 style="margin-top:0;">Attachments</h3>
                     <ul>
                         <?php foreach ($ticket['attachments'] as $file): ?>
@@ -54,7 +54,7 @@ safe_page(function () {
                     </ul>
                 </div>
             <?php endif; ?>
-            <div class="card" style="background:#0f1624;margin-top:12px;">
+            <div class="card" style="background:var(--surface-2);margin-top:12px;border:1px solid var(--border);">
                 <h3 style="margin-top:0;">Admin Notes</h3>
                 <?php if (!empty($ticket['adminNotes'])): ?>
                     <ul>
