@@ -93,7 +93,6 @@ function employee_permission_catalog(): array
         'audit_view' => 'Audit Logs (metadata)',
         'stats_view' => 'Platform Stats',
         'can_process_assisted' => 'Assisted Pack Processing',
-        'scheme_builder' => 'Scheme Builder',
     ];
 }
 
