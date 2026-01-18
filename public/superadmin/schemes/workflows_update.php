@@ -1,0 +1,53 @@
+<?php
+require_once __DIR__ . '/../../../app/bootstrap.php';
+
+safe_page(function () {
+    $actor = require_superadmin_or_permission('scheme_builder');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        redirect('/superadmin/schemes/index.php');
+    }
+    require_csrf();
+    $schemeCode = strtoupper(trim($_POST['schemeCode'] ?? ''));
+    $packId = trim($_POST['packId'] ?? '');
+    if ($schemeCode === '' || $packId === '') {
+        redirect('/superadmin/schemes/index.php');
+    }
+    $action = $_POST['action'] ?? '';
+    $draft = load_scheme_draft($schemeCode);
+    if (!$draft) {
+        render_error_page('Scheme draft not found.');
+    }
+
+    if ($action === 'add_transition') {
+        $transition = [
+            'from' => trim($_POST['from'] ?? ''),
+            'to' => trim($_POST['to'] ?? ''),
+            'roles' => $_POST['roles'] ?? [],
+            'requiredFields' => $_POST['requiredFields'] ?? [],
+            'requiredDocs' => $_POST['requiredDocs'] ?? [],
+            'approval' => isset($_POST['approval']) ? 'required' : null,
+        ];
+        $draft = scheme_add_workflow_transition($draft, $packId, $transition);
+        scheme_log_audit($schemeCode, 'add_transition', $actor['type'] ?? 'actor', ['packId' => $packId]);
+    } else {
+        $states = array_filter(array_map('trim', explode(',', $_POST['workflowStates'] ?? '')));
+        $existingTransitions = [];
+        foreach ($draft['packs'] ?? [] as $pack) {
+            if (($pack['packId'] ?? '') === $packId) {
+                $existingTransitions = $pack['workflow']['transitions'] ?? [];
+                break;
+            }
+        }
+        $workflow = [
+            'enabled' => isset($_POST['workflowEnabled']),
+            'states' => $states ?: ['Draft', 'Submitted', 'Approved', 'Completed'],
+            'transitions' => $existingTransitions,
+            'defaultState' => trim($_POST['workflowDefaultState'] ?? ''),
+        ];
+        $draft = scheme_update_pack_workflow($draft, $packId, $workflow);
+        scheme_log_audit($schemeCode, 'update_workflow', $actor['type'] ?? 'actor', ['packId' => $packId]);
+    }
+
+    save_scheme_draft($schemeCode, $draft);
+    redirect('/superadmin/schemes/edit.php?schemeCode=' . urlencode($schemeCode) . '&version=draft&tab=workflows');
+});

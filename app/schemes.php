@@ -127,6 +127,7 @@ function scheme_default_draft(string $schemeCode, array $meta): array
             ['moduleId' => 'compliance', 'label' => 'Compliance'],
         ],
         'fieldDictionary' => [],
+        'documents' => [],
         'packs' => [],
         'toggles' => [
             'customerPortalEnabled' => false,
@@ -215,8 +216,10 @@ function scheme_log_audit(string $schemeCode, string $event, string $actor, arra
     $record = array_merge([
         'event' => $event,
         'actor' => $actor,
+        'schemeCode' => $schemeCode,
     ], $payload);
     logEvent(scheme_audit_path($schemeCode), $record);
+    logEvent(DATA_PATH . '/logs/scheme_builder.log', $record);
 }
 
 function scheme_log_runtime_error(array $payload): void
@@ -232,9 +235,10 @@ function scheme_slugify(string $value): string
     return $value ?: 'field';
 }
 
-function scheme_generate_field_key(string $label, array $existing): string
+function scheme_generate_field_key(string $label, array $existing, string $moduleId = ''): string
 {
-    $base = 'case.' . scheme_slugify($label);
+    $prefix = $moduleId !== '' ? $moduleId : 'case';
+    $base = $prefix . '.' . scheme_slugify($label);
     $key = $base;
     $counter = 2;
     $existingKeys = array_map('strtolower', $existing);
@@ -249,7 +253,7 @@ function scheme_add_field(array $draft, array $payload): array
 {
     $fields = $draft['fieldDictionary'] ?? [];
     $keys = array_map(fn($field) => $field['key'] ?? '', $fields);
-    $key = scheme_generate_field_key($payload['label'], $keys);
+    $key = scheme_generate_field_key($payload['label'], $keys, $payload['moduleId'] ?? '');
     $fields[] = [
         'key' => $key,
         'label' => $payload['label'],
@@ -259,14 +263,57 @@ function scheme_add_field(array $draft, array $payload): array
             'minLen' => $payload['minLen'],
             'maxLen' => $payload['maxLen'],
             'pattern' => $payload['pattern'],
+            'min' => $payload['min'],
+            'max' => $payload['max'],
+            'dateMin' => $payload['dateMin'],
+            'dateMax' => $payload['dateMax'],
+            'options' => $payload['options'],
         ],
         'visibility' => [
             'view' => $payload['viewRoles'],
             'edit' => $payload['editRoles'],
         ],
         'moduleId' => $payload['moduleId'],
+        'unique' => $payload['unique'],
     ];
     $draft['fieldDictionary'] = $fields;
+    return $draft;
+}
+
+function scheme_update_field(array $draft, string $key, array $payload): array
+{
+    $fields = $draft['fieldDictionary'] ?? [];
+    foreach ($fields as &$field) {
+        if (($field['key'] ?? '') === $key) {
+            $field['label'] = $payload['label'];
+            $field['type'] = $payload['type'];
+            $field['required'] = $payload['required'];
+            $field['validation'] = [
+                'minLen' => $payload['minLen'],
+                'maxLen' => $payload['maxLen'],
+                'pattern' => $payload['pattern'],
+                'min' => $payload['min'],
+                'max' => $payload['max'],
+                'dateMin' => $payload['dateMin'],
+                'dateMax' => $payload['dateMax'],
+                'options' => $payload['options'],
+            ];
+            $field['visibility'] = [
+                'view' => $payload['viewRoles'],
+                'edit' => $payload['editRoles'],
+            ];
+            $field['moduleId'] = $payload['moduleId'];
+            $field['unique'] = $payload['unique'];
+        }
+    }
+    unset($field);
+    $draft['fieldDictionary'] = $fields;
+    return $draft;
+}
+
+function scheme_delete_field(array $draft, string $key): array
+{
+    $draft['fieldDictionary'] = array_values(array_filter($draft['fieldDictionary'] ?? [], fn($field) => ($field['key'] ?? '') !== $key));
     return $draft;
 }
 
@@ -278,43 +325,100 @@ function scheme_add_pack(array $draft, array $payload): array
         'label' => $payload['label'],
         'moduleId' => $payload['moduleId'],
         'requiredFieldKeys' => $payload['requiredFieldKeys'],
-        'documents' => [],
+        'documentIds' => $payload['documentIds'],
         'workflow' => [
-            'enabled' => false,
-            'states' => ['Draft', 'Submitted', 'Approved', 'Completed'],
-            'transitions' => [],
+            'enabled' => $payload['workflowEnabled'],
+            'states' => $payload['workflowStates'] ?: ['Draft', 'Submitted', 'Approved', 'Completed'],
+            'transitions' => $payload['workflowTransitions'],
+            'defaultState' => $payload['workflowDefaultState'] ?? '',
         ],
     ];
     $draft['packs'] = $packs;
     return $draft;
 }
 
-function scheme_add_document(array $draft, string $packId, array $payload): array
+function scheme_update_pack(array $draft, string $packId, array $payload): array
 {
     $packs = $draft['packs'] ?? [];
     foreach ($packs as &$pack) {
         if (($pack['packId'] ?? '') === $packId) {
-            $pack['documents'][] = [
-                'docId' => $payload['docId'],
-                'label' => $payload['label'],
-                'templateType' => 'simple_html',
-                'templateBody' => $payload['templateBody'],
-                'generation' => [
-                    'auto' => false,
-                    'allowManual' => true,
-                    'allowRegen' => true,
-                    'lockAfterGen' => false,
-                ],
-                'visibility' => [
-                    'vendor' => true,
-                    'customerDownload' => false,
-                    'authorityOnly' => false,
-                ],
+            $pack['label'] = $payload['label'];
+            $pack['packId'] = $payload['packId'];
+            $pack['moduleId'] = $payload['moduleId'];
+            $pack['requiredFieldKeys'] = $payload['requiredFieldKeys'];
+            $pack['documentIds'] = $payload['documentIds'];
+            $pack['workflow'] = [
+                'enabled' => $payload['workflowEnabled'],
+                'states' => $payload['workflowStates'] ?: ['Draft', 'Submitted', 'Approved', 'Completed'],
+                'transitions' => $payload['workflowTransitions'],
+                'defaultState' => $payload['workflowDefaultState'] ?? '',
             ];
         }
     }
     unset($pack);
     $draft['packs'] = $packs;
+    return $draft;
+}
+
+function scheme_delete_pack(array $draft, string $packId): array
+{
+    $draft['packs'] = array_values(array_filter($draft['packs'] ?? [], fn($pack) => ($pack['packId'] ?? '') !== $packId));
+    return $draft;
+}
+
+function scheme_add_document(array $draft, array $payload): array
+{
+    $docs = $draft['documents'] ?? [];
+    $docs[] = [
+        'docId' => $payload['docId'],
+        'label' => $payload['label'],
+        'templateType' => 'simple_html',
+        'templateBody' => $payload['templateBody'],
+        'generation' => [
+            'auto' => $payload['autoGenerate'],
+            'allowManual' => $payload['allowManual'],
+            'allowRegen' => $payload['allowRegen'],
+            'lockAfterGen' => $payload['lockAfterGen'],
+        ],
+        'visibility' => [
+            'vendor' => $payload['vendorVisible'],
+            'customerDownload' => $payload['customerDownload'],
+            'authorityOnly' => $payload['authorityOnly'],
+        ],
+    ];
+    $draft['documents'] = $docs;
+    return $draft;
+}
+
+function scheme_update_document(array $draft, string $docId, array $payload): array
+{
+    $docs = $draft['documents'] ?? [];
+    foreach ($docs as &$doc) {
+        if (($doc['docId'] ?? '') === $docId) {
+            $doc['docId'] = $payload['docId'];
+            $doc['label'] = $payload['label'];
+            $doc['templateBody'] = $payload['templateBody'];
+            $doc['generation'] = [
+                'auto' => $payload['autoGenerate'],
+                'allowManual' => $payload['allowManual'],
+                'allowRegen' => $payload['allowRegen'],
+                'lockAfterGen' => $payload['lockAfterGen'],
+            ];
+            $doc['visibility'] = [
+                'vendor' => $payload['vendorVisible'],
+                'customerDownload' => $payload['customerDownload'],
+                'authorityOnly' => $payload['authorityOnly'],
+            ];
+        }
+    }
+    unset($doc);
+    $draft['documents'] = $docs;
+    return $draft;
+}
+
+function scheme_delete_document(array $draft, string $docId): array
+{
+    $draft['documents'] = array_values(array_filter($draft['documents'] ?? [], fn($doc) => ($doc['docId'] ?? '') !== $docId));
     return $draft;
 }
 
@@ -346,10 +450,13 @@ function scheme_add_workflow_transition(array $draft, string $packId, array $tra
     return $draft;
 }
 
-function scheme_render_template(string $template, array $values): string
+function scheme_render_template(string $template, array $values, array $missingKeys = []): string
 {
-    return preg_replace_callback('/\{\{\s*field:([a-zA-Z0-9._-]+)\s*\}\}/', function ($matches) use ($values) {
+    return preg_replace_callback('/\{\{\s*field:([a-zA-Z0-9._-]+)\s*\}\}/', function ($matches) use ($values, $missingKeys) {
         $key = $matches[1] ?? '';
+        if (in_array($key, $missingKeys, true)) {
+            return '<span class="placeholder-line">__________</span>';
+        }
         return htmlspecialchars((string)($values[$key] ?? ''), ENT_QUOTES, 'UTF-8');
     }, $template) ?? $template;
 }
@@ -376,9 +483,41 @@ function scheme_pack_runtime_from_values(array $pack, array $values): array
         'status' => $status,
         'missingFields' => $missing,
         'generatedDocs' => [],
-        'workflowState' => ($pack['workflow']['states'][0] ?? 'Draft'),
+        'workflowState' => ($pack['workflow']['defaultState'] ?? $pack['workflow']['states'][0] ?? 'Draft'),
         'updatedAt' => now_kolkata()->format(DateTime::ATOM),
     ];
+}
+
+function scheme_pack_status_label(string $status): string
+{
+    return match ($status) {
+        'not_ready' => 'Not Ready',
+        'ready' => 'Ready',
+        'generated' => 'Generated',
+        'approved' => 'Approved',
+        'submitted' => 'Submitted',
+        'completed' => 'Completed',
+        default => ucfirst(str_replace('_', ' ', $status)),
+    };
+}
+
+function scheme_pack_status_from_runtime(array $pack, array $missingFields, array $generatedDocs, string $workflowState): string
+{
+    $workflowEnabled = (bool)($pack['workflow']['enabled'] ?? false);
+    $state = strtolower($workflowState);
+    if ($workflowEnabled && in_array($state, ['submitted'], true)) {
+        return 'submitted';
+    }
+    if ($workflowEnabled && in_array($state, ['approved', 'completed'], true)) {
+        return 'approved';
+    }
+    if (!empty($missingFields)) {
+        return 'not_ready';
+    }
+    if (!empty($generatedDocs)) {
+        return 'generated';
+    }
+    return 'ready';
 }
 
 function scheme_update_pack_runtime(string $schemeCode, string $yojId, string $caseId, array $pack, array $values): array
@@ -388,10 +527,106 @@ function scheme_update_pack_runtime(string $schemeCode, string $yojId, string $c
     $computed = scheme_pack_runtime_from_values($pack, $values);
     $runtime = array_merge($computed, $runtime);
     $runtime['missingFields'] = $computed['missingFields'];
-    $runtime['status'] = $computed['status'];
+    $runtime['workflowState'] = $runtime['workflowState'] ?? $computed['workflowState'];
+    $runtime['status'] = scheme_pack_status_from_runtime($pack, $runtime['missingFields'], $runtime['generatedDocs'] ?? [], $runtime['workflowState'] ?? '');
     $runtime['updatedAt'] = now_kolkata()->format(DateTime::ATOM);
     writeJsonAtomic($path, $runtime);
     return $runtime;
+}
+
+function scheme_pack_documents(array $scheme, array $pack): array
+{
+    $docs = [];
+    if (!empty($pack['documents'])) {
+        return $pack['documents'];
+    }
+    $library = $scheme['documents'] ?? [];
+    $documentIds = $pack['documentIds'] ?? [];
+    foreach ($documentIds as $docId) {
+        foreach ($library as $doc) {
+            if (($doc['docId'] ?? '') === $docId) {
+                $docs[] = $doc;
+                break;
+            }
+        }
+    }
+    return $docs;
+}
+
+function scheme_template_field_keys(string $template): array
+{
+    preg_match_all('/\{\{\s*field:([a-zA-Z0-9._-]+)\s*\}\}/', $template, $matches);
+    return array_values(array_unique($matches[1] ?? []));
+}
+
+function scheme_missing_template_values(array $templateKeys, array $values): array
+{
+    $missing = [];
+    foreach ($templateKeys as $key) {
+        $val = $values[$key] ?? null;
+        if ($val === null || $val === '') {
+            $missing[] = $key;
+        }
+    }
+    return $missing;
+}
+
+function scheme_document_generation_path(string $schemeCode, string $yojId, string $caseId, string $docId, string $genId): string
+{
+    return scheme_case_documents_dir($schemeCode, $yojId, $caseId) . '/' . $docId . '/' . $genId . '.json';
+}
+
+function scheme_document_latest_generation(string $schemeCode, string $yojId, string $caseId, string $docId): array
+{
+    $dir = scheme_case_documents_dir($schemeCode, $yojId, $caseId) . '/' . $docId;
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $files = glob($dir . '/*.json') ?: [];
+    if (!$files) {
+        return [];
+    }
+    rsort($files);
+    return readJson($files[0]);
+}
+
+function scheme_append_timeline(string $schemeCode, string $yojId, string $caseId, array $payload): void
+{
+    $path = scheme_case_dir($schemeCode, $yojId, $caseId) . '/timeline.jsonl';
+    logEvent($path, $payload);
+}
+
+function scheme_document_generate(array $scheme, array $case, array $pack, array $doc, array $values, string $yojId): array
+{
+    $template = $doc['templateBody'] ?? '';
+    $keys = scheme_template_field_keys($template);
+    $missing = scheme_missing_template_values($keys, $values);
+    if ($missing) {
+        return ['error' => 'missing_fields', 'missing' => $missing];
+    }
+    $rendered = scheme_render_template($template, $values, []);
+    $genId = 'GEN-' . now_kolkata()->format('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(2)));
+    $payload = [
+        'docId' => $doc['docId'],
+        'label' => $doc['label'] ?? $doc['docId'],
+        'schemeVersion' => $case['schemeVersion'] ?? '',
+        'generatedAt' => now_kolkata()->format(DateTime::ATOM),
+        'generatedBy' => $yojId,
+        'renderedHtml' => $rendered,
+    ];
+    $path = scheme_document_generation_path($case['schemeCode'] ?? '', $yojId, $case['caseId'] ?? '', $doc['docId'], $genId);
+    writeJsonAtomic($path, $payload);
+    return ['generation' => $payload, 'genId' => $genId];
+}
+
+function scheme_pack_next_state(array $pack, string $currentState): string
+{
+    $states = $pack['workflow']['states'] ?? [];
+    $index = array_search($currentState, $states, true);
+    if ($index === false) {
+        return $states[0] ?? '';
+    }
+    return $states[$index + 1] ?? '';
 }
 
 function ensure_contract_scheme_activation_env(string $yojId): void
@@ -500,6 +735,26 @@ function scheme_case_create(string $schemeCode, string $version, string $yojId, 
     foreach ($scheme['packs'] ?? [] as $pack) {
         scheme_update_pack_runtime($schemeCode, $yojId, $caseId, $pack, []);
     }
+    foreach ($scheme['packs'] ?? [] as $pack) {
+        $docs = scheme_pack_documents($scheme, $pack);
+        foreach ($docs as $doc) {
+            if (!empty($doc['generation']['auto'])) {
+                $result = scheme_document_generate($scheme, $case, $pack, $doc, [], $yojId);
+                if (!empty($result['generation'])) {
+                    $runtimePath = scheme_case_pack_runtime_path($schemeCode, $yojId, $caseId, $pack['packId']);
+                    $runtime = readJson($runtimePath);
+                    $generated = $runtime['generatedDocs'] ?? [];
+                    if (!in_array($doc['docId'], $generated, true)) {
+                        $generated[] = $doc['docId'];
+                    }
+                    $runtime['generatedDocs'] = $generated;
+                    $runtime['status'] = scheme_pack_status_from_runtime($pack, $runtime['missingFields'] ?? [], $generated, $runtime['workflowState'] ?? '');
+                    writeJsonAtomic($runtimePath, $runtime);
+                }
+            }
+        }
+    }
+    scheme_append_timeline($schemeCode, $yojId, $caseId, ['event' => 'CASE_CREATED', 'caseId' => $caseId]);
     return $case;
 }
 
