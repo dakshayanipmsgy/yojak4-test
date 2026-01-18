@@ -2400,9 +2400,8 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     .plain li{margin:4px 0;}
     .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;background:var(--surface-2);}
     .page-break{page-break-before:always;}
-    .print-footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
-    footer.page-footer{margin-top:6px;font-size:12px;color:var(--muted);text-align:center;min-height:8mm;}
-    footer.page-footer .page-number::after{content:'1';}
+    footer{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;min-height:20mm;}
+    footer .page-number::after{content:'1';}
     .print-header{min-height:24mm;margin-bottom:10px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:8px;}
     .print-header .logo{max-width:35mm;max-height:20mm;object-fit:contain;}
     .print-header .blank{height:20mm;}
@@ -2436,14 +2435,14 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         body{background:#fff !important;color:#000 !important;padding:0;}
         .page,.print-page{box-shadow:none;border:0;padding:0;background:#fff;}
         a{color:#000;text-decoration:none;}
-        .ui-only,.no-print,header,nav,footer:not(.page-footer),.topbar,.actions,.btn,.controls,.toolbar,.sidebar,.panel,.sticky-header,[data-ui=\"true\"]{display:none !important;}
+        .ui-only,.no-print,header,nav,footer,.topbar,.actions,.btn,.controls,.toolbar,.sidebar,.panel,.sticky-header,[data-ui=\"true\"]{display:none !important;}
         .print-settings,.print-actions{display:none;}
         .card,.panel,.box,.paper,.shadow,.rounded,.bordered,.container,.section,.card-sm,.template-block,.warning,.pill{background:transparent;border:0 !important;box-shadow:none !important;border-radius:0 !important;}
         th,td{border:1px solid #ddd;color:#000;}
         th{background:#f7f7f7;}
         .financial-manual-table input{background:#fff;color:#000;border:1px solid #000;}
         hr{border-top:1px solid #000 !important;}
-        footer.page-footer .page-number::after{content: counter(page);}
+        footer .page-number::after{content: counter(page);}
     }
     </style>";
 
@@ -2476,7 +2475,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     $tenderTitle = $pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender Pack');
     $header = '<div class="print-header" aria-label="Print header">' . $logoHtml . $headerText . '</div>'
         . '<div class="print-meta">'
-        . '<div class="print-meta-line"><div class="meta-left">YOJAK pack</div><div class="meta-right">' . implode(' | ', $metaRightParts) . '</div></div>'
+        . '<div class="print-meta-line"><div>Visit yojak.co.in</div><div class="meta-right">' . implode(' | ', $metaRightParts) . '</div></div>'
         . ($tenderNumber !== '' ? '<div class="print-tender-no">Tender No: ' . htmlspecialchars($tenderNumber, ENT_QUOTES, 'UTF-8') . '</div>' : '')
         . '<div class="print-tender-title">' . htmlspecialchars($tenderTitle, ENT_QUOTES, 'UTF-8') . '</div>'
         . '</div>';
@@ -2487,7 +2486,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
     } else {
         $footerText = '<div style="min-height:20mm;"></div>';
     }
-    $footer = '<div class="print-footer">' . $footerText . '</div><footer class="page-footer"><span class="page-number"></span></footer>';
+    $footer = '<footer>' . $footerText . '<div>Printed via YOJAK • Page <span class="page-number"></span></div></footer>';
 
     $settingsPanel = '';
     if ($mode === 'preview') {
@@ -2499,7 +2498,7 @@ function pack_print_html(array $pack, array $contractor, string $docType = 'inde
         . '<input type="hidden" name="tplId" value="' . htmlspecialchars((string)($options['templateId'] ?? ''), ENT_QUOTES, 'UTF-8') . '">'
         . '<input type="hidden" name="annexurePreview" value="' . htmlspecialchars(!empty($options['annexurePreview']) ? '1' : '0', ENT_QUOTES, 'UTF-8') . '">'
         . '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'
-        . '<div><strong>Print settings</strong><div class="hint">In print dialog, keep Scale = 100% for exact sizing.</div><div class="hint no-print">To remove the URL at the bottom: In the print dialog, turn OFF “Headers and footers”.</div></div>'
+        . '<div><strong>Print settings</strong><div class="hint">In print dialog, keep Scale = 100% for exact sizing.</div></div>'
         . '<button type="submit">Save settings</button>'
         . '</div>'
         . '<div class="grid">'
