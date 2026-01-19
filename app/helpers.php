@@ -45,13 +45,6 @@ function ensure_data_structure(): void
         DATA_PATH . '/assisted_v2',
         DATA_PATH . '/assisted_v2/requests',
         DATA_PATH . '/assisted_v2/templates',
-        DATA_PATH . '/templates',
-        DATA_PATH . '/templates/global',
-        DATA_PATH . '/templates/contractors',
-        DATA_PATH . '/packs',
-        DATA_PATH . '/packs/global',
-        DATA_PATH . '/packs/contractors',
-        DATA_PATH . '/template_requests',
         DATA_PATH . '/defaults',
         DATA_PATH . '/site',
         DATA_PATH . '/site/analytics',
@@ -152,7 +145,6 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/scheme_runtime.log',
         DATA_PATH . '/logs/guide.log',
         DATA_PATH . '/logs/guide_staff.log',
-        DATA_PATH . '/logs/template_requests.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {
