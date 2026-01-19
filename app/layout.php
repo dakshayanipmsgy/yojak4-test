@@ -46,16 +46,15 @@ function render_layout(string $title, callable $content): void
         $navLinks = [
             ['label' => t('nav_home'), 'href' => '/home.php'],
             ['label' => t('nav_dashboard'), 'href' => '/superadmin/dashboard.php'],
-            ['label' => 'Departments', 'href' => '/superadmin/departments.php'],
-            ['label' => 'Contractors', 'href' => '/superadmin/contractors.php'],
-            ['label' => 'Employees', 'href' => '/superadmin/employees.php'],
+            ['label' => 'Users', 'href' => '/superadmin/users.php'],
             ['label' => 'AI Studio', 'href' => '/superadmin/ai_studio.php'],
             ['label' => 'Tender Discovery', 'href' => '/superadmin/tender_discovery.php'],
             ['label' => 'Backups', 'href' => '/superadmin/backup.php'],
             ['label' => 'Support Inbox', 'href' => '/superadmin/support_dashboard.php'],
             ['label' => 'Assisted Pack v2', 'href' => '/superadmin/assisted_v2/queue.php'],
             ['label' => 'Schemes', 'href' => '/superadmin/schemes/index.php'],
-            ['label' => 'Guides', 'href' => '/superadmin/guide/index.php'],
+            ['label' => 'Staff Guide', 'href' => '/superadmin/staff_guide.php'],
+            ['label' => 'Contractor Guides', 'href' => '/superadmin/guide/index.php'],
             ['label' => 'Error Log', 'href' => '/superadmin/error_log.php'],
             ['label' => 'Factory Reset', 'href' => '/superadmin/factory_reset.php'],
             ['label' => 'Stats', 'href' => '/superadmin/stats.php'],
@@ -87,16 +86,11 @@ function render_layout(string $title, callable $content): void
             ['label' => t('nav_home'), 'href' => '/home.php'],
             ['label' => 'Contractor', 'href' => '/contractor/dashboard.php'],
             ['label' => 'Departments', 'href' => '/contractor/departments.php'],
-            ['label' => 'Tender Packs', 'href' => '/contractor/packs.php'],
             ['label' => 'Vault', 'href' => '/contractor/vault.php'],
             ['label' => 'Bills', 'href' => '/contractor/bills.php'],
             ['label' => 'Workorders', 'href' => '/contractor/workorders.php'],
             ['label' => 'Tenders', 'href' => '/contractor/tenders.php'],
-            ['label' => 'Templates', 'href' => '/contractor/templates.php'],
-            ['label' => 'Discovered', 'href' => '/contractor/discovered_tenders.php'],
             ['label' => 'Schemes', 'href' => '/contractor/schemes.php'],
-            ['label' => 'Offline Tenders', 'href' => '/contractor/offline_tenders.php'],
-            ['label' => 'Tender Archive', 'href' => '/contractor/tender_archive.php'],
             ['label' => 'Notifications', 'href' => '/contractor/notifications.php'],
             ['label' => 'Support', 'href' => '/contractor/support.php'],
         ];
@@ -105,6 +99,7 @@ function render_layout(string $title, callable $content): void
         $navLinks = [
             ['label' => t('nav_home'), 'href' => '/home.php'],
             ['label' => 'Staff', 'href' => '/staff/dashboard.php'],
+            ['label' => 'Guide', 'href' => '/employees/staff_guide.php'],
         ];
         if (in_array('tickets', $user['permissions'] ?? [], true)) {
             $navLinks[] = ['label' => 'Tickets', 'href' => '/staff/tickets.php'];
