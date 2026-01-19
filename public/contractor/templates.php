@@ -5,147 +5,57 @@ require_once __DIR__ . '/../../app/bootstrap.php';
 safe_page(function () {
     $user = require_role('contractor');
     $yojId = $user['yojId'];
-    ensure_templates_library_env($yojId);
+    ensure_contractor_templates_env($yojId);
 
-    $globalTemplates = array_filter(template_list('global'), static function (array $tpl): bool {
-        return !empty($tpl['published']) && empty($tpl['archived']);
-    });
-    $myTemplates = array_filter(template_list('contractor', $yojId), static function (array $tpl): bool {
-        return empty($tpl['archived']);
-    });
-    $requests = array_values(array_filter(request_list('template'), static function (array $req) use ($yojId): bool {
-        return ($req['from']['yojId'] ?? '') === $yojId;
-    }));
-    $title = get_app_config()['appName'] . ' | Templates Library';
+    $templates = load_contractor_templates_full($yojId);
+    $title = get_app_config()['appName'] . ' | Tender Templates';
 
-    render_layout($title, function () use ($globalTemplates, $myTemplates, $requests) {
+    render_layout($title, function () use ($templates) {
         ?>
-        <div class="card" style="display:grid;gap:14px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div class="card" style="display:grid;gap:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
                 <div>
-                    <h2 style="margin:0;"><?= sanitize('Templates Library'); ?></h2>
-                    <p class="muted" style="margin:4px 0 0;"><?= sanitize('Use YOJAK defaults or create your own private templates.'); ?></p>
+                    <h2 style="margin:0;">Default Tender Templates</h2>
+                    <p class="muted" style="margin:4px 0 0;">Common tender letters without any bid values. Use them inside packs.</p>
                 </div>
-                <a class="btn" href="/contractor/template_new.php"><?= sanitize('Create Template'); ?></a>
+                <form method="post" action="/contractor/templates_seed_defaults.php">
+                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                    <button class="btn" type="submit">Add default templates</button>
+                </form>
             </div>
-            <div class="tabs">
-                <button class="tab active" data-tab="global"><?= sanitize('YOJAK Templates'); ?></button>
-                <button class="tab" data-tab="mine"><?= sanitize('My Templates'); ?></button>
-                <button class="tab" data-tab="request"><?= sanitize('Request a Template'); ?></button>
-            </div>
-
-            <div class="tab-content active" id="tab-global">
-                <p class="muted" style="margin-top:0;"><?= sanitize('Read-only templates provided by the platform.'); ?></p>
-                <div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
-                    <?php if (!$globalTemplates): ?>
-                        <div class="card" style="background:var(--surface-2);border:1px dashed var(--border);">
-                            <p class="muted" style="margin:0;"><?= sanitize('No global templates yet.'); ?></p>
-                        </div>
-                    <?php endif; ?>
-                    <?php foreach ($globalTemplates as $tpl): ?>
-                        <div style="border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:8px;background:var(--surface-2);">
+            <div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
+                <?php if (!$templates): ?>
+                    <div class="card" style="background:var(--surface-2);border:1px dashed var(--border);">
+                        <p class="muted" style="margin:0;">No templates yet. Seed defaults to get started.</p>
+                    </div>
+                <?php endif; ?>
+                <?php foreach ($templates as $tpl): ?>
+                    <div style="border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:8px;background:var(--surface-2);">
+                        <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
                             <div>
-                                <h3 style="margin:0 0 4px 0;"><?= sanitize($tpl['title'] ?? 'Template'); ?></h3>
-                                <p class="muted" style="margin:0;"><?= sanitize($tpl['category'] ?? 'Other'); ?></p>
+                                <h3 style="margin:0 0 4px 0;"><?= sanitize($tpl['name'] ?? 'Template'); ?></h3>
+                                <p class="muted" style="margin:0;"><?= sanitize(ucfirst($tpl['category'] ?? 'tender')); ?> • <?= sanitize($tpl['language'] ?? 'en'); ?></p>
                             </div>
-                            <p class="muted" style="margin:0;white-space:pre-wrap;max-height:140px;overflow:auto;"><?= sanitize(mb_substr($tpl['body'] ?? '', 0, 420)); ?></p>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                                <a class="btn secondary" href="/contractor/template_preview.php?tplId=<?= sanitize($tpl['id'] ?? ''); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
+                            <?php if (!empty($tpl['isDefaultSeeded'])): ?>
+                                <span class="pill" style="border-color:#2ea043;color:#8ce99a;">Default</span>
+                            <?php endif; ?>
+                        </div>
+                        <p class="muted" style="margin:0;white-space:pre-wrap;max-height:160px;overflow:auto;"><?= sanitize(mb_substr($tpl['body'] ?? '', 0, 500)); ?></p>
+                        <?php if (!empty($tpl['placeholders'])): ?>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                <?php foreach ($tpl['placeholders'] as $ph): ?>
+                                    <span class="tag"><?= sanitize($ph); ?></span>
+                                <?php endforeach; ?>
                             </div>
-                            <p class="muted" style="margin:0;"><?= sanitize('Updated: ' . ($tpl['updatedAt'] ?? '')); ?></p>
+                        <?php endif; ?>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <a class="btn secondary" href="/contractor/template_preview.php?tplId=<?= sanitize($tpl['tplId'] ?? ''); ?>" target="_blank" rel="noopener" style="color:var(--text);"><?= sanitize('Preview & Print'); ?></a>
                         </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <div class="tab-content" id="tab-mine">
-                <p class="muted" style="margin-top:0;"><?= sanitize('Templates created by you (private to your account).'); ?></p>
-                <div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
-                    <?php if (!$myTemplates): ?>
-                        <div class="card" style="background:var(--surface-2);border:1px dashed var(--border);">
-                            <p class="muted" style="margin:0;"><?= sanitize('No templates yet. Create your first template.'); ?></p>
-                        </div>
-                    <?php endif; ?>
-                    <?php foreach ($myTemplates as $tpl): ?>
-                        <div style="border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:8px;background:var(--surface-2);">
-                            <div>
-                                <h3 style="margin:0 0 4px 0;"><?= sanitize($tpl['title'] ?? 'Template'); ?></h3>
-                                <p class="muted" style="margin:0;"><?= sanitize($tpl['category'] ?? 'Other'); ?></p>
-                            </div>
-                            <p class="muted" style="margin:0;white-space:pre-wrap;max-height:140px;overflow:auto;"><?= sanitize(mb_substr($tpl['body'] ?? '', 0, 420)); ?></p>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                                <a class="btn secondary" href="/contractor/template_preview.php?tplId=<?= sanitize($tpl['id'] ?? ''); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
-                                <a class="btn secondary" href="/contractor/template_edit.php?id=<?= sanitize($tpl['id'] ?? ''); ?>"><?= sanitize('Edit'); ?></a>
-                                <form method="post" action="/contractor/template_delete.php" onsubmit="return confirm('Archive this template?');">
-                                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                                    <input type="hidden" name="id" value="<?= sanitize($tpl['id'] ?? ''); ?>">
-                                    <button class="btn danger" type="submit"><?= sanitize('Archive'); ?></button>
-                                </form>
-                            </div>
-                            <p class="muted" style="margin:0;"><?= sanitize('Updated: ' . ($tpl['updatedAt'] ?? '')); ?></p>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <div class="tab-content" id="tab-request">
-                <div class="card" style="background:var(--surface-2);">
-                    <h3 style="margin-top:0;"><?= sanitize('Request a Template'); ?></h3>
-                    <p class="muted"><?= sanitize('Upload the tender/NIB/NIT PDF and describe the template you need. Our staff will prepare it for you.'); ?></p>
-                    <form method="post" action="/contractor/template_requests_create.php" enctype="multipart/form-data" style="display:grid;gap:10px;">
-                        <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                        <input type="hidden" name="type" value="template">
-                        <label>
-                            <?= sanitize('Template title') ?>
-                            <input type="text" name="title" required>
-                        </label>
-                        <label>
-                            <?= sanitize('Notes for staff') ?>
-                            <textarea name="notes" rows="4" required></textarea>
-                        </label>
-                        <label>
-                            <?= sanitize('Tender PDF (optional)') ?>
-                            <input type="file" name="attachment">
-                        </label>
-                        <button class="btn" type="submit"><?= sanitize('Submit request'); ?></button>
-                    </form>
-                </div>
-
-                <h4 style="margin:14px 0 6px;"><?= sanitize('Your recent requests'); ?></h4>
-                <div style="display:grid;gap:8px;">
-                    <?php if (!$requests): ?>
-                        <p class="muted" style="margin:0;"><?= sanitize('No requests yet.'); ?></p>
-                    <?php endif; ?>
-                    <?php foreach ($requests as $req): ?>
-                        <div style="border:1px solid var(--border);border-radius:10px;padding:10px;display:grid;gap:4px;">
-                            <strong><?= sanitize($req['title'] ?? 'Request'); ?></strong>
-                            <span class="muted"><?= sanitize('Status: ' . request_status_label((string)($req['status'] ?? 'new'))); ?></span>
-                            <span class="muted"><?= sanitize('Updated: ' . ($req['updatedAt'] ?? '')); ?></span>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
+                        <p class="muted" style="margin:0;">Updated: <?= sanitize($tpl['updatedAt'] ?? ''); ?></p>
+                    </div>
+                <?php endforeach; ?>
             </div>
         </div>
-        <style>
-            .tabs{display:flex;gap:8px;flex-wrap:wrap;}
-            .tab{border:1px solid var(--border);background:var(--surface-2);padding:6px 12px;border-radius:999px;cursor:pointer;color:var(--text);}
-            .tab.active{border-color:#1f6feb;background:#0b1f3a;color:#fff;}
-            .tab-content{display:none;}
-            .tab-content.active{display:block;}
-        </style>
-        <script>
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.addEventListener('click', () => {
-                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                    tab.classList.add('active');
-                    const target = document.getElementById('tab-' + tab.dataset.tab);
-                    if (target) {
-                        target.classList.add('active');
-                    }
-                });
-            });
-        </script>
         <?php
     });
 });
