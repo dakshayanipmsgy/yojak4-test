@@ -95,6 +95,10 @@ function employee_permission_catalog(): array
         'can_process_assisted' => 'Assisted Pack Processing',
         'staff_guide_editor' => 'Staff Guide Editor',
         'scheme_builder_advanced' => 'Scheme Builder Advanced JSON Apply',
+        'template_manager' => 'Templates Manager',
+        'template_manager_advanced' => 'Templates Advanced JSON',
+        'pack_manager' => 'Pack Templates Manager',
+        'pack_manager_advanced' => 'Pack Templates Advanced JSON',
     ];
 }
 
