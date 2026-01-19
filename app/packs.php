@@ -411,7 +411,7 @@ function pack_tender_context(array $pack): array
 
 function pack_template_payloads(array $pack, array $contractor): array
 {
-    $templates = load_contractor_templates_full($pack['yojId']);
+    $templates = templates_to_pack_format(templates_available_for_contractor((string)$pack['yojId']));
     $catalog = pack_field_meta_catalog($pack, [], $templates);
     $contextMap = contractor_template_context($contractor, pack_tender_context($pack));
     $contextMap = array_merge($contextMap, pack_placeholder_value_map($pack, $contractor, $catalog));
@@ -730,7 +730,7 @@ function pack_items_from_requirement_set(array $set): array
 
 function pack_apply_default_templates(array $pack, array $tender, array $contractor, string $context = 'tender'): array
 {
-    $templates = load_contractor_templates_full($pack['yojId']);
+    $templates = templates_to_pack_format(templates_available_for_contractor((string)$pack['yojId']));
     $defaults = array_filter($templates, fn($tpl) => ($tpl['category'] ?? 'tender') === 'tender');
     if (!$defaults) {
         return $pack;

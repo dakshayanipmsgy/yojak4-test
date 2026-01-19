@@ -5,84 +5,86 @@ require_once __DIR__ . '/../../app/bootstrap.php';
 safe_page(function () {
     $user = require_role('contractor');
     $yojId = $user['yojId'];
-    ensure_templates_library_env($yojId);
-
-    $globalTemplates = array_filter(template_list('global'), static function (array $tpl): bool {
-        return !empty($tpl['published']) && empty($tpl['archived']);
+    $global = array_filter(pack_blueprint_list('global'), static function (array $bp): bool {
+        return !empty($bp['published']) && empty($bp['archived']);
     });
-    $myTemplates = array_filter(template_list('contractor', $yojId), static function (array $tpl): bool {
-        return empty($tpl['archived']);
+    $mine = array_filter(pack_blueprint_list('contractor', $yojId), static function (array $bp): bool {
+        return empty($bp['archived']);
     });
-    $requests = array_values(array_filter(request_list('template'), static function (array $req) use ($yojId): bool {
+    $requests = array_values(array_filter(request_list('pack'), static function (array $req) use ($yojId): bool {
         return ($req['from']['yojId'] ?? '') === $yojId;
     }));
-    $title = get_app_config()['appName'] . ' | Templates Library';
 
-    render_layout($title, function () use ($globalTemplates, $myTemplates, $requests) {
+    $title = get_app_config()['appName'] . ' | Tender Pack Blueprints';
+    render_layout($title, function () use ($global, $mine, $requests) {
         ?>
         <div class="card" style="display:grid;gap:14px;">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
                 <div>
-                    <h2 style="margin:0;"><?= sanitize('Templates Library'); ?></h2>
-                    <p class="muted" style="margin:4px 0 0;"><?= sanitize('Use YOJAK defaults or create your own private templates.'); ?></p>
+                    <h2 style="margin:0;"><?= sanitize('Tender Pack Blueprints'); ?></h2>
+                    <p class="muted" style="margin:4px 0 0;"><?= sanitize('Reusable packs with checklist items, required fields, and templates.'); ?></p>
                 </div>
-                <a class="btn" href="/contractor/template_new.php"><?= sanitize('Create Template'); ?></a>
+                <a class="btn" href="/contractor/pack_blueprint_new.php"><?= sanitize('Create Blueprint'); ?></a>
             </div>
             <div class="tabs">
-                <button class="tab active" data-tab="global"><?= sanitize('YOJAK Templates'); ?></button>
-                <button class="tab" data-tab="mine"><?= sanitize('My Templates'); ?></button>
-                <button class="tab" data-tab="request"><?= sanitize('Request a Template'); ?></button>
+                <button class="tab active" data-tab="global"><?= sanitize('YOJAK Packs'); ?></button>
+                <button class="tab" data-tab="mine"><?= sanitize('My Packs'); ?></button>
+                <button class="tab" data-tab="request"><?= sanitize('Request a Pack'); ?></button>
             </div>
 
             <div class="tab-content active" id="tab-global">
-                <p class="muted" style="margin-top:0;"><?= sanitize('Read-only templates provided by the platform.'); ?></p>
+                <p class="muted"><?= sanitize('Read-only pack blueprints provided by YOJAK.'); ?></p>
                 <div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
-                    <?php if (!$globalTemplates): ?>
+                    <?php if (!$global): ?>
                         <div class="card" style="background:var(--surface-2);border:1px dashed var(--border);">
-                            <p class="muted" style="margin:0;"><?= sanitize('No global templates yet.'); ?></p>
+                            <p class="muted" style="margin:0;"><?= sanitize('No global packs yet.'); ?></p>
                         </div>
                     <?php endif; ?>
-                    <?php foreach ($globalTemplates as $tpl): ?>
+                    <?php foreach ($global as $bp): ?>
                         <div style="border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:8px;background:var(--surface-2);">
                             <div>
-                                <h3 style="margin:0 0 4px 0;"><?= sanitize($tpl['title'] ?? 'Template'); ?></h3>
-                                <p class="muted" style="margin:0;"><?= sanitize($tpl['category'] ?? 'Other'); ?></p>
+                                <h3 style="margin:0 0 4px 0;"><?= sanitize($bp['title'] ?? 'Pack'); ?></h3>
+                                <p class="muted" style="margin:0;"><?= sanitize($bp['description'] ?? ''); ?></p>
                             </div>
-                            <p class="muted" style="margin:0;white-space:pre-wrap;max-height:140px;overflow:auto;"><?= sanitize(mb_substr($tpl['body'] ?? '', 0, 420)); ?></p>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                                <a class="btn secondary" href="/contractor/template_preview.php?tplId=<?= sanitize($tpl['id'] ?? ''); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
-                            </div>
-                            <p class="muted" style="margin:0;"><?= sanitize('Updated: ' . ($tpl['updatedAt'] ?? '')); ?></p>
+                            <span class="pill"><?= sanitize(count($bp['items']['checklist'] ?? []) . ' checklist items'); ?></span>
+                            <form method="post" action="/contractor/pack_blueprint_use.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="id" value="<?= sanitize($bp['id'] ?? ''); ?>">
+                                <button class="btn secondary" type="submit"><?= sanitize('Create Pack from Blueprint'); ?></button>
+                            </form>
                         </div>
                     <?php endforeach; ?>
                 </div>
             </div>
 
             <div class="tab-content" id="tab-mine">
-                <p class="muted" style="margin-top:0;"><?= sanitize('Templates created by you (private to your account).'); ?></p>
+                <p class="muted"><?= sanitize('Your private pack blueprints.'); ?></p>
                 <div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
-                    <?php if (!$myTemplates): ?>
+                    <?php if (!$mine): ?>
                         <div class="card" style="background:var(--surface-2);border:1px dashed var(--border);">
-                            <p class="muted" style="margin:0;"><?= sanitize('No templates yet. Create your first template.'); ?></p>
+                            <p class="muted" style="margin:0;"><?= sanitize('No pack blueprints yet.'); ?></p>
                         </div>
                     <?php endif; ?>
-                    <?php foreach ($myTemplates as $tpl): ?>
+                    <?php foreach ($mine as $bp): ?>
                         <div style="border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:8px;background:var(--surface-2);">
                             <div>
-                                <h3 style="margin:0 0 4px 0;"><?= sanitize($tpl['title'] ?? 'Template'); ?></h3>
-                                <p class="muted" style="margin:0;"><?= sanitize($tpl['category'] ?? 'Other'); ?></p>
+                                <h3 style="margin:0 0 4px 0;"><?= sanitize($bp['title'] ?? 'Pack'); ?></h3>
+                                <p class="muted" style="margin:0;"><?= sanitize($bp['description'] ?? ''); ?></p>
                             </div>
-                            <p class="muted" style="margin:0;white-space:pre-wrap;max-height:140px;overflow:auto;"><?= sanitize(mb_substr($tpl['body'] ?? '', 0, 420)); ?></p>
+                            <span class="pill"><?= sanitize(count($bp['items']['checklist'] ?? []) . ' checklist items'); ?></span>
                             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                                <a class="btn secondary" href="/contractor/template_preview.php?tplId=<?= sanitize($tpl['id'] ?? ''); ?>" target="_blank" rel="noopener"><?= sanitize('Preview'); ?></a>
-                                <a class="btn secondary" href="/contractor/template_edit.php?id=<?= sanitize($tpl['id'] ?? ''); ?>"><?= sanitize('Edit'); ?></a>
-                                <form method="post" action="/contractor/template_delete.php" onsubmit="return confirm('Archive this template?');">
+                                <a class="btn secondary" href="/contractor/pack_blueprint_edit.php?id=<?= sanitize($bp['id'] ?? ''); ?>"><?= sanitize('Edit'); ?></a>
+                                <form method="post" action="/contractor/pack_blueprint_use.php">
                                     <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                                    <input type="hidden" name="id" value="<?= sanitize($tpl['id'] ?? ''); ?>">
+                                    <input type="hidden" name="id" value="<?= sanitize($bp['id'] ?? ''); ?>">
+                                    <button class="btn secondary" type="submit"><?= sanitize('Create Pack'); ?></button>
+                                </form>
+                                <form method="post" action="/contractor/pack_blueprint_delete.php" onsubmit="return confirm('Archive this blueprint?');">
+                                    <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                    <input type="hidden" name="id" value="<?= sanitize($bp['id'] ?? ''); ?>">
                                     <button class="btn danger" type="submit"><?= sanitize('Archive'); ?></button>
                                 </form>
                             </div>
-                            <p class="muted" style="margin:0;"><?= sanitize('Updated: ' . ($tpl['updatedAt'] ?? '')); ?></p>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -90,13 +92,13 @@ safe_page(function () {
 
             <div class="tab-content" id="tab-request">
                 <div class="card" style="background:var(--surface-2);">
-                    <h3 style="margin-top:0;"><?= sanitize('Request a Template'); ?></h3>
-                    <p class="muted"><?= sanitize('Upload the tender/NIB/NIT PDF and describe the template you need. Our staff will prepare it for you.'); ?></p>
+                    <h3 style="margin-top:0;"><?= sanitize('Request a Pack'); ?></h3>
+                    <p class="muted"><?= sanitize('Upload the tender PDF and describe the pack blueprint you need.'); ?></p>
                     <form method="post" action="/contractor/template_requests_create.php" enctype="multipart/form-data" style="display:grid;gap:10px;">
                         <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                        <input type="hidden" name="type" value="template">
+                        <input type="hidden" name="type" value="pack">
                         <label>
-                            <?= sanitize('Template title') ?>
+                            <?= sanitize('Pack title') ?>
                             <input type="text" name="title" required>
                         </label>
                         <label>
@@ -110,7 +112,6 @@ safe_page(function () {
                         <button class="btn" type="submit"><?= sanitize('Submit request'); ?></button>
                     </form>
                 </div>
-
                 <h4 style="margin:14px 0 6px;"><?= sanitize('Your recent requests'); ?></h4>
                 <div style="display:grid;gap:8px;">
                     <?php if (!$requests): ?>
