@@ -20,8 +20,10 @@ safe_page(function () {
     $fields = $draft['fieldDictionary'] ?? [];
     $packs = $draft['packs'] ?? [];
     $documents = $draft['documents'] ?? [];
+    $promptTemplates = scheme_load_prompt_templates();
+    $canEditAdvanced = ($actor['type'] ?? '') === 'superadmin' || employee_has_permission($actor, 'scheme_builder_advanced');
 
-    render_layout('Scheme Builder', function () use ($schemeCode, $draft, $tab, $roles, $modules, $fields, $packs, $documents, $actor) {
+    render_layout('Scheme Builder', function () use ($schemeCode, $draft, $tab, $roles, $modules, $fields, $packs, $documents, $actor, $promptTemplates, $canEditAdvanced) {
         ?>
         <style>
             .tabs { display:flex; gap:12px; flex-wrap:wrap; margin:16px 0; }
@@ -41,7 +43,29 @@ safe_page(function () {
             th, td { text-align:left; padding:8px; border-bottom:1px solid var(--border); vertical-align:top; }
             .badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid var(--border); background:var(--surface-2); }
             .actions { display:flex; gap:8px; flex-wrap:wrap; }
+            .advanced-panel { margin-top:16px; }
+            .code-block { background: #fff; border:1px solid var(--border); border-radius:10px; padding:12px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size:13px; overflow:auto; max-height:320px; }
+            .copy-btn { border:1px dashed var(--border); background:var(--surface); padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; }
+            .status-pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid var(--border); }
+            .status-pill.valid { background:#e9f9ef; border-color:#b7e4c7; color:#1b7a46; }
+            .status-pill.invalid { background:#ffecec; border-color:#ffc9c9; color:#b42318; }
+            .advanced-grid { display:grid; gap:16px; }
+            .advanced-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+            .json-errors { margin:8px 0 0; padding-left:18px; color:#b42318; }
         </style>
+        <script>
+            function copyTextFromTarget(button) {
+                const targetId = button.getAttribute('data-target');
+                const target = document.getElementById(targetId);
+                if (!target) return;
+                const text = target.value || target.textContent || '';
+                navigator.clipboard.writeText(text).then(() => {
+                    const original = button.textContent;
+                    button.textContent = 'Copied!';
+                    setTimeout(() => { button.textContent = original; }, 1200);
+                });
+            }
+        </script>
         <h1>Scheme Builder · <?= sanitize($schemeCode); ?></h1>
         <div class="tabs">
             <?php
@@ -88,6 +112,87 @@ safe_page(function () {
                     <h3>Version Snapshot</h3>
                     <p class="muted">Draft version stays editable. Publish to create immutable versions for cases.</p>
                     <p><span class="badge">Current Draft</span></p>
+                </div>
+            </div>
+            <?php
+                $sectionKey = 'overview';
+                $sectionPayload = scheme_section_payload_from_draft($sectionKey, $draft);
+                $currentJson = json_encode($sectionPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}';
+                $prompt = $promptTemplates[$sectionKey] ?? '';
+                $hasContent = !empty($draft['name']) || !empty($draft['description']);
+                $isValidated = !empty($_GET['section']) && $_GET['section'] === $sectionKey && !empty($_GET['validated']) && $_GET['validated'] === '1';
+                $canApply = $canEditAdvanced && $isValidated;
+            ?>
+            <div class="card advanced-panel" style="padding:16px;">
+                <h3>Advanced: JSON (optional)</h3>
+                <p class="muted">Use external AI to generate section JSON, validate, and apply to the draft only.</p>
+                <?php if (!$hasContent) { ?>
+                    <p class="badge">Blank section · Try the sample prompt + example JSON</p>
+                <?php } ?>
+                <div class="advanced-grid">
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Copy Prompt Template</strong>
+                            <button class="copy-btn" type="button" data-target="prompt-overview" onclick="copyTextFromTarget(this)">Copy Prompt</button>
+                        </div>
+                        <textarea id="prompt-overview" class="code-block" readonly><?= sanitize($prompt); ?></textarea>
+                    </div>
+                    <?php if (!$hasContent) { ?>
+                        <div>
+                            <strong>Example JSON</strong>
+                            <pre class="code-block"><?= sanitize(scheme_section_example_json($sectionKey)); ?></pre>
+                        </div>
+                    <?php } ?>
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Current JSON</strong>
+                            <button class="copy-btn" type="button" data-target="current-overview" onclick="copyTextFromTarget(this)">Copy JSON</button>
+                        </div>
+                        <pre id="current-overview" class="code-block"><?= sanitize($currentJson); ?></pre>
+                    </div>
+                    <div>
+                        <strong>Paste JSON from external AI</strong>
+                        <textarea id="paste-overview" class="code-block" placeholder="Paste JSON here..."></textarea>
+                        <div class="advanced-actions" style="margin-top:8px;">
+                            <form method="post" action="/superadmin/schemes/section_json_validate.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="overview">
+                                <input type="hidden" name="payload" id="payload-overview-validate">
+                                <button class="btn secondary" type="submit" onclick="document.getElementById('payload-overview-validate').value = document.getElementById('paste-overview').value;">Validate JSON</button>
+                            </form>
+                            <form method="post" action="/superadmin/schemes/section_json_apply.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="overview">
+                                <input type="hidden" name="payload" id="payload-overview-apply">
+                                <button class="btn" type="submit" <?= $canApply ? '' : 'disabled'; ?> onclick="document.getElementById('payload-overview-apply').value = document.getElementById('paste-overview').value;">Apply to Draft</button>
+                            </form>
+                            <?php if (!$canEditAdvanced) { ?>
+                                <span class="muted">Apply disabled: view-only access.</span>
+                            <?php } elseif (!$isValidated) { ?>
+                                <span class="muted">Apply disabled: validate JSON first.</span>
+                            <?php } ?>
+                        </div>
+                        <?php if (!empty($_GET['section']) && $_GET['section'] === 'overview') { ?>
+                            <?php if (!empty($_GET['validated']) && $_GET['validated'] === '1') { ?>
+                                <p class="status-pill valid">✅ Valid JSON</p>
+                            <?php } elseif (!empty($_GET['validated']) && $_GET['validated'] === '0') { ?>
+                                <p class="status-pill invalid">❌ Validation failed</p>
+                                <?php if (!empty($_GET['errors'])) {
+                                    $errors = json_decode($_GET['errors'], true) ?: [];
+                                ?>
+                                    <ul class="json-errors">
+                                        <?php foreach ($errors as $error) { ?>
+                                            <li><?= sanitize($error); ?></li>
+                                        <?php } ?>
+                                    </ul>
+                                <?php } ?>
+                            <?php } elseif (!empty($_GET['applied']) && $_GET['applied'] === '1') { ?>
+                                <p class="status-pill valid">✅ Applied to draft (snapshot saved)</p>
+                            <?php } ?>
+                        <?php } ?>
+                    </div>
                 </div>
             </div>
         <?php } ?>
@@ -137,6 +242,168 @@ safe_page(function () {
                         </div>
                         <button class="btn secondary" type="submit">Add Module</button>
                     </form>
+                </div>
+            </div>
+            <?php
+                $sectionKey = 'roles';
+                $sectionPayload = scheme_section_payload_from_draft($sectionKey, $draft);
+                $currentJson = json_encode($sectionPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}';
+                $prompt = $promptTemplates[$sectionKey] ?? '';
+                $hasContent = !empty($roles);
+                $isValidated = !empty($_GET['section']) && $_GET['section'] === $sectionKey && !empty($_GET['validated']) && $_GET['validated'] === '1';
+                $canApply = $canEditAdvanced && $isValidated;
+            ?>
+            <div class="card advanced-panel" style="padding:16px;">
+                <h3>Advanced: JSON (optional)</h3>
+                <p class="muted">Advanced JSON editor for roles only.</p>
+                <?php if (!$hasContent) { ?>
+                    <p class="badge">Blank section · Try the sample prompt + example JSON</p>
+                <?php } ?>
+                <div class="advanced-grid">
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Copy Prompt Template</strong>
+                            <button class="copy-btn" type="button" data-target="prompt-roles" onclick="copyTextFromTarget(this)">Copy Prompt</button>
+                        </div>
+                        <textarea id="prompt-roles" class="code-block" readonly><?= sanitize($prompt); ?></textarea>
+                    </div>
+                    <?php if (!$hasContent) { ?>
+                        <div>
+                            <strong>Example JSON</strong>
+                            <pre class="code-block"><?= sanitize(scheme_section_example_json($sectionKey)); ?></pre>
+                        </div>
+                    <?php } ?>
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Current JSON</strong>
+                            <button class="copy-btn" type="button" data-target="current-roles" onclick="copyTextFromTarget(this)">Copy JSON</button>
+                        </div>
+                        <pre id="current-roles" class="code-block"><?= sanitize($currentJson); ?></pre>
+                    </div>
+                    <div>
+                        <strong>Paste JSON from external AI</strong>
+                        <textarea id="paste-roles" class="code-block" placeholder="Paste JSON here..."></textarea>
+                        <div class="advanced-actions" style="margin-top:8px;">
+                            <form method="post" action="/superadmin/schemes/section_json_validate.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="roles">
+                                <input type="hidden" name="payload" id="payload-roles-validate">
+                                <button class="btn secondary" type="submit" onclick="document.getElementById('payload-roles-validate').value = document.getElementById('paste-roles').value;">Validate JSON</button>
+                            </form>
+                            <form method="post" action="/superadmin/schemes/section_json_apply.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="roles">
+                                <input type="hidden" name="payload" id="payload-roles-apply">
+                                <button class="btn" type="submit" <?= $canApply ? '' : 'disabled'; ?> onclick="document.getElementById('payload-roles-apply').value = document.getElementById('paste-roles').value;">Apply to Draft</button>
+                            </form>
+                            <?php if (!$canEditAdvanced) { ?>
+                                <span class="muted">Apply disabled: view-only access.</span>
+                            <?php } elseif (!$isValidated) { ?>
+                                <span class="muted">Apply disabled: validate JSON first.</span>
+                            <?php } ?>
+                        </div>
+                        <?php if (!empty($_GET['section']) && $_GET['section'] === 'roles') { ?>
+                            <?php if (!empty($_GET['validated']) && $_GET['validated'] === '1') { ?>
+                                <p class="status-pill valid">✅ Valid JSON</p>
+                            <?php } elseif (!empty($_GET['validated']) && $_GET['validated'] === '0') { ?>
+                                <p class="status-pill invalid">❌ Validation failed</p>
+                                <?php if (!empty($_GET['errors'])) {
+                                    $errors = json_decode($_GET['errors'], true) ?: [];
+                                ?>
+                                    <ul class="json-errors">
+                                        <?php foreach ($errors as $error) { ?>
+                                            <li><?= sanitize($error); ?></li>
+                                        <?php } ?>
+                                    </ul>
+                                <?php } ?>
+                            <?php } elseif (!empty($_GET['applied']) && $_GET['applied'] === '1') { ?>
+                                <p class="status-pill valid">✅ Applied to draft (snapshot saved)</p>
+                            <?php } ?>
+                        <?php } ?>
+                    </div>
+                </div>
+            </div>
+            <?php
+                $sectionKey = 'modules';
+                $sectionPayload = scheme_section_payload_from_draft($sectionKey, $draft);
+                $currentJson = json_encode($sectionPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}';
+                $prompt = $promptTemplates[$sectionKey] ?? '';
+                $hasContent = !empty($modules);
+                $isValidated = !empty($_GET['section']) && $_GET['section'] === $sectionKey && !empty($_GET['validated']) && $_GET['validated'] === '1';
+                $canApply = $canEditAdvanced && $isValidated;
+            ?>
+            <div class="card advanced-panel" style="padding:16px;">
+                <h3>Advanced: JSON (optional) · Modules</h3>
+                <p class="muted">Advanced JSON editor for modules only.</p>
+                <?php if (!$hasContent) { ?>
+                    <p class="badge">Blank section · Try the sample prompt + example JSON</p>
+                <?php } ?>
+                <div class="advanced-grid">
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Copy Prompt Template</strong>
+                            <button class="copy-btn" type="button" data-target="prompt-modules" onclick="copyTextFromTarget(this)">Copy Prompt</button>
+                        </div>
+                        <textarea id="prompt-modules" class="code-block" readonly><?= sanitize($prompt); ?></textarea>
+                    </div>
+                    <?php if (!$hasContent) { ?>
+                        <div>
+                            <strong>Example JSON</strong>
+                            <pre class="code-block"><?= sanitize(scheme_section_example_json($sectionKey)); ?></pre>
+                        </div>
+                    <?php } ?>
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Current JSON</strong>
+                            <button class="copy-btn" type="button" data-target="current-modules" onclick="copyTextFromTarget(this)">Copy JSON</button>
+                        </div>
+                        <pre id="current-modules" class="code-block"><?= sanitize($currentJson); ?></pre>
+                    </div>
+                    <div>
+                        <strong>Paste JSON from external AI</strong>
+                        <textarea id="paste-modules" class="code-block" placeholder="Paste JSON here..."></textarea>
+                        <div class="advanced-actions" style="margin-top:8px;">
+                            <form method="post" action="/superadmin/schemes/section_json_validate.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="modules">
+                                <input type="hidden" name="payload" id="payload-modules-validate">
+                                <button class="btn secondary" type="submit" onclick="document.getElementById('payload-modules-validate').value = document.getElementById('paste-modules').value;">Validate JSON</button>
+                            </form>
+                            <form method="post" action="/superadmin/schemes/section_json_apply.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="modules">
+                                <input type="hidden" name="payload" id="payload-modules-apply">
+                                <button class="btn" type="submit" <?= $canApply ? '' : 'disabled'; ?> onclick="document.getElementById('payload-modules-apply').value = document.getElementById('paste-modules').value;">Apply to Draft</button>
+                            </form>
+                            <?php if (!$canEditAdvanced) { ?>
+                                <span class="muted">Apply disabled: view-only access.</span>
+                            <?php } elseif (!$isValidated) { ?>
+                                <span class="muted">Apply disabled: validate JSON first.</span>
+                            <?php } ?>
+                        </div>
+                        <?php if (!empty($_GET['section']) && $_GET['section'] === 'modules') { ?>
+                            <?php if (!empty($_GET['validated']) && $_GET['validated'] === '1') { ?>
+                                <p class="status-pill valid">✅ Valid JSON</p>
+                            <?php } elseif (!empty($_GET['validated']) && $_GET['validated'] === '0') { ?>
+                                <p class="status-pill invalid">❌ Validation failed</p>
+                                <?php if (!empty($_GET['errors'])) {
+                                    $errors = json_decode($_GET['errors'], true) ?: [];
+                                ?>
+                                    <ul class="json-errors">
+                                        <?php foreach ($errors as $error) { ?>
+                                            <li><?= sanitize($error); ?></li>
+                                        <?php } ?>
+                                    </ul>
+                                <?php } ?>
+                            <?php } elseif (!empty($_GET['applied']) && $_GET['applied'] === '1') { ?>
+                                <p class="status-pill valid">✅ Applied to draft (snapshot saved)</p>
+                            <?php } ?>
+                        <?php } ?>
+                    </div>
                 </div>
             </div>
         <?php } ?>
@@ -374,6 +641,87 @@ safe_page(function () {
                     </form>
                 </div>
             </div>
+            <?php
+                $sectionKey = 'fields';
+                $sectionPayload = scheme_section_payload_from_draft($sectionKey, $draft);
+                $currentJson = json_encode($sectionPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}';
+                $prompt = $promptTemplates[$sectionKey] ?? '';
+                $hasContent = !empty($fields);
+                $isValidated = !empty($_GET['section']) && $_GET['section'] === $sectionKey && !empty($_GET['validated']) && $_GET['validated'] === '1';
+                $canApply = $canEditAdvanced && $isValidated;
+            ?>
+            <div class="card advanced-panel" style="padding:16px;">
+                <h3>Advanced: JSON (optional)</h3>
+                <p class="muted">Advanced JSON editor for fields only.</p>
+                <?php if (!$hasContent) { ?>
+                    <p class="badge">Blank section · Try the sample prompt + example JSON</p>
+                <?php } ?>
+                <div class="advanced-grid">
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Copy Prompt Template</strong>
+                            <button class="copy-btn" type="button" data-target="prompt-fields" onclick="copyTextFromTarget(this)">Copy Prompt</button>
+                        </div>
+                        <textarea id="prompt-fields" class="code-block" readonly><?= sanitize($prompt); ?></textarea>
+                    </div>
+                    <?php if (!$hasContent) { ?>
+                        <div>
+                            <strong>Example JSON</strong>
+                            <pre class="code-block"><?= sanitize(scheme_section_example_json($sectionKey)); ?></pre>
+                        </div>
+                    <?php } ?>
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Current JSON</strong>
+                            <button class="copy-btn" type="button" data-target="current-fields" onclick="copyTextFromTarget(this)">Copy JSON</button>
+                        </div>
+                        <pre id="current-fields" class="code-block"><?= sanitize($currentJson); ?></pre>
+                    </div>
+                    <div>
+                        <strong>Paste JSON from external AI</strong>
+                        <textarea id="paste-fields" class="code-block" placeholder="Paste JSON here..."></textarea>
+                        <div class="advanced-actions" style="margin-top:8px;">
+                            <form method="post" action="/superadmin/schemes/section_json_validate.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="fields">
+                                <input type="hidden" name="payload" id="payload-fields-validate">
+                                <button class="btn secondary" type="submit" onclick="document.getElementById('payload-fields-validate').value = document.getElementById('paste-fields').value;">Validate JSON</button>
+                            </form>
+                            <form method="post" action="/superadmin/schemes/section_json_apply.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="fields">
+                                <input type="hidden" name="payload" id="payload-fields-apply">
+                                <button class="btn" type="submit" <?= $canApply ? '' : 'disabled'; ?> onclick="document.getElementById('payload-fields-apply').value = document.getElementById('paste-fields').value;">Apply to Draft</button>
+                            </form>
+                            <?php if (!$canEditAdvanced) { ?>
+                                <span class="muted">Apply disabled: view-only access.</span>
+                            <?php } elseif (!$isValidated) { ?>
+                                <span class="muted">Apply disabled: validate JSON first.</span>
+                            <?php } ?>
+                        </div>
+                        <?php if (!empty($_GET['section']) && $_GET['section'] === 'fields') { ?>
+                            <?php if (!empty($_GET['validated']) && $_GET['validated'] === '1') { ?>
+                                <p class="status-pill valid">✅ Valid JSON</p>
+                            <?php } elseif (!empty($_GET['validated']) && $_GET['validated'] === '0') { ?>
+                                <p class="status-pill invalid">❌ Validation failed</p>
+                                <?php if (!empty($_GET['errors'])) {
+                                    $errors = json_decode($_GET['errors'], true) ?: [];
+                                ?>
+                                    <ul class="json-errors">
+                                        <?php foreach ($errors as $error) { ?>
+                                            <li><?= sanitize($error); ?></li>
+                                        <?php } ?>
+                                    </ul>
+                                <?php } ?>
+                            <?php } elseif (!empty($_GET['applied']) && $_GET['applied'] === '1') { ?>
+                                <p class="status-pill valid">✅ Applied to draft (snapshot saved)</p>
+                            <?php } ?>
+                        <?php } ?>
+                    </div>
+                </div>
+            </div>
         <?php } ?>
 
         <?php if ($tab === 'packs') { ?>
@@ -509,6 +857,87 @@ safe_page(function () {
                         </div>
                         <button class="btn secondary" type="submit">Delete Pack</button>
                     </form>
+                </div>
+            </div>
+            <?php
+                $sectionKey = 'packs';
+                $sectionPayload = scheme_section_payload_from_draft($sectionKey, $draft);
+                $currentJson = json_encode($sectionPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}';
+                $prompt = $promptTemplates[$sectionKey] ?? '';
+                $hasContent = !empty($packs);
+                $isValidated = !empty($_GET['section']) && $_GET['section'] === $sectionKey && !empty($_GET['validated']) && $_GET['validated'] === '1';
+                $canApply = $canEditAdvanced && $isValidated;
+            ?>
+            <div class="card advanced-panel" style="padding:16px;">
+                <h3>Advanced: JSON (optional)</h3>
+                <p class="muted">Advanced JSON editor for packs only.</p>
+                <?php if (!$hasContent) { ?>
+                    <p class="badge">Blank section · Try the sample prompt + example JSON</p>
+                <?php } ?>
+                <div class="advanced-grid">
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Copy Prompt Template</strong>
+                            <button class="copy-btn" type="button" data-target="prompt-packs" onclick="copyTextFromTarget(this)">Copy Prompt</button>
+                        </div>
+                        <textarea id="prompt-packs" class="code-block" readonly><?= sanitize($prompt); ?></textarea>
+                    </div>
+                    <?php if (!$hasContent) { ?>
+                        <div>
+                            <strong>Example JSON</strong>
+                            <pre class="code-block"><?= sanitize(scheme_section_example_json($sectionKey)); ?></pre>
+                        </div>
+                    <?php } ?>
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Current JSON</strong>
+                            <button class="copy-btn" type="button" data-target="current-packs" onclick="copyTextFromTarget(this)">Copy JSON</button>
+                        </div>
+                        <pre id="current-packs" class="code-block"><?= sanitize($currentJson); ?></pre>
+                    </div>
+                    <div>
+                        <strong>Paste JSON from external AI</strong>
+                        <textarea id="paste-packs" class="code-block" placeholder="Paste JSON here..."></textarea>
+                        <div class="advanced-actions" style="margin-top:8px;">
+                            <form method="post" action="/superadmin/schemes/section_json_validate.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="packs">
+                                <input type="hidden" name="payload" id="payload-packs-validate">
+                                <button class="btn secondary" type="submit" onclick="document.getElementById('payload-packs-validate').value = document.getElementById('paste-packs').value;">Validate JSON</button>
+                            </form>
+                            <form method="post" action="/superadmin/schemes/section_json_apply.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="packs">
+                                <input type="hidden" name="payload" id="payload-packs-apply">
+                                <button class="btn" type="submit" <?= $canApply ? '' : 'disabled'; ?> onclick="document.getElementById('payload-packs-apply').value = document.getElementById('paste-packs').value;">Apply to Draft</button>
+                            </form>
+                            <?php if (!$canEditAdvanced) { ?>
+                                <span class="muted">Apply disabled: view-only access.</span>
+                            <?php } elseif (!$isValidated) { ?>
+                                <span class="muted">Apply disabled: validate JSON first.</span>
+                            <?php } ?>
+                        </div>
+                        <?php if (!empty($_GET['section']) && $_GET['section'] === 'packs') { ?>
+                            <?php if (!empty($_GET['validated']) && $_GET['validated'] === '1') { ?>
+                                <p class="status-pill valid">✅ Valid JSON</p>
+                            <?php } elseif (!empty($_GET['validated']) && $_GET['validated'] === '0') { ?>
+                                <p class="status-pill invalid">❌ Validation failed</p>
+                                <?php if (!empty($_GET['errors'])) {
+                                    $errors = json_decode($_GET['errors'], true) ?: [];
+                                ?>
+                                    <ul class="json-errors">
+                                        <?php foreach ($errors as $error) { ?>
+                                            <li><?= sanitize($error); ?></li>
+                                        <?php } ?>
+                                    </ul>
+                                <?php } ?>
+                            <?php } elseif (!empty($_GET['applied']) && $_GET['applied'] === '1') { ?>
+                                <p class="status-pill valid">✅ Applied to draft (snapshot saved)</p>
+                            <?php } ?>
+                        <?php } ?>
+                    </div>
                 </div>
             </div>
         <?php } ?>
@@ -664,6 +1093,87 @@ safe_page(function () {
                     });
                 });
             </script>
+            <?php
+                $sectionKey = 'documents';
+                $sectionPayload = scheme_section_payload_from_draft($sectionKey, $draft);
+                $currentJson = json_encode($sectionPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}';
+                $prompt = $promptTemplates[$sectionKey] ?? '';
+                $hasContent = !empty($documents);
+                $isValidated = !empty($_GET['section']) && $_GET['section'] === $sectionKey && !empty($_GET['validated']) && $_GET['validated'] === '1';
+                $canApply = $canEditAdvanced && $isValidated;
+            ?>
+            <div class="card advanced-panel" style="padding:16px;">
+                <h3>Advanced: JSON (optional)</h3>
+                <p class="muted">Advanced JSON editor for documents only.</p>
+                <?php if (!$hasContent) { ?>
+                    <p class="badge">Blank section · Try the sample prompt + example JSON</p>
+                <?php } ?>
+                <div class="advanced-grid">
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Copy Prompt Template</strong>
+                            <button class="copy-btn" type="button" data-target="prompt-documents" onclick="copyTextFromTarget(this)">Copy Prompt</button>
+                        </div>
+                        <textarea id="prompt-documents" class="code-block" readonly><?= sanitize($prompt); ?></textarea>
+                    </div>
+                    <?php if (!$hasContent) { ?>
+                        <div>
+                            <strong>Example JSON</strong>
+                            <pre class="code-block"><?= sanitize(scheme_section_example_json($sectionKey)); ?></pre>
+                        </div>
+                    <?php } ?>
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Current JSON</strong>
+                            <button class="copy-btn" type="button" data-target="current-documents" onclick="copyTextFromTarget(this)">Copy JSON</button>
+                        </div>
+                        <pre id="current-documents" class="code-block"><?= sanitize($currentJson); ?></pre>
+                    </div>
+                    <div>
+                        <strong>Paste JSON from external AI</strong>
+                        <textarea id="paste-documents" class="code-block" placeholder="Paste JSON here..."></textarea>
+                        <div class="advanced-actions" style="margin-top:8px;">
+                            <form method="post" action="/superadmin/schemes/section_json_validate.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="documents">
+                                <input type="hidden" name="payload" id="payload-documents-validate">
+                                <button class="btn secondary" type="submit" onclick="document.getElementById('payload-documents-validate').value = document.getElementById('paste-documents').value;">Validate JSON</button>
+                            </form>
+                            <form method="post" action="/superadmin/schemes/section_json_apply.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="documents">
+                                <input type="hidden" name="payload" id="payload-documents-apply">
+                                <button class="btn" type="submit" <?= $canApply ? '' : 'disabled'; ?> onclick="document.getElementById('payload-documents-apply').value = document.getElementById('paste-documents').value;">Apply to Draft</button>
+                            </form>
+                            <?php if (!$canEditAdvanced) { ?>
+                                <span class="muted">Apply disabled: view-only access.</span>
+                            <?php } elseif (!$isValidated) { ?>
+                                <span class="muted">Apply disabled: validate JSON first.</span>
+                            <?php } ?>
+                        </div>
+                        <?php if (!empty($_GET['section']) && $_GET['section'] === 'documents') { ?>
+                            <?php if (!empty($_GET['validated']) && $_GET['validated'] === '1') { ?>
+                                <p class="status-pill valid">✅ Valid JSON</p>
+                            <?php } elseif (!empty($_GET['validated']) && $_GET['validated'] === '0') { ?>
+                                <p class="status-pill invalid">❌ Validation failed</p>
+                                <?php if (!empty($_GET['errors'])) {
+                                    $errors = json_decode($_GET['errors'], true) ?: [];
+                                ?>
+                                    <ul class="json-errors">
+                                        <?php foreach ($errors as $error) { ?>
+                                            <li><?= sanitize($error); ?></li>
+                                        <?php } ?>
+                                    </ul>
+                                <?php } ?>
+                            <?php } elseif (!empty($_GET['applied']) && $_GET['applied'] === '1') { ?>
+                                <p class="status-pill valid">✅ Applied to draft (snapshot saved)</p>
+                            <?php } ?>
+                        <?php } ?>
+                    </div>
+                </div>
+            </div>
         <?php } ?>
 
         <?php if ($tab === 'workflows') { ?>
@@ -757,6 +1267,87 @@ safe_page(function () {
                         </div>
                         <button class="btn" type="submit">Add Transition</button>
                     </form>
+                </div>
+            </div>
+            <?php
+                $sectionKey = 'workflows';
+                $sectionPayload = scheme_section_payload_from_draft($sectionKey, $draft);
+                $currentJson = json_encode($sectionPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}';
+                $prompt = $promptTemplates[$sectionKey] ?? '';
+                $hasContent = !empty($packs);
+                $isValidated = !empty($_GET['section']) && $_GET['section'] === $sectionKey && !empty($_GET['validated']) && $_GET['validated'] === '1';
+                $canApply = $canEditAdvanced && $isValidated;
+            ?>
+            <div class="card advanced-panel" style="padding:16px;">
+                <h3>Advanced: JSON (optional)</h3>
+                <p class="muted">Advanced JSON editor for workflows only.</p>
+                <?php if (!$hasContent) { ?>
+                    <p class="badge">Blank section · Try the sample prompt + example JSON</p>
+                <?php } ?>
+                <div class="advanced-grid">
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Copy Prompt Template</strong>
+                            <button class="copy-btn" type="button" data-target="prompt-workflows" onclick="copyTextFromTarget(this)">Copy Prompt</button>
+                        </div>
+                        <textarea id="prompt-workflows" class="code-block" readonly><?= sanitize($prompt); ?></textarea>
+                    </div>
+                    <?php if (!$hasContent) { ?>
+                        <div>
+                            <strong>Example JSON</strong>
+                            <pre class="code-block"><?= sanitize(scheme_section_example_json($sectionKey)); ?></pre>
+                        </div>
+                    <?php } ?>
+                    <div>
+                        <div class="advanced-actions" style="margin-bottom:8px;">
+                            <strong>Current JSON</strong>
+                            <button class="copy-btn" type="button" data-target="current-workflows" onclick="copyTextFromTarget(this)">Copy JSON</button>
+                        </div>
+                        <pre id="current-workflows" class="code-block"><?= sanitize($currentJson); ?></pre>
+                    </div>
+                    <div>
+                        <strong>Paste JSON from external AI</strong>
+                        <textarea id="paste-workflows" class="code-block" placeholder="Paste JSON here..."></textarea>
+                        <div class="advanced-actions" style="margin-top:8px;">
+                            <form method="post" action="/superadmin/schemes/section_json_validate.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="workflows">
+                                <input type="hidden" name="payload" id="payload-workflows-validate">
+                                <button class="btn secondary" type="submit" onclick="document.getElementById('payload-workflows-validate').value = document.getElementById('paste-workflows').value;">Validate JSON</button>
+                            </form>
+                            <form method="post" action="/superadmin/schemes/section_json_apply.php">
+                                <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
+                                <input type="hidden" name="schemeCode" value="<?= sanitize($schemeCode); ?>">
+                                <input type="hidden" name="section" value="workflows">
+                                <input type="hidden" name="payload" id="payload-workflows-apply">
+                                <button class="btn" type="submit" <?= $canApply ? '' : 'disabled'; ?> onclick="document.getElementById('payload-workflows-apply').value = document.getElementById('paste-workflows').value;">Apply to Draft</button>
+                            </form>
+                            <?php if (!$canEditAdvanced) { ?>
+                                <span class="muted">Apply disabled: view-only access.</span>
+                            <?php } elseif (!$isValidated) { ?>
+                                <span class="muted">Apply disabled: validate JSON first.</span>
+                            <?php } ?>
+                        </div>
+                        <?php if (!empty($_GET['section']) && $_GET['section'] === 'workflows') { ?>
+                            <?php if (!empty($_GET['validated']) && $_GET['validated'] === '1') { ?>
+                                <p class="status-pill valid">✅ Valid JSON</p>
+                            <?php } elseif (!empty($_GET['validated']) && $_GET['validated'] === '0') { ?>
+                                <p class="status-pill invalid">❌ Validation failed</p>
+                                <?php if (!empty($_GET['errors'])) {
+                                    $errors = json_decode($_GET['errors'], true) ?: [];
+                                ?>
+                                    <ul class="json-errors">
+                                        <?php foreach ($errors as $error) { ?>
+                                            <li><?= sanitize($error); ?></li>
+                                        <?php } ?>
+                                    </ul>
+                                <?php } ?>
+                            <?php } elseif (!empty($_GET['applied']) && $_GET['applied'] === '1') { ?>
+                                <p class="status-pill valid">✅ Applied to draft (snapshot saved)</p>
+                            <?php } ?>
+                        <?php } ?>
+                    </div>
                 </div>
             </div>
         <?php } ?>

@@ -32,6 +32,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/runtime_errors',
         DATA_PATH . '/locks',
         DATA_PATH . '/schemes',
+        DATA_PATH . '/schemes/snapshots',
         DATA_PATH . '/contractor_scheme_activations',
         DATA_PATH . '/scheme_cases',
         DATA_PATH . '/ai',
