@@ -52,4 +52,55 @@ if ($type === 'dept_public_tender') {
     exit;
 }
 
+if ($type === 'template_request') {
+    $requestId = trim($_GET['requestId'] ?? '');
+    $file = trim($_GET['file'] ?? '');
+    if ($requestId === '' || $file === '') {
+        render_error_page('Invalid download request.');
+        exit;
+    }
+
+    $user = current_user();
+    if (!$user) {
+        redirect('/auth/login.php');
+    }
+
+    $request = load_template_request($requestId);
+    if (!$request) {
+        render_error_page('Request not found.');
+        exit;
+    }
+
+    $allowed = false;
+    if (($user['type'] ?? '') === 'superadmin') {
+        $allowed = true;
+    } elseif (($user['type'] ?? '') === 'employee') {
+        $employee = current_employee_record();
+        if ($employee && employee_has_permission($employee, 'template_manager')) {
+            $allowed = true;
+        }
+    } elseif (($user['type'] ?? '') === 'contractor') {
+        $allowed = ($request['yojId'] ?? '') === ($user['yojId'] ?? '');
+    }
+
+    if (!$allowed) {
+        render_error_page('Unauthorized.');
+        exit;
+    }
+
+    $base = template_request_upload_dir($requestId);
+    $safeFile = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($file));
+    $fullPath = realpath($base . '/' . $safeFile);
+    if ($fullPath === false || !is_path_within($fullPath, $base) || !file_exists($fullPath)) {
+        render_error_page('Attachment missing.');
+        exit;
+    }
+
+    header('Content-Type: application/octet-stream');
+    header('Content-Length: ' . (string)filesize($fullPath));
+    header('Content-Disposition: attachment; filename="' . basename($safeFile) . '"');
+    readfile($fullPath);
+    exit;
+}
+
 render_error_page('Unsupported download.');
