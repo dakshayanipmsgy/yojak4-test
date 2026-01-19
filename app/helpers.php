@@ -51,6 +51,8 @@ function ensure_data_structure(): void
         DATA_PATH . '/suggestions',
         DATA_PATH . '/ratelimits',
         DATA_PATH . '/ratelimits/suggestions',
+        DATA_PATH . '/guides',
+        DATA_PATH . '/guides/sections',
     ];
 
     foreach ($directories as $dir) {
@@ -138,6 +140,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/site.log',
         DATA_PATH . '/logs/suggestions.log',
         DATA_PATH . '/logs/scheme_runtime.log',
+        DATA_PATH . '/logs/guide.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {

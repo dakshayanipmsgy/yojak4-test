@@ -243,6 +243,7 @@ safe_page(function () {
                 <a class="btn secondary" href="/contractor/pack_create.php"><?= sanitize('Create Pack'); ?></a>
                 <a class="btn secondary" href="/contractor/vault.php#vault-upload"><?= sanitize('Upload to Vault'); ?></a>
                 <a class="btn secondary" href="/contractor/profile.php"><?= sanitize('My Profile'); ?></a>
+                <a class="btn secondary" href="/contractor/guide.php"><?= sanitize('Guide'); ?></a>
             </div>
         </div>
 
@@ -327,6 +328,13 @@ safe_page(function () {
                 <strong><?= sanitize('Department Links'); ?></strong>
                 <div class="muted"><?= sanitize('Pending approvals from departments.'); ?></div>
                 <a class="dash-link" href="/contractor/departments.php?filter=pending"><?= sanitize('Open'); ?></a>
+            </div>
+
+            <div class="card dash-card">
+                <div class="dash-number">📘</div>
+                <strong><?= sanitize('Contractor Guide'); ?></strong>
+                <div class="muted"><?= sanitize('Step-by-step workflows for offline tenders and schemes.'); ?></div>
+                <a class="dash-link" href="/contractor/guide.php"><?= sanitize('Open'); ?></a>
             </div>
         </div>
         <?php
