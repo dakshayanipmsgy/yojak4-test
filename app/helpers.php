@@ -46,10 +46,6 @@ function ensure_data_structure(): void
         DATA_PATH . '/assisted_v2/requests',
         DATA_PATH . '/assisted_v2/templates',
         DATA_PATH . '/defaults',
-        DATA_PATH . '/library',
-        DATA_PATH . '/library/templates',
-        DATA_PATH . '/library/packs',
-        DATA_PATH . '/template_requests',
         DATA_PATH . '/site',
         DATA_PATH . '/site/analytics',
         DATA_PATH . '/site/inquiries',
@@ -144,7 +140,6 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/print.log',
         DATA_PATH . '/logs/contractor_profile.log',
         DATA_PATH . '/logs/templates.log',
-        DATA_PATH . '/logs/template_requests.log',
         DATA_PATH . '/logs/site.log',
         DATA_PATH . '/logs/suggestions.log',
         DATA_PATH . '/logs/scheme_runtime.log',
@@ -183,7 +178,6 @@ function ensure_data_structure(): void
     if (!file_exists(default_contractor_templates_path())) {
         default_contractor_templates();
     }
-    ensure_global_templates_seeded();
 }
 
 function initialize_php_error_logging(): void

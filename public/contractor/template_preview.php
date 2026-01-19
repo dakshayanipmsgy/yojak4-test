@@ -5,22 +5,18 @@ require_once __DIR__ . '/../../app/bootstrap.php';
 safe_page(function () {
     $user = require_role('contractor');
     $yojId = $user['yojId'];
-    $templateId = trim((string)($_GET['templateId'] ?? ($_GET['tplId'] ?? '')));
-    $scope = $_GET['scope'] ?? 'contractor';
+    $tplId = trim($_GET['tplId'] ?? '');
 
-    if ($templateId === '') {
+    if ($tplId === '') {
         render_error_page('Template not found.');
         return;
     }
 
-    $template = $scope === 'global'
-        ? load_global_template($templateId)
-        : load_contractor_template($yojId, $templateId);
+    $template = load_contractor_template($yojId, $tplId);
     if (!$template) {
         render_error_page('Template not found.');
         return;
     }
-    $template = normalize_template_schema($template, $scope === 'global' ? 'global' : 'contractor', $yojId);
 
     $contractor = load_contractor($yojId) ?? [];
     $settings = load_contractor_print_settings($yojId);
@@ -38,58 +34,16 @@ safe_page(function () {
         $contextMap[$key] = (string)$value;
     }
 
-    $profileValues = pack_profile_placeholder_values($contractor);
-    $memoryValues = pack_profile_memory_values($yojId);
-    $tenderValues = pack_tender_placeholder_values([
-        'tenderTitle' => $tender['tender_title'] ?? '',
-        'tenderNumber' => $tender['tender_number'] ?? '',
-        'departmentName' => $tender['department_name'] ?? '',
-        'submissionDeadline' => $tender['submission_deadline'] ?? '',
-        'title' => $tender['tender_title'] ?? '',
-    ]);
-
-    $fieldMap = array_merge($profileValues, $memoryValues, $tenderValues, [
-        'date' => now_kolkata()->format('d M Y'),
-    ]);
-
-    $body = (string)($template['body'] ?? '');
-    foreach ($contextMap as $key => $value) {
-        $body = str_replace($key, (string)$value, $body);
-    }
-
-    $body = preg_replace_callback('/{{\s*([^}]+)\s*}}/', function ($matches) use ($fieldMap, $template) {
-        $token = trim((string)$matches[1]);
-        if (str_starts_with($token, 'blank:')) {
-            return str_contains($token, 'long') ? str_repeat('_', 24) : str_repeat('_', 10);
-        }
-        if (str_starts_with($token, 'yesno:')) {
-            $label = trim(substr($token, strlen('yesno:')));
-            $labelText = $label !== '' ? $label . ': ' : '';
-            return $labelText . '□ Yes   □ No';
-        }
-        if (str_starts_with($token, 'field:table:')) {
-            $tableId = trim(substr($token, strlen('field:table:')));
-            $label = $tableId !== '' ? 'Table: ' . $tableId : 'Table';
-            return $label . "\n" . str_repeat('_', 40);
-        }
-        if (str_starts_with($token, 'field:')) {
-            $key = pack_normalize_placeholder_key(substr($token, strlen('field:')));
-            $value = trim((string)($fieldMap[$key] ?? ''));
-            return $value !== '' ? $value : str_repeat('_', 8);
-        }
-        $normalized = pack_normalize_placeholder_key($token);
-        $value = trim((string)($fieldMap[$normalized] ?? ''));
-        return $value !== '' ? $value : str_repeat('_', 8);
-    }, $body) ?? $body;
+    $body = contractor_fill_template_body($template['body'] ?? '', $contextMap);
 
     logEvent(DATA_PATH . '/logs/templates.log', [
         'event' => 'template_preview',
         'yojId' => $yojId,
-        'templateId' => $templateId,
+        'tplId' => $tplId,
         'ip' => mask_ip($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
     ]);
 
-    $title = ($template['title'] ?? 'Template') . ' | Preview';
+    $title = ($template['name'] ?? 'Template') . ' | Preview';
     $logoHtml = '';
     $headerText = '';
     if (!empty($settings['logoEnabled']) && !empty($settings['logoPublicPath'])) {
@@ -138,7 +92,7 @@ safe_page(function () {
     <body>
         <div class="toolbar ui-only" data-ui="true">
             <div>
-                <div style="font-size:18px;font-weight:700;"><?= sanitize($template['title'] ?? 'Template'); ?></div>
+                <div style="font-size:18px;font-weight:700;"><?= sanitize($template['name'] ?? 'Template'); ?></div>
                 <div class="meta"><?= sanitize('Preview uses your saved profile + tender fields. Missing values print as blanks.'); ?></div>
                 <div class="meta no-print"><?= sanitize('For clean PDF/print: In print dialog, turn OFF “Headers and footers”.'); ?></div>
             </div>
