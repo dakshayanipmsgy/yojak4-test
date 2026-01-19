@@ -17,7 +17,6 @@ require_once __DIR__ . '/offline_tenders.php';
 require_once __DIR__ . '/workorders.php';
 require_once __DIR__ . '/tender_archive.php';
 require_once __DIR__ . '/packs.php';
-require_once __DIR__ . '/pack_blueprints.php';
 require_once __DIR__ . '/reminders.php';
 require_once __DIR__ . '/ai.php';
 require_once __DIR__ . '/bills.php';

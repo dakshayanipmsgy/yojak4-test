@@ -15,7 +15,6 @@ safe_page(function () {
 
     $offtdId = trim($_POST['offtdId'] ?? '');
     $includeDefaults = ($_POST['include_defaults'] ?? '1') === '1';
-    $packTplId = trim((string)($_POST['packTplId'] ?? ''));
     if ($offtdId === '') {
         render_error_page('Missing tender id.');
         return;
@@ -67,12 +66,6 @@ safe_page(function () {
     if ($includeDefaults) {
         $contractor = load_contractor($yojId) ?? [];
         $pack = pack_apply_default_templates($pack, $tender, $contractor);
-    }
-    if ($packTplId !== '') {
-        $blueprint = load_packtpl_for_contractor($yojId, $packTplId);
-        if ($blueprint) {
-            $pack = packtpl_apply_blueprint($pack, $blueprint);
-        }
     }
 
     save_pack($pack);

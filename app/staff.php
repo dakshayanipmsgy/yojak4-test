@@ -291,20 +291,6 @@ function require_active_employee(): array
     return $record;
 }
 
-function require_staff_actor(string $permission = 'content_tools'): array
-{
-    $user = current_user();
-    if ($user && ($user['type'] ?? '') === 'superadmin') {
-        return $user;
-    }
-    $employee = require_active_employee();
-    if (!employee_has_permission($employee, $permission)) {
-        render_error_page('Access denied.');
-        exit;
-    }
-    return $employee;
-}
-
 function require_superadmin_or_permission(string $permission): array
 {
     $user = current_user();
