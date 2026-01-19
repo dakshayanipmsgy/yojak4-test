@@ -52,6 +52,9 @@ function render_layout(string $title, callable $content): void
             ['label' => 'Backups', 'href' => '/superadmin/backup.php'],
             ['label' => 'Support Inbox', 'href' => '/superadmin/support_dashboard.php'],
             ['label' => 'Assisted Pack v2', 'href' => '/superadmin/assisted_v2/queue.php'],
+            ['label' => 'Templates Manager', 'href' => '/superadmin/templates.php'],
+            ['label' => 'Packs Manager', 'href' => '/superadmin/packs.php'],
+            ['label' => 'Template Requests', 'href' => '/superadmin/template_requests.php'],
             ['label' => 'Schemes Builder', 'href' => '/superadmin/schemes/index.php'],
             ['label' => 'Activation Requests', 'href' => '/superadmin/schemes/activation_requests.php'],
             ['label' => 'Staff Guide', 'href' => '/superadmin/staff_guide.php'],
@@ -91,6 +94,8 @@ function render_layout(string $title, callable $content): void
             ['label' => 'Bills', 'href' => '/contractor/bills.php'],
             ['label' => 'Workorders', 'href' => '/contractor/workorders.php'],
             ['label' => 'Tenders', 'href' => '/contractor/tenders.php'],
+            ['label' => 'Templates', 'href' => '/contractor/templates.php'],
+            ['label' => 'Packs', 'href' => '/contractor/packs_library.php'],
             ['label' => 'Schemes', 'href' => '/contractor/schemes.php'],
             ['label' => 'Notifications', 'href' => '/contractor/notifications.php'],
             ['label' => 'Support', 'href' => '/contractor/support.php'],
@@ -110,6 +115,11 @@ function render_layout(string $title, callable $content): void
         }
         if (in_array('audit_view', $user['permissions'] ?? [], true)) {
             $navLinks[] = ['label' => 'Audit', 'href' => '/staff/audit.php'];
+        }
+        if (in_array('template_manager', $user['permissions'] ?? [], true) || in_array('*', $user['permissions'] ?? [], true)) {
+            $navLinks[] = ['label' => 'Templates', 'href' => '/superadmin/templates.php'];
+            $navLinks[] = ['label' => 'Packs', 'href' => '/superadmin/packs.php'];
+            $navLinks[] = ['label' => 'Template Requests', 'href' => '/superadmin/template_requests.php'];
         }
         if (in_array('scheme_builder', $user['permissions'] ?? [], true) || in_array('*', $user['permissions'] ?? [], true)) {
             $navLinks[] = ['label' => 'Schemes', 'href' => '/superadmin/schemes/index.php'];

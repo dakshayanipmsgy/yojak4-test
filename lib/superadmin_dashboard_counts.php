@@ -33,6 +33,11 @@ function superadmin_dashboard_counts(): array
         'backupsLastAt' => null,
         'backupsCount' => 0,
         'backupsLastStatus' => null,
+        'templatesGlobalCount' => 0,
+        'templatesContractorCount' => 0,
+        'packsGlobalCount' => 0,
+        'packsContractorCount' => 0,
+        'templateRequestsOpen' => 0,
     ];
 
     try {
@@ -136,6 +141,17 @@ function superadmin_dashboard_counts(): array
             $counts['backupsLastAt'] = $backups[0]['createdAt'] ?? null;
         }
         $counts['backupsLastStatus'] = dashboard_last_backup_status(DATA_PATH . '/logs/backup.log');
+
+        $counts['templatesGlobalCount'] = count(list_template_library_records('global', null));
+        $counts['templatesContractorCount'] = count(dashboard_safe_glob(DATA_PATH . '/templates/contractors/*/*/template.json'));
+        $counts['packsGlobalCount'] = count(list_pack_template_records('global', null));
+        $counts['packsContractorCount'] = count(dashboard_safe_glob(DATA_PATH . '/packs/contractors/*/*/pack_template.json'));
+        $requests = list_template_requests();
+        foreach ($requests as $request) {
+            if (in_array(($request['status'] ?? 'new'), ['new', 'in_progress'], true)) {
+                $counts['templateRequestsOpen']++;
+            }
+        }
     } catch (Throwable $e) {
         logEvent(DATA_PATH . '/logs/site.log', [
             'event' => 'DASH_COUNTS_ERROR',
