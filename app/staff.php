@@ -94,6 +94,7 @@ function employee_permission_catalog(): array
         'stats_view' => 'Platform Stats',
         'can_process_assisted' => 'Assisted Pack Processing',
         'staff_guide_editor' => 'Staff Guide Editor',
+        'scheme_builder_advanced' => 'Scheme Builder Advanced JSON Apply',
     ];
 }
 
