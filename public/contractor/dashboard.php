@@ -241,8 +241,6 @@ safe_page(function () {
             <div class="buttons">
                 <a class="btn" href="/contractor/offline_tender_create.php"><?= sanitize('Create Offline Tender'); ?></a>
                 <a class="btn secondary" href="/contractor/pack_create.php"><?= sanitize('Create Pack'); ?></a>
-                <a class="btn secondary" href="/contractor/templates.php"><?= sanitize('Templates'); ?></a>
-                <a class="btn secondary" href="/contractor/packs_library.php"><?= sanitize('Packs Library'); ?></a>
                 <a class="btn secondary" href="/contractor/vault.php#vault-upload"><?= sanitize('Upload to Vault'); ?></a>
                 <a class="btn secondary" href="/contractor/profile.php"><?= sanitize('My Profile'); ?></a>
                 <a class="btn secondary" href="/contractor/guide.php"><?= sanitize('Guide'); ?></a>
@@ -330,20 +328,6 @@ safe_page(function () {
                 <strong><?= sanitize('Department Links'); ?></strong>
                 <div class="muted"><?= sanitize('Pending approvals from departments.'); ?></div>
                 <a class="dash-link" href="/contractor/departments.php?filter=pending"><?= sanitize('Open'); ?></a>
-            </div>
-
-            <div class="card dash-card">
-                <div class="dash-number">🧩</div>
-                <strong><?= sanitize('Templates'); ?></strong>
-                <div class="muted"><?= sanitize('Create and manage guided templates.'); ?></div>
-                <a class="dash-link" href="/contractor/templates.php"><?= sanitize('Open'); ?></a>
-            </div>
-
-            <div class="card dash-card">
-                <div class="dash-number">📦</div>
-                <strong><?= sanitize('Packs Library'); ?></strong>
-                <div class="muted"><?= sanitize('Reusable packs for tenders and workorders.'); ?></div>
-                <a class="dash-link" href="/contractor/packs_library.php"><?= sanitize('Open'); ?></a>
             </div>
 
             <div class="card dash-card">
