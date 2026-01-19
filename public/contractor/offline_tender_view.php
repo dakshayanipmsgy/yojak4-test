@@ -39,8 +39,6 @@ safe_page(function () {
     $tender = $offtdId !== '' ? load_offline_tender($yojId, $offtdId) : null;
     $existingPack = $offtdId !== '' ? find_pack_by_source($yojId, 'OFFTD', $offtdId) : null;
     $assistedRequest = $offtdId !== '' ? assisted_v2_latest_request_for_tender($yojId, $offtdId) : null;
-    $globalPackPresets = load_packtpl_index('global');
-    $contractorPackPresets = load_packtpl_index('contractor', $yojId);
 
     if (!$tender || ($tender['yojId'] ?? '') !== $yojId) {
         render_error_page('Tender not found.');
@@ -49,7 +47,7 @@ safe_page(function () {
 
     $title = get_app_config()['appName'] . ' | ' . ($tender['title'] ?? 'Offline Tender');
 
-    render_layout($title, function () use ($tender, $existingPack, $assistedRequest, $globalPackPresets, $contractorPackPresets) {
+    render_layout($title, function () use ($tender, $existingPack, $assistedRequest) {
         $extracted = $tender['extracted'] ?? offline_tender_defaults();
         $checklist = $tender['checklist'] ?? [];
         $packContext = $existingPack ? detect_pack_context($existingPack['packId']) : 'tender';
@@ -82,26 +80,6 @@ safe_page(function () {
                         <input type="hidden" name="offtdId" value="<?= sanitize($tender['id']); ?>">
                         <label class="pill" style="display:inline-flex;gap:6px;align-items:center;">
                             <input type="checkbox" name="include_defaults" value="1" checked> <?= sanitize('Add default tender letters'); ?>
-                        </label>
-                        <label class="pill" style="display:inline-flex;gap:6px;align-items:center;">
-                            <?= sanitize('Pack preset'); ?>
-                            <select name="packTplId">
-                                <option value=""><?= sanitize('Start from default'); ?></option>
-                                <?php if ($globalPackPresets): ?>
-                                    <optgroup label="<?= sanitize('YOJAK Presets'); ?>">
-                                        <?php foreach ($globalPackPresets as $preset): ?>
-                                            <option value="<?= sanitize($preset['packTplId'] ?? ''); ?>"><?= sanitize($preset['title'] ?? 'Preset'); ?></option>
-                                        <?php endforeach; ?>
-                                    </optgroup>
-                                <?php endif; ?>
-                                <?php if ($contractorPackPresets): ?>
-                                    <optgroup label="<?= sanitize('My Presets'); ?>">
-                                        <?php foreach ($contractorPackPresets as $preset): ?>
-                                            <option value="<?= sanitize($preset['packTplId'] ?? ''); ?>"><?= sanitize($preset['title'] ?? 'Preset'); ?></option>
-                                        <?php endforeach; ?>
-                                    </optgroup>
-                                <?php endif; ?>
-                            </select>
                         </label>
                         <button class="btn" type="submit"><?= sanitize('Create Tender Pack'); ?></button>
                     </form>
