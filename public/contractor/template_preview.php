@@ -12,8 +12,23 @@ safe_page(function () {
         return;
     }
 
-    $template = load_contractor_template($yojId, $tplId);
+    $template = load_template_record($tplId, $yojId);
     if (!$template) {
+        $legacy = load_contractor_template($yojId, $tplId);
+        if ($legacy) {
+            $template = [
+                'templateId' => $legacy['tplId'] ?? $tplId,
+                'title' => $legacy['name'] ?? 'Template',
+                'bodyHtml' => $legacy['body'] ?? '',
+                'scope' => 'contractor',
+                'owner' => ['yojId' => $yojId],
+            ];
+        } else {
+            render_error_page('Template not found.');
+            return;
+        }
+    }
+    if (($template['scope'] ?? '') === 'contractor' && (($template['owner']['yojId'] ?? '') !== $yojId)) {
         render_error_page('Template not found.');
         return;
     }
@@ -29,12 +44,23 @@ safe_page(function () {
         'place' => trim((string)($_GET['place'] ?? '')),
     ];
 
+    $pack = [
+        'yojId' => $yojId,
+        'title' => $tender['tender_title'] ?: 'Tender',
+        'tenderTitle' => $tender['tender_title'] ?: 'Tender',
+        'tenderNumber' => $tender['tender_number'] ?? '',
+        'departmentName' => $tender['department_name'] ?? '',
+        'dates' => [
+            'submission' => $tender['submission_deadline'] ?? '',
+        ],
+    ];
     $contextMap = contractor_template_context($contractor, $tender);
+    $contextMap = array_merge($contextMap, pack_placeholder_value_map($pack, $contractor));
     foreach ($contextMap as $key => $value) {
-        $contextMap[$key] = (string)$value;
+        $contextMap[$key] = trim((string)$value) !== '' ? (string)$value : '__________';
     }
 
-    $body = contractor_fill_template_body($template['body'] ?? '', $contextMap);
+    $body = contractor_fill_template_body($template['bodyHtml'] ?? ($template['body'] ?? ''), $contextMap);
 
     logEvent(DATA_PATH . '/logs/templates.log', [
         'event' => 'template_preview',
@@ -43,7 +69,7 @@ safe_page(function () {
         'ip' => mask_ip($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
     ]);
 
-    $title = ($template['name'] ?? 'Template') . ' | Preview';
+    $title = ($template['title'] ?? ($template['name'] ?? 'Template')) . ' | Preview';
     $logoHtml = '';
     $headerText = '';
     if (!empty($settings['logoEnabled']) && !empty($settings['logoPublicPath'])) {
@@ -92,7 +118,7 @@ safe_page(function () {
     <body>
         <div class="toolbar ui-only" data-ui="true">
             <div>
-                <div style="font-size:18px;font-weight:700;"><?= sanitize($template['name'] ?? 'Template'); ?></div>
+                <div style="font-size:18px;font-weight:700;"><?= sanitize($template['title'] ?? ($template['name'] ?? 'Template')); ?></div>
                 <div class="meta"><?= sanitize('Preview uses your saved profile + tender fields. Missing values print as blanks.'); ?></div>
                 <div class="meta no-print"><?= sanitize('For clean PDF/print: In print dialog, turn OFF “Headers and footers”.'); ?></div>
             </div>
