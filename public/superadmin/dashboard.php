@@ -63,6 +63,15 @@ safe_page(function () {
                 'badge' => $badgeClass((int)$counts['resetApprovalsPending'], 1, 4),
             ],
             [
+                'title' => 'Scheme Activations',
+                'value' => $counts['schemeActivationPending'],
+                'description' => 'Pending scheme activation requests awaiting review.',
+                'secondary' => 'Review contractor scheme access requests.',
+                'link' => '/superadmin/schemes/activation_requests.php',
+                'badge' => $badgeClass((int)$counts['schemeActivationPending'], 1, 4),
+                'cta' => 'Review Requests',
+            ],
+            [
                 'title' => 'Assisted Pack v2 Queue',
                 'value' => $assistedWaiting,
                 'description' => 'New + in-progress assisted pack requests.',
@@ -239,7 +248,7 @@ safe_page(function () {
                         <div class="dashboard-meta"><?= sanitize($card['description']); ?></div>
                         <div class="dashboard-meta"><?= sanitize($card['secondary']); ?></div>
                         <div style="margin-top:auto;">
-                            <a class="btn secondary" href="<?= sanitize($card['link']); ?>">View</a>
+                            <a class="btn secondary" href="<?= sanitize($card['link']); ?>"><?= sanitize($card['cta'] ?? 'View'); ?></a>
                         </div>
                     </div>
                 <?php endforeach; ?>

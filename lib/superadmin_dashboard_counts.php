@@ -21,6 +21,7 @@ function superadmin_dashboard_counts(): array
         'assistedNew' => 0,
         'assistedInProgress' => 0,
         'assistedFailed' => 0,
+        'schemeActivationPending' => 0,
         'assistedLastAt' => null,
         'errorsToday' => 0,
         'errors24h' => 0,
@@ -89,6 +90,8 @@ function superadmin_dashboard_counts(): array
                 $counts['supportOpen']++;
             }
         }
+
+        $counts['schemeActivationPending'] = count(list_activation_requests('pending'));
 
         $assistedRequests = assisted_v2_list_requests();
         foreach ($assistedRequests as $request) {

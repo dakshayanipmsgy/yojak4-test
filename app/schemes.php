@@ -1414,6 +1414,33 @@ function create_activation_request(string $yojId, string $schemeCode, string $ve
     return $payload;
 }
 
+function read_activation_request_file(string $path): ?array
+{
+    if (!file_exists($path)) {
+        return null;
+    }
+    $handle = fopen($path, 'r');
+    if (!$handle) {
+        return null;
+    }
+    flock($handle, LOCK_SH);
+    $content = stream_get_contents($handle);
+    flock($handle, LOCK_UN);
+    fclose($handle);
+
+    $data = json_decode((string)$content, true);
+    if (!is_array($data)) {
+        logEvent(DATA_PATH . '/logs/schemes.log', [
+            'at' => now_kolkata()->format(DateTime::ATOM),
+            'event' => 'ACT_REQ_READ_FAIL',
+            'path' => $path,
+        ]);
+        return null;
+    }
+
+    return $data;
+}
+
 function list_activation_requests(string $status = ''): array
 {
     $root = DATA_PATH . '/contractor_scheme_activations';
@@ -1425,7 +1452,7 @@ function list_activation_requests(string $status = ''): array
     foreach ($dirs as $dir) {
         $files = glob($dir . '/requests/REQ-*.json') ?: [];
         foreach ($files as $file) {
-            $record = readJson($file);
+            $record = read_activation_request_file($file);
             if (!$record) {
                 continue;
             }
