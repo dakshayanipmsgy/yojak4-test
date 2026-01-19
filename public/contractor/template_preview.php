@@ -12,8 +12,7 @@ safe_page(function () {
         return;
     }
 
-    $template = template_load('contractor', $tplId, $yojId);
-    $template = $template ?: template_load('global', $tplId);
+    $template = load_contractor_template($yojId, $tplId);
     if (!$template) {
         render_error_page('Template not found.');
         return;
@@ -30,17 +29,21 @@ safe_page(function () {
         'place' => trim((string)($_GET['place'] ?? '')),
     ];
 
-    $body = template_render_body((string)($template['body'] ?? ''), $contractor, $tender);
+    $contextMap = contractor_template_context($contractor, $tender);
+    foreach ($contextMap as $key => $value) {
+        $contextMap[$key] = (string)$value;
+    }
+
+    $body = contractor_fill_template_body($template['body'] ?? '', $contextMap);
 
     logEvent(DATA_PATH . '/logs/templates.log', [
         'event' => 'template_preview',
         'yojId' => $yojId,
-        'templateId' => $tplId,
-        'scope' => $template['scope'] ?? '',
+        'tplId' => $tplId,
         'ip' => mask_ip($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
     ]);
 
-    $title = ($template['title'] ?? 'Template') . ' | Preview';
+    $title = ($template['name'] ?? 'Template') . ' | Preview';
     $logoHtml = '';
     $headerText = '';
     if (!empty($settings['logoEnabled']) && !empty($settings['logoPublicPath'])) {
@@ -89,7 +92,7 @@ safe_page(function () {
     <body>
         <div class="toolbar ui-only" data-ui="true">
             <div>
-                <div style="font-size:18px;font-weight:700;"><?= sanitize($template['title'] ?? 'Template'); ?></div>
+                <div style="font-size:18px;font-weight:700;"><?= sanitize($template['name'] ?? 'Template'); ?></div>
                 <div class="meta"><?= sanitize('Preview uses your saved profile + tender fields. Missing values print as blanks.'); ?></div>
                 <div class="meta no-print"><?= sanitize('For clean PDF/print: In print dialog, turn OFF “Headers and footers”.'); ?></div>
             </div>

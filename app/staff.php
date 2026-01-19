@@ -95,9 +95,6 @@ function employee_permission_catalog(): array
         'can_process_assisted' => 'Assisted Pack Processing',
         'staff_guide_editor' => 'Staff Guide Editor',
         'scheme_builder_advanced' => 'Scheme Builder Advanced JSON Apply',
-        'templates_manage' => 'Templates Library Management',
-        'pack_blueprints_manage' => 'Pack Blueprints Management',
-        'requests_manage' => 'Template/Pack Requests Queue',
     ];
 }
 
