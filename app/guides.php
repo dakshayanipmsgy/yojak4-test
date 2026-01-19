@@ -39,6 +39,8 @@ function ensure_guides_env(): void
     $indexPath = guide_index_path();
     if (!file_exists($indexPath)) {
         guide_seed_initial();
+    } else {
+        guide_seed_defaults_if_missing();
     }
 }
 
@@ -154,6 +156,8 @@ function guide_seed_initial(): void
         ],
     ];
 
+    $sections[] = guide_default_tenders_section();
+
     foreach ($sections as $section) {
         writeJsonAtomic(guide_section_path($section['id']), $section);
     }
@@ -173,6 +177,13 @@ function guide_seed_initial(): void
             'order' => 2,
             'archived' => false,
         ],
+        [
+            'id' => 'GUIDE-TENDERS-HUB',
+            'title' => 'Tenders Hub',
+            'published' => true,
+            'order' => 3,
+            'archived' => false,
+        ],
     ];
 
     $index = [
@@ -182,6 +193,105 @@ function guide_seed_initial(): void
     ];
 
     writeJsonAtomic(guide_index_path(), $index);
+}
+
+function guide_seed_defaults_if_missing(): void
+{
+    $index = readJson(guide_index_path());
+    $entries = $index['sections'] ?? [];
+    $entries = is_array($entries) ? $entries : [];
+    $existingIds = array_map(fn($entry) => $entry['id'] ?? '', $entries);
+    $maxOrder = 0;
+    foreach ($entries as $entry) {
+        $maxOrder = max($maxOrder, (int)($entry['order'] ?? 0));
+    }
+
+    $defaultSection = guide_default_tenders_section();
+    $changed = false;
+    if (!in_array($defaultSection['id'], $existingIds, true)) {
+        writeJsonAtomic(guide_section_path($defaultSection['id']), $defaultSection);
+        $entries[] = [
+            'id' => $defaultSection['id'],
+            'title' => $defaultSection['title'],
+            'published' => true,
+            'order' => ++$maxOrder,
+            'archived' => false,
+        ];
+        $changed = true;
+    } elseif (!file_exists(guide_section_path($defaultSection['id']))) {
+        writeJsonAtomic(guide_section_path($defaultSection['id']), $defaultSection);
+        $changed = true;
+    }
+
+    if ($changed) {
+        $index['version'] = $index['version'] ?? 1;
+        $index['sections'] = $entries;
+        guide_save_index($index);
+    }
+}
+
+function guide_default_tenders_section(): array
+{
+    $now = now_kolkata()->format(DateTime::ATOM);
+    return [
+        'id' => 'GUIDE-TENDERS-HUB',
+        'title' => 'Tenders Hub',
+        'summary' => 'Understand where to prepare, discover, and manage tenders in one place.',
+        'audience' => 'contractor',
+        'published' => true,
+        'updatedAt' => $now,
+        'contentBlocks' => [
+            [
+                'type' => 'intro',
+                'text' => 'The Tenders hub is your starting point. Each section has a unique purpose so you always know the right workflow to use.',
+            ],
+            [
+                'type' => 'steps',
+                'title' => 'Offline Tenders (Mode B)',
+                'items' => [
+                    'When to use: you already have a tender PDF/NIB/NIT from any source.',
+                    'Steps: upload the PDF, choose Assisted Pack v2 if needed, review checklist and annexures.',
+                    'Output: a structured pack with checklist, annexure templates, print/export ZIP.',
+                ],
+            ],
+            [
+                'type' => 'steps',
+                'title' => 'Discovered Tenders',
+                'items' => [
+                    'When to use: you want to browse tenders discovered by YOJAK.',
+                    'Steps: filter/search, open tender details, start offline prep from the tender.',
+                    'Output: a ready starting point for offline tender preparation.',
+                ],
+            ],
+            [
+                'type' => 'steps',
+                'title' => 'Tender Packs',
+                'items' => [
+                    'When to use: you are preparing a final submission folder for a tender.',
+                    'Steps: check pack status, fill missing fields, generate annexures/templates, print full pack.',
+                    'Output: a submission-ready pack folder with ZIP export.',
+                ],
+            ],
+            [
+                'type' => 'steps',
+                'title' => 'Templates',
+                'items' => [
+                    'When to use: you need reusable letters, affidavits, and declaration formats.',
+                    'Steps: pick a template, auto-fill fields from profile/pack, save the output.',
+                    'Output: reusable documents you can attach to tender packs.',
+                ],
+            ],
+            [
+                'type' => 'steps',
+                'title' => 'Tender Archive',
+                'items' => [
+                    'When to use: you want to store old tenders and learn from outcomes.',
+                    'Steps: upload past tender PDFs, add summary notes/outcomes, convert checklists into templates.',
+                    'Output: a reusable archive for future tenders.',
+                ],
+            ],
+        ],
+    ];
 }
 
 function guide_index_entries(): array
