@@ -281,7 +281,7 @@ function contractor_template_context(array $contractor, array $tender): array
     $tenderTitle = $tender['tenderTitle'] ?? ($tender['tender_title'] ?? ($tender['title'] ?? 'Tender'));
     $tenderNumber = $tender['tenderNumber'] ?? ($tender['tender_number'] ?? ($tender['id'] ?? ''));
     $placeDefault = $tender['place'] ?? ($contractor['placeDefault'] ?? ($contractor['district'] ?? ''));
-    return [
+    $context = [
         '{{contractor_firm_name}}' => $contractor['firmName'] ?: ($contractor['name'] ?? ''),
         '{{contractor_address}}' => $address,
         '{{contractor_gst}}' => $contractor['gstNumber'] ?? '',
@@ -338,6 +338,18 @@ function contractor_template_context(array $contractor, array $tender): array
         '{{openingDate}}' => $extracted['openingDate'] ?? '',
         '{{todayDate}}' => now_kolkata()->format('Y-m-d'),
     ];
+
+    $profileValues = array_merge(pack_profile_placeholder_values($contractor), pack_profile_memory_values($contractor['yojId'] ?? ''));
+    $tenderValues = pack_tender_placeholder_values($tender);
+    foreach (array_merge($profileValues, $tenderValues) as $key => $value) {
+        $normalized = pack_normalize_placeholder_key((string)$key);
+        if ($normalized === '') {
+            continue;
+        }
+        $context['{{field:' . $normalized . '}}'] = (string)$value;
+    }
+
+    return $context;
 }
 
 function contractor_fill_template_body(string $body, array $context): string

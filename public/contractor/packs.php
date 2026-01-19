@@ -20,7 +20,10 @@ safe_page(function () {
                     <h2 style="margin:0;"><?= sanitize('Tender Packs'); ?></h2>
                     <p class="muted" style="margin:4px 0 0;"><?= sanitize('One-click packs for offline tenders. Upload items, generate letters, export ZIP.'); ?></p>
                 </div>
-                <a class="btn secondary" href="/contractor/offline_tenders.php"><?= sanitize('Back to OFFTD'); ?></a>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <a class="btn secondary" href="/contractor/packs_library.php"><?= sanitize('Pack Blueprints'); ?></a>
+                    <a class="btn secondary" href="/contractor/offline_tenders.php"><?= sanitize('Back to OFFTD'); ?></a>
+                </div>
             </div>
         </div>
         <div style="display:grid; gap:12px; margin-top:12px;">

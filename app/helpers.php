@@ -56,6 +56,11 @@ function ensure_data_structure(): void
         DATA_PATH . '/guides/sections',
         DATA_PATH . '/guides_staff',
         DATA_PATH . '/guides_staff/sections',
+        DATA_PATH . '/library',
+        DATA_PATH . '/library/templates_global',
+        DATA_PATH . '/library/packs_global',
+        DATA_PATH . '/requests',
+        DATA_PATH . '/requests/uploads',
     ];
 
     foreach ($directories as $dir) {
@@ -145,6 +150,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/scheme_runtime.log',
         DATA_PATH . '/logs/guide.log',
         DATA_PATH . '/logs/guide_staff.log',
+        DATA_PATH . '/logs/requests.log',
     ];
     foreach ($logFiles as $logFile) {
         if (!file_exists($logFile)) {
