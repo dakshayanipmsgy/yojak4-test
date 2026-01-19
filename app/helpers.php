@@ -56,6 +56,14 @@ function ensure_data_structure(): void
         DATA_PATH . '/guides/sections',
         DATA_PATH . '/guides_staff',
         DATA_PATH . '/guides_staff/sections',
+        DATA_PATH . '/templates',
+        DATA_PATH . '/templates/global',
+        DATA_PATH . '/templates/contractors',
+        DATA_PATH . '/template_requests',
+        DATA_PATH . '/template_requests/uploads',
+        DATA_PATH . '/packs',
+        DATA_PATH . '/packs/global',
+        DATA_PATH . '/packs/contractors',
     ];
 
     foreach ($directories as $dir) {
@@ -140,6 +148,8 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/print.log',
         DATA_PATH . '/logs/contractor_profile.log',
         DATA_PATH . '/logs/templates.log',
+        DATA_PATH . '/logs/template_requests.log',
+        DATA_PATH . '/logs/packs_blueprints.log',
         DATA_PATH . '/logs/site.log',
         DATA_PATH . '/logs/suggestions.log',
         DATA_PATH . '/logs/scheme_runtime.log',
@@ -178,6 +188,9 @@ function ensure_data_structure(): void
     if (!file_exists(default_contractor_templates_path())) {
         default_contractor_templates();
     }
+
+    ensure_templates_env();
+    ensure_global_templates_seeded();
 }
 
 function initialize_php_error_logging(): void

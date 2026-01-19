@@ -429,6 +429,7 @@ function pack_template_payloads(array $pack, array $contractor): array
     }
 
     $payloads = [];
+    $preferredIds = array_values(array_filter(array_map('strval', $pack['templateIdsPreferred'] ?? [])));
     foreach ($templates as $tpl) {
         if (count($payloads) >= 50) {
             break;
@@ -438,6 +439,9 @@ function pack_template_payloads(array $pack, array $contractor): array
             continue;
         }
         $tplId = $tpl['tplId'] ?? '';
+        if ($preferredIds && !in_array($tplId, $preferredIds, true)) {
+            continue;
+        }
         $payloads[] = [
             'tplId' => $tplId,
             'name' => $tpl['name'] ?? 'Template',
