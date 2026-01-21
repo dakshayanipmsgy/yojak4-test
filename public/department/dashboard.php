@@ -294,6 +294,7 @@ safe_page(function () {
                         <a class="btn" href="/department/workorder_create.php"><?= sanitize('Create Workorder'); ?></a>
                     <?php endif; ?>
                     <?php if ($hasPermission('generate_docs')): ?>
+                        <a class="btn" href="/department/create_docs.php"><?= sanitize('Create Docs'); ?></a>
                         <a class="btn" href="/department/quick_doc.php"><?= sanitize('Quick Doc Studio'); ?></a>
                     <?php endif; ?>
                     <?php if ($isAdmin && $hasPermission('manage_users')): ?>

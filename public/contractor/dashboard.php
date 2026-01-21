@@ -258,6 +258,13 @@ safe_page(function () {
         </div>
 
         <div class="dashboard-grid" style="margin-top:16px;">
+            <div class="card dash-card" style="border:1px solid #1f6feb;">
+                <div class="dash-number">🧾</div>
+                <strong><?= sanitize('Create Docs'); ?></strong>
+                <div class="muted"><?= sanitize('Generate standalone documents from saved templates.'); ?></div>
+                <a class="dash-link" href="/contractor/create_docs.php"><?= sanitize('Open'); ?></a>
+            </div>
+
             <div class="card dash-card">
                 <div class="dash-number"><?= sanitize((string)$packsInProgress); ?></div>
                 <strong><?= sanitize('Packs In Progress'); ?></strong>
