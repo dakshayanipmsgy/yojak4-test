@@ -34,6 +34,18 @@ safe_page(function () {
         }
 
         if (!$errors) {
+            $stats = [];
+            $data['bodyHtml'] = migrate_placeholders_to_canonical($data['bodyHtml'], $stats);
+            $validation = validate_placeholders($data['bodyHtml'], placeholder_registry());
+            if (!empty($validation['invalidTokens'])) {
+                $errors[] = 'Invalid placeholders: ' . implode(', ', $validation['invalidTokens']);
+            }
+            if (!empty($validation['unknownKeys'])) {
+                $errors[] = 'Unknown fields: ' . implode(', ', $validation['unknownKeys']);
+            }
+        }
+
+        if (!$errors) {
             $templateId = 'TPL-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
             $template = [
                 'templateId' => $templateId,
@@ -72,13 +84,29 @@ safe_page(function () {
             <?php endif; ?>
             <form method="post" style="margin-top:12px;display:grid;gap:12px;">
                 <input type="hidden" name="csrf_token" value="<?= sanitize(csrf_token()); ?>">
-                <div class="field">
-                    <label for="title"><?= sanitize('Title'); ?></label>
-                    <input id="title" name="title" value="<?= sanitize($data['title']); ?>" required>
-                </div>
-                <div class="field">
-                    <label for="bodyHtml"><?= sanitize('Body (HTML allowed)'); ?></label>
-                    <textarea id="bodyHtml" name="bodyHtml" rows="8" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;"><?= htmlspecialchars($data['bodyHtml'], ENT_QUOTES, 'UTF-8'); ?></textarea>
+                <div style="display:grid; gap:12px; grid-template-columns:minmax(0,2fr) minmax(0,1fr);">
+                    <div>
+                        <div class="field">
+                            <label for="title"><?= sanitize('Title'); ?></label>
+                            <input id="title" name="title" value="<?= sanitize($data['title']); ?>" required>
+                        </div>
+                        <div class="field">
+                            <label for="bodyHtml"><?= sanitize('Body (HTML allowed)'); ?></label>
+                            <textarea id="bodyHtml" name="bodyHtml" rows="8" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;"><?= htmlspecialchars($data['bodyHtml'], ENT_QUOTES, 'UTF-8'); ?></textarea>
+                        </div>
+                    </div>
+                    <div class="card" style="padding:12px;">
+                        <strong>Insert Field</strong>
+                        <p class="muted">Click a field to insert placeholder.</p>
+                        <input type="search" id="field-search" placeholder="Search fields..." style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);margin-bottom:8px;">
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                            <?php foreach ($placeholderOptions as $ph): ?>
+                                <button type="button" class="btn secondary field-btn" data-token="<?= sanitize($ph); ?>">
+                                    <?= sanitize($ph); ?>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
                 </div>
                 <div class="field">
                     <label><?= sanitize('Placeholders'); ?></label>
@@ -97,6 +125,33 @@ safe_page(function () {
                 </div>
             </form>
         </div>
+        <script>
+            const fieldButtons = document.querySelectorAll('.field-btn');
+            const bodyEl = document.getElementById('bodyHtml');
+            const searchInput = document.getElementById('field-search');
+            fieldButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (!bodyEl) return;
+                    const token = btn.dataset.token || '';
+                    const start = bodyEl.selectionStart || 0;
+                    const end = bodyEl.selectionEnd || 0;
+                    const text = bodyEl.value || '';
+                    bodyEl.value = text.slice(0, start) + token + text.slice(end);
+                    const pos = start + token.length;
+                    bodyEl.focus();
+                    bodyEl.setSelectionRange(pos, pos);
+                });
+            });
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    const term = (searchInput.value || '').toLowerCase();
+                    fieldButtons.forEach(btn => {
+                        const text = (btn.dataset.token || '').toLowerCase();
+                        btn.style.display = term === '' || text.includes(term) ? '' : 'none';
+                    });
+                });
+            }
+        </script>
         <?php
     });
 });

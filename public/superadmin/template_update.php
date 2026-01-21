@@ -28,13 +28,14 @@ safe_page(function () {
             set_flash('error', 'Invalid JSON payload.');
             redirect('/superadmin/template_edit.php' . ($tplId ? '?id=' . urlencode($tplId) : ''));
         }
+        $tokens = template_placeholder_tokens((string)($decoded['body'] ?? ''));
         $payload = array_merge($payload, [
             'title' => trim((string)($decoded['title'] ?? '')),
             'category' => trim((string)($decoded['category'] ?? 'General')),
             'description' => trim((string)($decoded['description'] ?? '')),
             'body' => trim((string)($decoded['body'] ?? '')),
             'templateType' => $decoded['templateType'] ?? 'simple_html',
-            'fieldRefs' => $decoded['fieldRefs'] ?? template_placeholder_tokens((string)($decoded['body'] ?? '')),
+            'fieldRefs' => $decoded['fieldRefs'] ?? array_values(array_filter($tokens, static fn($key) => !str_starts_with($key, 'table:'))),
             'published' => ($decoded['published'] ?? true) ? true : false,
         ]);
     }
@@ -44,10 +45,22 @@ safe_page(function () {
         redirect('/superadmin/template_edit.php' . ($tplId ? '?id=' . urlencode($tplId) : ''));
     }
 
+    $stats = [];
+    $payload['body'] = migrate_placeholders_to_canonical($payload['body'], $stats);
     $errors = template_body_errors($payload['body']);
     if ($errors) {
         set_flash('error', implode(' ', $errors));
         redirect('/superadmin/template_edit.php' . ($tplId ? '?id=' . urlencode($tplId) : ''));
+    }
+
+    $registry = placeholder_registry();
+    $validation = validate_placeholders($payload['body'], $registry);
+    if (!empty($validation['invalidTokens'])) {
+        set_flash('error', 'Invalid placeholders: ' . implode(', ', $validation['invalidTokens']));
+        redirect('/superadmin/template_edit.php' . ($tplId ? '?id=' . urlencode($tplId) : ''));
+    }
+    if (!empty($validation['unknownKeys'])) {
+        set_flash('warning', 'Unknown fields: ' . implode(', ', $validation['unknownKeys']) . '. Add them to the Field Registry before publishing.');
     }
 
     if ($isNew) {
@@ -78,7 +91,8 @@ safe_page(function () {
     $template['description'] = $payload['description'];
     $template['templateType'] = $payload['templateType'] ?? ($template['templateType'] ?? 'simple_html');
     $template['body'] = $payload['body'];
-    $template['fieldRefs'] = $payload['fieldRefs'] ?? template_placeholder_tokens($payload['body']);
+    $tokens = template_placeholder_tokens($payload['body']);
+    $template['fieldRefs'] = $payload['fieldRefs'] ?? array_values(array_filter($tokens, static fn($key) => !str_starts_with($key, 'table:')));
     $template['published'] = $payload['published'];
 
     if (($template['scope'] ?? 'global') === 'contractor') {

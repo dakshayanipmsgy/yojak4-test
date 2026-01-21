@@ -17,7 +17,7 @@ function profile_value_from_path(array $data, string $path): string
 function profile_field_aliases(): array
 {
     return [
-        'firm.name' => [
+        'contractor.firm_name' => [
             'firmName',
             'companyName',
             'dealerName',
@@ -27,8 +27,8 @@ function profile_field_aliases(): array
             'profile.companyName',
             'firm.name',
         ],
-        'firm.type' => ['firmType', 'companyType', 'firm.type'],
-        'firm.address' => [
+        'contractor.firm_type' => ['firmType', 'companyType', 'firm.type'],
+        'contractor.address' => [
             'address',
             'addressLine1',
             'registeredAddress',
@@ -36,24 +36,24 @@ function profile_field_aliases(): array
             'profile.address',
             'firm.address',
         ],
-        'firm.city' => ['city', 'district', 'firm.city'],
-        'firm.state' => ['state', 'firm.state'],
-        'firm.pincode' => ['pincode', 'pin', 'zip', 'firm.pincode'],
-        'tax.gst' => ['gst', 'gstin', 'gstNumber', 'tax.gst'],
-        'tax.pan' => ['pan', 'panNo', 'panNumber', 'tax.pan'],
-        'contact.mobile' => ['mobile', 'phone', 'contact.mobile', 'contact.phone'],
-        'contact.email' => ['email', 'contact.email'],
-        'contact.office_phone' => ['officePhone', 'office_phone', 'contact.office_phone', 'contact.officePhone'],
-        'contact.residence_phone' => ['residencePhone', 'residence_phone', 'contact.residence_phone', 'contact.residencePhone'],
-        'contact.fax' => ['fax', 'contact.fax'],
-        'bank.account_no' => ['bankAccount', 'accountNo', 'accountNumber', 'account_number', 'bank.account_no'],
-        'bank.ifsc' => ['ifsc', 'ifscCode', 'bank.ifsc'],
-        'bank.bank_name' => ['bankName', 'bank.bank_name'],
-        'bank.branch' => ['bankBranch', 'bank_branch', 'bank.branch'],
-        'bank.account_holder' => ['accountHolder', 'bank.account_holder', 'account_holder'],
-        'signatory.name' => ['authorizedSignatoryName', 'authorized_signatory', 'signatory.name'],
-        'signatory.designation' => ['authorizedSignatoryDesignation', 'signatory.designation', 'designation'],
-        'place' => ['placeDefault', 'place'],
+        'contractor.city' => ['city', 'district', 'firm.city'],
+        'contractor.state' => ['state', 'firm.state'],
+        'contractor.pincode' => ['pincode', 'pin', 'zip', 'firm.pincode'],
+        'contractor.gst' => ['gst', 'gstin', 'gstNumber', 'tax.gst'],
+        'contractor.pan' => ['pan', 'panNo', 'panNumber', 'tax.pan'],
+        'contractor.contact.mobile' => ['mobile', 'phone', 'contact.mobile', 'contact.phone'],
+        'contractor.contact.email' => ['email', 'contact.email'],
+        'contractor.contact.office_phone' => ['officePhone', 'office_phone', 'contact.office_phone', 'contact.officePhone'],
+        'contractor.contact.residence_phone' => ['residencePhone', 'residence_phone', 'contact.residence_phone', 'contact.residencePhone'],
+        'contractor.contact.fax' => ['fax', 'contact.fax'],
+        'contractor.bank.account_no' => ['bankAccount', 'accountNo', 'accountNumber', 'account_number', 'bank.account_no'],
+        'contractor.bank.ifsc' => ['ifsc', 'ifscCode', 'bank.ifsc'],
+        'contractor.bank.bank_name' => ['bankName', 'bank.bank_name'],
+        'contractor.bank.branch' => ['bankBranch', 'bank_branch', 'bank.branch'],
+        'contractor.bank.account_holder' => ['accountHolder', 'bank.account_holder', 'account_holder'],
+        'contractor.signatory.name' => ['authorizedSignatoryName', 'authorized_signatory', 'signatory.name'],
+        'contractor.signatory.designation' => ['authorizedSignatoryDesignation', 'signatory.designation', 'designation'],
+        'contractor.place' => ['placeDefault', 'place'],
     ];
 }
 
@@ -64,7 +64,7 @@ function get_profile_value_by_canonical_key(array $contractorJson, string $canon
     $canonicalKey = pack_normalize_placeholder_key($canonicalKey);
     $paths = $aliases[$canonicalKey] ?? [$canonicalKey];
 
-    if ($canonicalKey === 'firm.address') {
+    if ($canonicalKey === 'contractor.address') {
         $address = contractor_profile_address($contractor);
         if ($address !== '') {
             $diagnostics[] = $canonicalKey . ' ← contractor_profile_address()';
@@ -80,7 +80,7 @@ function get_profile_value_by_canonical_key(array $contractorJson, string $canon
         }
     }
 
-    if ($canonicalKey === 'place') {
+    if ($canonicalKey === 'contractor.place') {
         $place = trim((string)($contractor['placeDefault'] ?? ''));
         $source = 'placeDefault';
         if ($place === '') {

@@ -477,7 +477,7 @@ function offline_tender_ai_prompt(array $tender, bool $lenient = false): array
         . " RULES:\n"
         . " 1. Block: Do NOT extract rates/prices/BOQ data. If a financial annexure exists, list it in 'lists.restricted' and do NOT create a template for it.\n"
         . " 2. Fees: Extract Tender Fee and EMD amounts into checklist items (category: Fees).\n"
-        . " 3. Templates: For each required annexure/format, generate a generic text template with placeholders (e.g. {{contractor_firm_name}}, {{tender_title}}).\n"
+        . " 3. Templates: For each required annexure/format, generate a generic text template with placeholders (e.g. {{field:contractor.firm_name}}, {{field:tender.title}}).\n"
         . " 4. Timezone: Use Asia/Kolkata context for dates.\n"
         . " 5. Validity: validityDays = Bid Validity (not completion).\n"
         . " Do not wrap the JSON in markdown."

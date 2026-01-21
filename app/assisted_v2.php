@@ -16,7 +16,7 @@ You are creating a YOJAK Assisted Pack v2 payload from an uploaded tender PDF.
 OUTPUT MUST BE ONLY strict JSON. No markdown. No commentary.
 
 CRITICAL RULES:
-- Use ONLY these canonical keys exactly: firm.name, firm.address, tax.pan, tax.gst, contact.office_phone, contact.residence_phone, contact.mobile, contact.email, bank.bank_name, bank.branch, bank.account_no, bank.ifsc, signatory.name, signatory.designation, place, date.
+- Use ONLY these canonical keys exactly: contractor.firm_name, contractor.address, contractor.pan, contractor.gst, contractor.contact.office_phone, contractor.contact.residence_phone, contractor.contact.mobile, contractor.contact.email, contractor.bank.bank_name, contractor.bank.branch, contractor.bank.account_no, contractor.bank.ifsc, contractor.signatory.name, contractor.signatory.designation, contractor.place, contractor.date.
 - Do NOT invent synonyms like company_name/pan_no/dealer_name. Use canonical keys only.
 - Do NOT include BOQ unit rates, quoted rates, price calculations, L1 amounts.
 - You MAY include tender fee / EMD / SD / PG text (non-bid amounts).
@@ -29,7 +29,7 @@ FILLABLE OUTPUT REQUIRED:
 - Every blank line must be a field key.
 - Every compliance Yes/No row must be a choice field (yes/no/na).
 - Every table must include columns + rows and rowIds.
-- Use placeholders ONLY as {{field:<key>}} and {{table:<tableId>}}.
+- Use placeholders ONLY as {{field:<key>}} and {{field:table:<tableId>}}.
 
 FINAL JSON SHAPE:
 {
@@ -44,22 +44,22 @@ FINAL JSON SHAPE:
   "restrictedAnnexures": [],
 
   "fieldCatalog": [
-    { "key":"firm.name","label":"Firm Name","type":"text" },
-    { "key":"firm.address","label":"Firm Address","type":"textarea" },
-    { "key":"tax.gst","label":"GST","type":"text" },
-    { "key":"tax.pan","label":"PAN","type":"text" },
-    { "key":"signatory.name","label":"Authorized Signatory Name","type":"text" },
-    { "key":"signatory.designation","label":"Designation","type":"text" },
-    { "key":"contact.office_phone","label":"Office Phone","type":"phone" },
-    { "key":"contact.residence_phone","label":"Residence Phone","type":"phone" },
-    { "key":"contact.mobile","label":"Mobile","type":"phone" },
-    { "key":"contact.email","label":"Email","type":"email" },
-    { "key":"bank.bank_name","label":"Bank Name","type":"text" },
-    { "key":"bank.branch","label":"Bank Branch","type":"text" },
-    { "key":"bank.account_no","label":"Bank Account No","type":"text" },
-    { "key":"bank.ifsc","label":"IFSC","type":"ifsc" },
-    { "key":"place","label":"Place","type":"text" },
-    { "key":"date","label":"Date","type":"date" }
+    { "key":"contractor.firm_name","label":"Firm Name","type":"text" },
+    { "key":"contractor.address","label":"Firm Address","type":"textarea" },
+    { "key":"contractor.gst","label":"GST","type":"text" },
+    { "key":"contractor.pan","label":"PAN","type":"text" },
+    { "key":"contractor.signatory.name","label":"Authorized Signatory Name","type":"text" },
+    { "key":"contractor.signatory.designation","label":"Designation","type":"text" },
+    { "key":"contractor.contact.office_phone","label":"Office Phone","type":"phone" },
+    { "key":"contractor.contact.residence_phone","label":"Residence Phone","type":"phone" },
+    { "key":"contractor.contact.mobile","label":"Mobile","type":"phone" },
+    { "key":"contractor.contact.email","label":"Email","type":"email" },
+    { "key":"contractor.bank.bank_name","label":"Bank Name","type":"text" },
+    { "key":"contractor.bank.branch","label":"Bank Branch","type":"text" },
+    { "key":"contractor.bank.account_no","label":"Bank Account No","type":"text" },
+    { "key":"contractor.bank.ifsc","label":"IFSC","type":"ifsc" },
+    { "key":"contractor.place","label":"Place","type":"text" },
+    { "key":"contractor.date","label":"Date","type":"date" }
   ],
 
   "checklist": [
@@ -71,7 +71,7 @@ FINAL JSON SHAPE:
       "annexureCode":"TECH-BID",
       "title":"Technical Bid Format",
       "templateKind":"standard|compliance|table_form|financial_manual",
-      "requiredFieldKeys":["firm.name","firm.address","tax.gst","tax.pan","place","date","signatory.name","signatory.designation"],
+      "requiredFieldKeys":["contractor.firm_name","contractor.address","contractor.gst","contractor.pan","contractor.place","contractor.date","contractor.signatory.name","contractor.signatory.designation"],
       "tables":[
         {
           "tableId":"tech_compliance",
@@ -85,7 +85,7 @@ FINAL JSON SHAPE:
           ]
         }
       ],
-      "body":"... Place: {{field:place}} Date: {{field:date}} ... {{table:tech_compliance}} ...",
+      "body":"... Place: {{field:contractor.place}} Date: {{field:contractor.date}} ... {{field:table:tech_compliance}} ...",
       "notes":""
     }
   ],
@@ -860,29 +860,8 @@ function assisted_v2_extract_body_placeholders(string $body, array $tableIds, ar
     $tableIds = array_values(array_unique(array_map('strval', $tableIds)));
     foreach ($matches[1] as $raw) {
         $raw = trim((string)$raw);
-        if (stripos($raw, 'field:') === 0) {
-            $inner = trim(substr($raw, 6));
-            if (stripos($inner, 'table:') === 0) {
-                $tableId = pack_normalize_placeholder_key(substr($inner, 6));
-                if ($tableId === '') {
-                    $errors[] = 'Invalid table placeholder {{' . $raw . '}}.';
-                    continue;
-                }
-                if (!in_array($tableId, $tableIds, true)) {
-                    $errors[] = 'Unknown table placeholder {{' . $raw . '}}.';
-                    continue;
-                }
-                $tablePlaceholders[] = $tableId;
-                continue;
-            }
-            $key = pack_normalize_placeholder_key($inner);
-            if ($key !== '') {
-                $keys[] = $key;
-            }
-            continue;
-        }
-        if (stripos($raw, 'table:') === 0) {
-            $tableId = pack_normalize_placeholder_key(substr($raw, 6));
+        if (stripos($raw, 'field:table:') === 0) {
+            $tableId = pack_normalize_placeholder_key(substr($raw, 12));
             if ($tableId === '') {
                 $errors[] = 'Invalid table placeholder {{' . $raw . '}}.';
                 continue;
@@ -894,8 +873,16 @@ function assisted_v2_extract_body_placeholders(string $body, array $tableIds, ar
             $tablePlaceholders[] = $tableId;
             continue;
         }
+        if (stripos($raw, 'field:') === 0) {
+            $inner = trim(substr($raw, 6));
+            $key = pack_normalize_placeholder_key($inner);
+            if ($key !== '') {
+                $keys[] = $key;
+            }
+            continue;
+        }
         $suggested = pack_normalize_placeholder_key($raw);
-        $errors[] = 'Unknown placeholder {{' . $raw . '}}. Use {{field:' . ($suggested !== '' ? $suggested : 'key') . '}} or {{table:<tableId>}} instead.';
+        $errors[] = 'Unknown placeholder {{' . $raw . '}}. Use {{field:' . ($suggested !== '' ? $suggested : 'key') . '}} or {{field:table:<tableId>}} instead.';
     }
     return array_values(array_unique($keys));
 }
@@ -925,14 +912,17 @@ function assisted_v2_canonicalize_table_placeholders(string $body, array &$stats
     if (trim($body) === '') {
         return $body;
     }
-    $body = preg_replace_callback('/{{\s*field:\s*table:\s*([a-z0-9_.-]+)\s*}}/i', static function (array $match) use (&$stats): string {
-        $tableId = pack_normalize_placeholder_key($match[1] ?? '');
-        $stats['placeholdersFixed'] = ($stats['placeholdersFixed'] ?? 0) + 1;
-        return '{{table:' . $tableId . '}}';
-    }, $body) ?? $body;
     $body = preg_replace_callback('/{{\s*table:\s*([a-z0-9_.-]+)\s*}}/i', static function (array $match) use (&$stats): string {
         $tableId = pack_normalize_placeholder_key($match[1] ?? '');
-        $canonical = '{{table:' . $tableId . '}}';
+        $canonical = '{{field:table:' . $tableId . '}}';
+        if ($match[0] !== $canonical) {
+            $stats['placeholdersFixed'] = ($stats['placeholdersFixed'] ?? 0) + 1;
+        }
+        return $canonical;
+    }, $body) ?? $body;
+    $body = preg_replace_callback('/{{\s*field:\s*table:\s*([a-z0-9_.-]+)\s*}}/i', static function (array $match) use (&$stats): string {
+        $tableId = pack_normalize_placeholder_key($match[1] ?? '');
+        $canonical = '{{field:table:' . $tableId . '}}';
         if ($match[0] !== $canonical) {
             $stats['placeholdersFixed'] = ($stats['placeholdersFixed'] ?? 0) + 1;
         }
@@ -1228,9 +1218,9 @@ function assisted_v2_normalize_payload(array $payload, array &$warnings = [], ar
                 if ($rawTableId === 'financial_bid') {
                     continue;
                 }
-                $pattern = '/{{\s*table:\s*' . preg_quote($rawTableId, '/') . '\s*}}/i';
-                $body = preg_replace($pattern, '{{table:financial_bid}}', $body) ?? $body;
-                $renderTemplate = preg_replace($pattern, '{{table:financial_bid}}', $renderTemplate) ?? $renderTemplate;
+                $pattern = '/{{\s*field:table:\s*' . preg_quote($rawTableId, '/') . '\s*}}/i';
+                $body = preg_replace($pattern, '{{field:table:financial_bid}}', $body) ?? $body;
+                $renderTemplate = preg_replace($pattern, '{{field:table:financial_bid}}', $renderTemplate) ?? $renderTemplate;
                 $stats['placeholdersFixed'] = ($stats['placeholdersFixed'] ?? 0) + 1;
             }
         }

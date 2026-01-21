@@ -37,6 +37,11 @@ function ensure_contractors_root(): void
     if (!file_exists($profileMemoryLog)) {
         touch($profileMemoryLog);
     }
+
+    $placeholderLog = DATA_PATH . '/logs/placeholder_migration.log';
+    if (!file_exists($placeholderLog)) {
+        touch($placeholderLog);
+    }
 }
 
 function contractors_index_path(): string
@@ -141,7 +146,7 @@ function profile_memory_is_eligible_key(string $key, string $value): bool
     if (preg_match('/^table\..+\.(rate|amount)$/', $normalized)) {
         return false;
     }
-    $allowedPrefix = (bool)preg_match('/^(firm|tax|contact|bank|signatory)\./', $normalized)
+    $allowedPrefix = (bool)preg_match('/^contractor\./', $normalized)
         || str_starts_with($normalized, 'custom.');
     if (!$allowedPrefix) {
         return false;

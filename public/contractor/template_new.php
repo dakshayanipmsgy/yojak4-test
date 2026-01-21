@@ -9,17 +9,40 @@ safe_page(function () {
     $contractor = load_contractor($yojId) ?? [];
     $memory = load_profile_memory($yojId);
     $missingFields = templates_missing_profile_fields($contractor);
-    $fieldCatalog = templates_field_catalog();
+    $registry = placeholder_registry([
+        'contractor' => $contractor,
+        'memory' => $memory,
+    ]);
+    $fieldCatalog = $registry['fields'];
+    $tableCatalog = $registry['tables'];
 
     $title = get_app_config()['appName'] . ' | New Template';
 
-    render_layout($title, function () use ($missingFields, $fieldCatalog, $memory) {
-        $groups = [
-            'Contractor Profile Fields' => ['Contractor Contact', 'Bank Details', 'Signatory'],
-            'Common Tender Fields' => ['Tender Meta'],
-            'Additional Fields' => ['Other', 'Compliance Table'],
+    render_layout($title, function () use ($missingFields, $fieldCatalog, $tableCatalog) {
+        $grouped = [
+            'Contractor' => [],
+            'Tender' => [],
+            'Case/Scheme' => [],
+            'Custom Saved Fields' => [],
         ];
-        $customFields = $memory['fields'] ?? [];
+        foreach ($fieldCatalog as $key => $meta) {
+            $label = $meta['label'] ?? $key;
+            if (str_starts_with($key, 'contractor.')) {
+                $grouped['Contractor'][] = ['key' => $key, 'label' => $label];
+            } elseif (str_starts_with($key, 'tender.')) {
+                $grouped['Tender'][] = ['key' => $key, 'label' => $label];
+            } elseif (str_starts_with($key, 'case.') || str_starts_with($key, 'module.')) {
+                $grouped['Case/Scheme'][] = ['key' => $key, 'label' => $label];
+            } elseif (str_starts_with($key, 'custom.')) {
+                $grouped['Custom Saved Fields'][] = ['key' => $key, 'label' => $label];
+            } else {
+                $grouped['Custom Saved Fields'][] = ['key' => $key, 'label' => $label];
+            }
+        }
+        $tables = [];
+        foreach ($tableCatalog as $key => $meta) {
+            $tables[] = ['key' => $key, 'label' => $meta['label'] ?? $key];
+        }
         ?>
         <div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -57,7 +80,7 @@ safe_page(function () {
                         <span>Template Body</span>
                         <textarea id="template-body" name="body" rows="14" required placeholder="Write content here. Use the Insert Fields panel to add placeholders."></textarea>
                     </label>
-                    <div class="muted" style="font-size:13px;">Tip: Use {{field:contractor.firm_name}}-style placeholders from the right panel.</div>
+                    <div class="muted" style="font-size:13px;">Tip: Use {{field:contractor.firm_name}} or {{field:table:items}} placeholders from the right panel.</div>
                 </div>
                 <div style="display:grid; gap:12px;">
                     <div class="card" style="display:grid; gap:10px;">
@@ -81,28 +104,28 @@ safe_page(function () {
                                 <input type="checkbox" id="print-preview"> Print preview
                             </label>
                         </div>
-                        <?php foreach ($groups as $label => $groupNames): ?>
+                        <input type="search" id="field-search" placeholder="Search fields..." style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);">
+                        <?php foreach ($grouped as $label => $items): ?>
                             <div>
                                 <strong><?= sanitize($label); ?></strong>
                                 <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;">
-                                    <?php foreach ($fieldCatalog as $key => $meta): ?>
-                                        <?php if (!in_array($meta['group'] ?? '', $groupNames, true)) { continue; } ?>
-                                        <button type="button" class="btn secondary field-btn" data-key="<?= sanitize($key); ?>" data-label="<?= sanitize($meta['label'] ?? $key); ?>">
-                                            <?= sanitize($meta['label'] ?? $key); ?>
+                                    <?php foreach ($items as $item): ?>
+                                        <button type="button" class="btn secondary field-btn" data-key="<?= sanitize($item['key']); ?>" data-label="<?= sanitize($item['label']); ?>">
+                                            <?= sanitize($item['label']); ?>
                                         </button>
                                     <?php endforeach; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
                         <div>
-                            <strong>Custom Saved Fields</strong>
+                            <strong>Tables</strong>
                             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;">
-                                <?php if (!$customFields): ?>
-                                    <span class="muted">No custom fields saved yet.</span>
+                                <?php if (!$tables): ?>
+                                    <span class="muted">No table placeholders available.</span>
                                 <?php endif; ?>
-                                <?php foreach ($customFields as $key => $entry): ?>
-                                    <button type="button" class="btn secondary field-btn" data-key="<?= sanitize($key); ?>" data-label="<?= sanitize(profile_memory_label_from_key((string)$key)); ?>">
-                                        <?= sanitize(profile_memory_label_from_key((string)$key)); ?>
+                                <?php foreach ($tables as $table): ?>
+                                    <button type="button" class="btn secondary table-btn" data-key="<?= sanitize($table['key']); ?>" data-label="<?= sanitize($table['label']); ?>">
+                                        <?= sanitize($table['label']); ?>
                                     </button>
                                 <?php endforeach; ?>
                             </div>
@@ -128,8 +151,12 @@ safe_page(function () {
             const previewEl = document.getElementById('template-preview');
             const printToggle = document.getElementById('print-preview');
             const fieldButtons = document.querySelectorAll('.field-btn');
+            const tableButtons = document.querySelectorAll('.table-btn');
+            const searchInput = document.getElementById('field-search');
             const fieldMap = {};
             fieldButtons.forEach(btn => { fieldMap[btn.dataset.key.toLowerCase()] = btn.dataset.label; });
+            const tableMap = {};
+            tableButtons.forEach(btn => { tableMap[btn.dataset.key.toLowerCase()] = btn.dataset.label; });
 
             const insertAtCursor = (text) => {
                 const start = bodyEl.selectionStart || 0;
@@ -148,17 +175,43 @@ safe_page(function () {
                     insertAtCursor(`{{field:${key}}}`);
                 });
             });
+            tableButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const key = btn.dataset.key;
+                    insertAtCursor(`{{field:table:${key}}}`);
+                });
+            });
+
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    const term = (searchInput.value || '').toLowerCase();
+                    document.querySelectorAll('.field-btn, .table-btn').forEach(btn => {
+                        const label = (btn.dataset.label || '').toLowerCase();
+                        const key = (btn.dataset.key || '').toLowerCase();
+                        const match = term === '' || label.includes(term) || key.includes(term);
+                        btn.style.display = match ? '' : 'none';
+                    });
+                });
+            }
 
             const updatePreview = () => {
                 const raw = bodyEl.value || '';
                 const printMode = printToggle.checked;
-                const html = raw.replace(/{{\s*field:([^}]+)}}/gi, (match, key) => {
-                    const cleaned = (key || '').trim().toLowerCase();
-                    if (printMode) {
-                        return '__________';
-                    }
-                    return `[${fieldMap[cleaned] || cleaned}]`;
-                });
+                const html = raw
+                    .replace(/{{\s*field:table:([^}]+)}}/gi, (match, key) => {
+                        const cleaned = (key || '').trim().toLowerCase();
+                        if (printMode) {
+                            return '__________';
+                        }
+                        return `[Table: ${tableMap[cleaned] || cleaned}]`;
+                    })
+                    .replace(/{{\s*field:([^}]+)}}/gi, (match, key) => {
+                        const cleaned = (key || '').trim().toLowerCase();
+                        if (printMode) {
+                            return '__________';
+                        }
+                        return `[${fieldMap[cleaned] || cleaned}]`;
+                    });
                 previewEl.textContent = html;
             };
 

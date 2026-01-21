@@ -17,13 +17,38 @@ safe_page(function () {
         redirect('/contractor/template_new.php');
     }
 
+    $stats = [];
+    $body = migrate_placeholders_to_canonical($body, $stats);
     $errors = template_body_errors($body);
     if ($errors) {
         set_flash('error', implode(' ', $errors));
         redirect('/contractor/template_new.php');
     }
 
+    $contractor = load_contractor($yojId) ?? [];
+    $memory = load_profile_memory($yojId);
+    $registry = placeholder_registry([
+        'contractor' => $contractor,
+        'memory' => $memory,
+    ]);
+    $validation = validate_placeholders($body, $registry);
+    if (!empty($validation['invalidTokens'])) {
+        set_flash('error', 'Invalid placeholders: ' . implode(', ', $validation['invalidTokens']));
+        redirect('/contractor/template_new.php');
+    }
+    if (!empty($validation['unknownKeys'])) {
+        set_flash('warning', 'Unknown fields: ' . implode(', ', $validation['unknownKeys']) . '. Save them as custom fields if needed.');
+    }
+
     $tplId = generate_contractor_template_id_v2($yojId);
+    $tokens = template_placeholder_tokens($body);
+    $fieldRefs = array_values(array_filter($tokens, static fn($key) => !str_starts_with($key, 'table:')));
+    $placeholders = array_map(static function ($key) {
+        if (str_starts_with($key, 'table:')) {
+            return '{{field:table:' . substr($key, 6) . '}}';
+        }
+        return '{{field:' . $key . '}}';
+    }, $tokens);
     $template = [
         'id' => $tplId,
         'tplId' => $tplId,
@@ -35,8 +60,8 @@ safe_page(function () {
         'description' => $description,
         'templateType' => 'simple_html',
         'body' => $body,
-        'fieldRefs' => template_placeholder_tokens($body),
-        'placeholders' => array_map(static fn($key) => '{{field:' . $key . '}}', template_placeholder_tokens($body)),
+        'fieldRefs' => $fieldRefs,
+        'placeholders' => $placeholders,
         'published' => true,
     ];
 

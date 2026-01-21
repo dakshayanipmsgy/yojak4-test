@@ -803,57 +803,57 @@ function pack_annexure_template_library(): array
         'cover_letter_fee' => [
             'type' => 'cover_letter',
             'title' => 'Covering Letter for Tender Fee Submission',
-            'body' => "To,\n{{department_name}}\nSubject: Submission of tender documents for {{tender_title}} ({{tender_number}})\n\nRespected Sir/Madam,\n\nWe, {{contractor_firm_name}}, are submitting our bid for the above-mentioned tender. Tender fee and supporting documents are enclosed.\n\nThank you,\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{department_name}}','{{tender_title}}','{{tender_number}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'body' => "To,\n{{field:tender.departmentName}}\nSubject: Submission of tender documents for {{field:tender.title}} ({{field:tender.number}})\n\nRespected Sir/Madam,\n\nWe, {{field:contractor.firm_name}}, are submitting our bid for the above-mentioned tender. Tender fee and supporting documents are enclosed.\n\nThank you,\n{{field:contractor.signatory.name}}\n{{field:contractor.signatory.designation}}\nDate: {{field:contractor.date}}\nPlace: {{field:contractor.place}}",
+            'placeholders' => ['{{field:contractor.firm_name}}','{{field:tender.departmentName}}','{{field:tender.title}}','{{field:tender.number}}','{{field:contractor.signatory.name}}','{{field:contractor.signatory.designation}}','{{field:contractor.date}}','{{field:contractor.place}}'],
             'createdAt' => $now,
         ],
         'cover_letter_emd' => [
             'type' => 'cover_letter',
             'title' => 'Covering Letter for EMD Submission',
-            'body' => "To,\n{{department_name}}\nSubject: Submission of EMD for {{tender_title}} ({{tender_number}})\n\nDear Sir/Madam,\n\nPlease find enclosed the Earnest Money Deposit for the above tender. All documents are authentic to the best of our knowledge.\n\nSincerely,\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{department_name}}','{{tender_title}}','{{tender_number}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'body' => "To,\n{{field:tender.departmentName}}\nSubject: Submission of EMD for {{field:tender.title}} ({{field:tender.number}})\n\nDear Sir/Madam,\n\nPlease find enclosed the Earnest Money Deposit for the above tender. All documents are authentic to the best of our knowledge.\n\nSincerely,\n{{field:contractor.signatory.name}}\n{{field:contractor.signatory.designation}}\nDate: {{field:contractor.date}}\nPlace: {{field:contractor.place}}",
+            'placeholders' => ['{{field:tender.departmentName}}','{{field:tender.title}}','{{field:tender.number}}','{{field:contractor.signatory.name}}','{{field:contractor.signatory.designation}}','{{field:contractor.date}}','{{field:contractor.place}}'],
             'createdAt' => $now,
         ],
         'information_sheet' => [
             'type' => 'info_sheet',
             'title' => 'Bidder Information Sheet',
-            'body' => "Name of Bidder/Firm: {{contractor_firm_name}}\nType of Firm: {{contractor_firm_type}}\nAddress: {{contractor_address}}\nGST: {{contractor_gst}} | PAN: {{contractor_pan}}\nAuthorized Signatory: {{authorized_signatory}} ({{designation}})\nOffice Phone: {{contact.office_phone}} | Residence Phone: {{contact.residence_phone}}\nEmail: {{contact.email}} | Mobile: {{contact.mobile}} | Fax: {{contact.fax}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{contractor_firm_type}}','{{contractor_address}}','{{contractor_gst}}','{{contractor_pan}}','{{authorized_signatory}}','{{designation}}','{{contact.office_phone}}','{{contact.residence_phone}}','{{contact.email}}','{{contact.mobile}}','{{contact.fax}}'],
+            'body' => "Name of Bidder/Firm: {{field:contractor.firm_name}}\nType of Firm: {{field:contractor.firm_type}}\nAddress: {{field:contractor.address}}\nGST: {{field:contractor.gst}} | PAN: {{field:contractor.pan}}\nAuthorized Signatory: {{field:contractor.signatory.name}} ({{field:contractor.signatory.designation}})\nOffice Phone: {{field:contractor.contact.office_phone}} | Residence Phone: {{field:contractor.contact.residence_phone}}\nEmail: {{field:contractor.contact.email}} | Mobile: {{field:contractor.contact.mobile}} | Fax: {{field:contractor.contact.fax}}",
+            'placeholders' => ['{{field:contractor.firm_name}}','{{field:contractor.firm_type}}','{{field:contractor.address}}','{{field:contractor.gst}}','{{field:contractor.pan}}','{{field:contractor.signatory.name}}','{{field:contractor.signatory.designation}}','{{field:contractor.contact.office_phone}}','{{field:contractor.contact.residence_phone}}','{{field:contractor.contact.email}}','{{field:contractor.contact.mobile}}','{{field:contractor.contact.fax}}'],
             'createdAt' => $now,
         ],
         'declaration_general' => [
             'type' => 'declaration',
             'title' => 'Declaration by Bidder',
-            'body' => "We hereby declare that the information submitted for {{tender_title}} is true and correct. We accept all tender terms and conditions.\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{tender_title}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'body' => "We hereby declare that the information submitted for {{field:tender.title}} is true and correct. We accept all tender terms and conditions.\n\nAuthorized Signatory\n{{field:contractor.signatory.name}}\n{{field:contractor.signatory.designation}}\nDate: {{field:contractor.date}}\nPlace: {{field:contractor.place}}",
+            'placeholders' => ['{{field:tender.title}}','{{field:contractor.signatory.name}}','{{field:contractor.signatory.designation}}','{{field:contractor.date}}','{{field:contractor.place}}'],
             'createdAt' => $now,
         ],
         'power_of_attorney' => [
             'type' => 'poa',
             'title' => 'Power of Attorney',
-            'body' => "We, {{contractor_firm_name}}, authorize {{authorized_signatory}} ({{designation}}) to act on our behalf for all matters related to {{tender_title}} ({{tender_number}}).\n\nSignature\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{authorized_signatory}}','{{designation}}','{{tender_title}}','{{tender_number}}','{{date}}','{{place}}'],
+            'body' => "We, {{field:contractor.firm_name}}, authorize {{field:contractor.signatory.name}} ({{field:contractor.signatory.designation}}) to act on our behalf for all matters related to {{field:tender.title}} ({{field:tender.number}}).\n\nSignature\nDate: {{field:contractor.date}}\nPlace: {{field:contractor.place}}",
+            'placeholders' => ['{{field:contractor.firm_name}}','{{field:contractor.signatory.name}}','{{field:contractor.signatory.designation}}','{{field:tender.title}}','{{field:tender.number}}','{{field:contractor.date}}','{{field:contractor.place}}'],
             'createdAt' => $now,
         ],
         'turnover_certificate' => [
             'type' => 'turnover_certificate',
             'title' => 'Annual Turnover Certificate',
-            'body' => "This is to certify that {{contractor_firm_name}} has achieved the following turnovers (audited):\n{{turnover_details}}\n\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{turnover_details}}','{{date}}','{{place}}'],
+            'body' => "This is to certify that {{field:contractor.firm_name}} has achieved the following turnovers (audited):\n{{field:contractor.turnover_details}}\n\nChartered Accountant Signature & Seal\nDate: {{field:contractor.date}}\nPlace: {{field:contractor.place}}",
+            'placeholders' => ['{{field:contractor.firm_name}}','{{field:contractor.turnover_details}}','{{field:contractor.date}}','{{field:contractor.place}}'],
             'createdAt' => $now,
         ],
         'net_worth_certificate' => [
             'type' => 'net_worth_certificate',
             'title' => 'Net Worth Certificate',
-            'body' => "Certified that the Net Worth of {{contractor_firm_name}} as on {{net_worth_as_on}} is ₹ {{net_worth_amount}} (in words: {{net_worth_in_words}}).\n\nChartered Accountant Signature & Seal\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{net_worth_as_on}}','{{net_worth_amount}}','{{net_worth_in_words}}','{{date}}','{{place}}'],
+            'body' => "Certified that the Net Worth of {{field:contractor.firm_name}} as on {{field:contractor.net_worth_as_on}} is ₹ {{field:contractor.net_worth_amount}} (in words: {{field:contractor.net_worth_in_words}}).\n\nChartered Accountant Signature & Seal\nDate: {{field:contractor.date}}\nPlace: {{field:contractor.place}}",
+            'placeholders' => ['{{field:contractor.firm_name}}','{{field:contractor.net_worth_as_on}}','{{field:contractor.net_worth_amount}}','{{field:contractor.net_worth_in_words}}','{{field:contractor.date}}','{{field:contractor.place}}'],
             'createdAt' => $now,
         ],
         'msme_undertaking' => [
             'type' => 'declaration',
             'title' => 'MSME Undertaking (Jharkhand Preference)',
-            'body' => "We, {{contractor_firm_name}}, claim MSME preference as per Jharkhand procurement policy, subject to submission of valid certificates.\n\nAuthorized Signatory\n{{authorized_signatory}}\n{{designation}}\nDate: {{date}}\nPlace: {{place}}",
-            'placeholders' => ['{{contractor_firm_name}}','{{authorized_signatory}}','{{designation}}','{{date}}','{{place}}'],
+            'body' => "We, {{field:contractor.firm_name}}, claim MSME preference as per Jharkhand procurement policy, subject to submission of valid certificates.\n\nAuthorized Signatory\n{{field:contractor.signatory.name}}\n{{field:contractor.signatory.designation}}\nDate: {{field:contractor.date}}\nPlace: {{field:contractor.place}}",
+            'placeholders' => ['{{field:contractor.firm_name}}','{{field:contractor.signatory.name}}','{{field:contractor.signatory.designation}}','{{field:contractor.date}}','{{field:contractor.place}}'],
             'createdAt' => $now,
         ],
     ];
@@ -932,8 +932,8 @@ function pack_generate_annexures(array $pack, array $contractor, string $context
         $matched = pack_match_annexure_template($label) ?? [
             'type' => 'other',
             'title' => $label,
-            'body' => "This annexure format is not auto-generated. Please prepare manually and attach.\n\nTitle: {{annexure_code}} — {{annexure_title}}\nContractor: {{contractor_firm_name}}",
-            'placeholders' => ['{{annexure_code}}','{{annexure_title}}','{{contractor_firm_name}}'],
+            'body' => "This annexure format is not auto-generated. Please prepare manually and attach.\n\nTitle: {{field:tender.annexure_code}} — {{field:tender.annexure_title}}\nContractor: {{field:contractor.firm_name}}",
+            'placeholders' => ['{{field:tender.annexure_code}}','{{field:tender.annexure_title}}','{{field:contractor.firm_name}}'],
             'createdAt' => now_kolkata()->format(DateTime::ATOM),
         ];
         $annexureCode = 'Annexure-' . (count($templates) + count($existingIndex) + 1);
@@ -1056,53 +1056,53 @@ function pack_upsert_offline_tender(array $tender, array $normalized, array $con
 function pack_default_field_meta(): array
 {
     return [
-        'firm.name' => ['label' => 'Firm name', 'group' => 'Contractor Contact', 'max' => 160, 'type' => 'text'],
-        'firm.type' => ['label' => 'Firm type', 'group' => 'Contractor Contact', 'max' => 80, 'type' => 'text'],
-        'firm.address' => ['label' => 'Firm address', 'group' => 'Contractor Contact', 'max' => 400, 'type' => 'textarea'],
-        'firm.city' => ['label' => 'City', 'group' => 'Contractor Contact', 'max' => 120, 'type' => 'text'],
-        'firm.state' => ['label' => 'State', 'group' => 'Contractor Contact', 'max' => 120, 'type' => 'text'],
-        'firm.pincode' => ['label' => 'Pincode', 'group' => 'Contractor Contact', 'max' => 20, 'type' => 'text'],
-        'tax.gst' => ['label' => 'GST number', 'group' => 'Contractor Contact', 'max' => 80, 'type' => 'text'],
-        'tax.pan' => ['label' => 'PAN number', 'group' => 'Contractor Contact', 'max' => 80, 'type' => 'text'],
-        'contact.office_phone' => ['label' => 'Office phone', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
-        'contact.residence_phone' => ['label' => 'Residence phone', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
-        'contact.mobile' => ['label' => 'Mobile', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
-        'contact.fax' => ['label' => 'Fax', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
-        'contact.email' => ['label' => 'Email', 'group' => 'Contractor Contact', 'max' => 120, 'type' => 'text'],
-        'bank.account_no' => ['label' => 'Bank account number', 'group' => 'Bank Details', 'max' => 60, 'type' => 'text'],
-        'bank.ifsc' => ['label' => 'IFSC', 'group' => 'Bank Details', 'max' => 20, 'type' => 'text'],
-        'bank.bank_name' => ['label' => 'Bank name', 'group' => 'Bank Details', 'max' => 120, 'type' => 'text'],
-        'bank.branch' => ['label' => 'Bank branch', 'group' => 'Bank Details', 'max' => 120, 'type' => 'text'],
-        'bank.account_holder' => ['label' => 'Account holder', 'group' => 'Bank Details', 'max' => 160, 'type' => 'text'],
-        'signatory.name' => ['label' => 'Authorized signatory', 'group' => 'Signatory', 'max' => 160, 'type' => 'text'],
-        'signatory.designation' => ['label' => 'Signatory designation', 'group' => 'Signatory', 'max' => 120, 'type' => 'text'],
-        'place' => ['label' => 'Place', 'group' => 'Signatory', 'max' => 120, 'type' => 'text'],
-        'date' => ['label' => 'Date', 'group' => 'Signatory', 'max' => 40, 'type' => 'date'],
-        'tender_title' => ['label' => 'Tender title', 'group' => 'Tender Meta', 'max' => 200, 'type' => 'text', 'readOnly' => true],
-        'tender_number' => ['label' => 'Tender number', 'group' => 'Tender Meta', 'max' => 120, 'type' => 'text', 'readOnly' => true],
-        'department_name' => ['label' => 'Department name', 'group' => 'Tender Meta', 'max' => 200, 'type' => 'text', 'readOnly' => true],
-        'submission_deadline' => ['label' => 'Submission deadline', 'group' => 'Tender Meta', 'max' => 120, 'type' => 'text', 'readOnly' => true],
-        'emd_text' => ['label' => 'EMD details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
-        'fee_text' => ['label' => 'Tender fee details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
-        'sd_text' => ['label' => 'Security deposit details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
-        'pg_text' => ['label' => 'Performance guarantee details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
-        'officer_name' => ['label' => 'Officer name', 'group' => 'Tender Meta', 'max' => 160, 'type' => 'text', 'readOnly' => true],
-        'office_address' => ['label' => 'Office address', 'group' => 'Tender Meta', 'max' => 400, 'type' => 'textarea', 'readOnly' => true],
-        'warranty_years' => ['label' => 'Warranty (years)', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
-        'installation_timeline_days' => ['label' => 'Installation timeline (days)', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
-        'local_content_percent' => ['label' => 'Local content (%)', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
-        'company.core_expertise' => ['label' => 'Core expertise', 'group' => 'Other', 'max' => 240, 'type' => 'textarea'],
-        'company.year_established' => ['label' => 'Year of establishment', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
-        'company.key_licenses' => ['label' => 'Key licenses', 'group' => 'Other', 'max' => 240, 'type' => 'textarea'],
-        'experience_summary_table' => ['label' => 'Experience summary table', 'group' => 'Other', 'max' => 1500, 'type' => 'textarea'],
-        'manpower_list_table' => ['label' => 'Manpower list', 'group' => 'Other', 'max' => 1500, 'type' => 'textarea'],
-        'equipment_list_table' => ['label' => 'Equipment list', 'group' => 'Other', 'max' => 1500, 'type' => 'textarea'],
-        'turnover_details' => ['label' => 'Turnover details', 'group' => 'Other', 'max' => 800, 'type' => 'textarea'],
-        'net_worth_as_on' => ['label' => 'Net worth as on', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
-        'net_worth_amount' => ['label' => 'Net worth amount', 'group' => 'Other', 'max' => 80, 'type' => 'text'],
-        'net_worth_in_words' => ['label' => 'Net worth (in words)', 'group' => 'Other', 'max' => 120, 'type' => 'text'],
-        'compliance.SolarArrayCapacity' => ['label' => 'Solar Array Capacity meets tender spec', 'group' => 'Compliance Table', 'max' => 10, 'type' => 'choice', 'choices' => ['yes', 'no', 'na']],
-        'compliance.SolarModules' => ['label' => 'Solar Modules comply', 'group' => 'Compliance Table', 'max' => 10, 'type' => 'choice', 'choices' => ['yes', 'no', 'na']],
+        'contractor.firm_name' => ['label' => 'Firm name', 'group' => 'Contractor Contact', 'max' => 160, 'type' => 'text'],
+        'contractor.firm_type' => ['label' => 'Firm type', 'group' => 'Contractor Contact', 'max' => 80, 'type' => 'text'],
+        'contractor.address' => ['label' => 'Firm address', 'group' => 'Contractor Contact', 'max' => 400, 'type' => 'textarea'],
+        'contractor.city' => ['label' => 'City', 'group' => 'Contractor Contact', 'max' => 120, 'type' => 'text'],
+        'contractor.state' => ['label' => 'State', 'group' => 'Contractor Contact', 'max' => 120, 'type' => 'text'],
+        'contractor.pincode' => ['label' => 'Pincode', 'group' => 'Contractor Contact', 'max' => 20, 'type' => 'text'],
+        'contractor.gst' => ['label' => 'GST number', 'group' => 'Contractor Contact', 'max' => 80, 'type' => 'text'],
+        'contractor.pan' => ['label' => 'PAN number', 'group' => 'Contractor Contact', 'max' => 80, 'type' => 'text'],
+        'contractor.contact.office_phone' => ['label' => 'Office phone', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
+        'contractor.contact.residence_phone' => ['label' => 'Residence phone', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
+        'contractor.contact.mobile' => ['label' => 'Mobile', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
+        'contractor.contact.fax' => ['label' => 'Fax', 'group' => 'Contractor Contact', 'max' => 30, 'type' => 'text'],
+        'contractor.contact.email' => ['label' => 'Email', 'group' => 'Contractor Contact', 'max' => 120, 'type' => 'text'],
+        'contractor.bank.account_no' => ['label' => 'Bank account number', 'group' => 'Bank Details', 'max' => 60, 'type' => 'text'],
+        'contractor.bank.ifsc' => ['label' => 'IFSC', 'group' => 'Bank Details', 'max' => 20, 'type' => 'text'],
+        'contractor.bank.bank_name' => ['label' => 'Bank name', 'group' => 'Bank Details', 'max' => 120, 'type' => 'text'],
+        'contractor.bank.branch' => ['label' => 'Bank branch', 'group' => 'Bank Details', 'max' => 120, 'type' => 'text'],
+        'contractor.bank.account_holder' => ['label' => 'Account holder', 'group' => 'Bank Details', 'max' => 160, 'type' => 'text'],
+        'contractor.signatory.name' => ['label' => 'Authorized signatory', 'group' => 'Signatory', 'max' => 160, 'type' => 'text'],
+        'contractor.signatory.designation' => ['label' => 'Signatory designation', 'group' => 'Signatory', 'max' => 120, 'type' => 'text'],
+        'contractor.place' => ['label' => 'Place', 'group' => 'Signatory', 'max' => 120, 'type' => 'text'],
+        'contractor.date' => ['label' => 'Date', 'group' => 'Signatory', 'max' => 40, 'type' => 'date'],
+        'tender.title' => ['label' => 'Tender title', 'group' => 'Tender Meta', 'max' => 200, 'type' => 'text', 'readOnly' => true],
+        'tender.number' => ['label' => 'Tender number', 'group' => 'Tender Meta', 'max' => 120, 'type' => 'text', 'readOnly' => true],
+        'tender.departmentName' => ['label' => 'Department name', 'group' => 'Tender Meta', 'max' => 200, 'type' => 'text', 'readOnly' => true],
+        'tender.submission_deadline' => ['label' => 'Submission deadline', 'group' => 'Tender Meta', 'max' => 120, 'type' => 'text', 'readOnly' => true],
+        'tender.emd_text' => ['label' => 'EMD details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
+        'tender.fee_text' => ['label' => 'Tender fee details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
+        'tender.sd_text' => ['label' => 'Security deposit details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
+        'tender.pg_text' => ['label' => 'Performance guarantee details', 'group' => 'Tender Meta', 'max' => 240, 'type' => 'textarea'],
+        'tender.officer_name' => ['label' => 'Officer name', 'group' => 'Tender Meta', 'max' => 160, 'type' => 'text', 'readOnly' => true],
+        'tender.office_address' => ['label' => 'Office address', 'group' => 'Tender Meta', 'max' => 400, 'type' => 'textarea', 'readOnly' => true],
+        'tender.warranty_years' => ['label' => 'Warranty (years)', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
+        'tender.installation_timeline_days' => ['label' => 'Installation timeline (days)', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
+        'tender.local_content_percent' => ['label' => 'Local content (%)', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
+        'contractor.company.core_expertise' => ['label' => 'Core expertise', 'group' => 'Other', 'max' => 240, 'type' => 'textarea'],
+        'contractor.company.year_established' => ['label' => 'Year of establishment', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
+        'contractor.company.key_licenses' => ['label' => 'Key licenses', 'group' => 'Other', 'max' => 240, 'type' => 'textarea'],
+        'table.experience_summary' => ['label' => 'Experience summary table', 'group' => 'Other', 'max' => 1500, 'type' => 'textarea', 'isTable' => true],
+        'table.manpower_list' => ['label' => 'Manpower list', 'group' => 'Other', 'max' => 1500, 'type' => 'textarea', 'isTable' => true],
+        'table.equipment_list' => ['label' => 'Equipment list', 'group' => 'Other', 'max' => 1500, 'type' => 'textarea', 'isTable' => true],
+        'contractor.turnover_details' => ['label' => 'Turnover details', 'group' => 'Other', 'max' => 800, 'type' => 'textarea'],
+        'contractor.net_worth_as_on' => ['label' => 'Net worth as on', 'group' => 'Other', 'max' => 40, 'type' => 'text'],
+        'contractor.net_worth_amount' => ['label' => 'Net worth amount', 'group' => 'Other', 'max' => 80, 'type' => 'text'],
+        'contractor.net_worth_in_words' => ['label' => 'Net worth (in words)', 'group' => 'Other', 'max' => 120, 'type' => 'text'],
+        'table.compliance.solar_array_capacity' => ['label' => 'Solar Array Capacity meets tender spec', 'group' => 'Compliance Table', 'max' => 10, 'type' => 'choice', 'choices' => ['yes', 'no', 'na']],
+        'table.compliance.solar_modules' => ['label' => 'Solar Modules comply', 'group' => 'Compliance Table', 'max' => 10, 'type' => 'choice', 'choices' => ['yes', 'no', 'na']],
     ];
 }
 
@@ -1114,36 +1114,36 @@ function pack_editable_field_catalog(): array
 function pack_field_aliases(): array
 {
     return [
-        'contractor_firm_name' => 'firm.name',
-        'contractor_firm_type' => 'firm.type',
-        'contractor_address' => 'firm.address',
-        'contractor_gst' => 'tax.gst',
-        'contractor_pan' => 'tax.pan',
-        'company_name' => 'firm.name',
-        'dealer_name' => 'firm.name',
-        'contractor_name' => 'firm.name',
-        'firm_name' => 'firm.name',
-        'company_address' => 'firm.address',
-        'pan_no' => 'tax.pan',
-        'pan_number' => 'tax.pan',
-        'gst_no' => 'tax.gst',
-        'gstin' => 'tax.gst',
-        'authorized_signatory' => 'signatory.name',
-        'designation' => 'signatory.designation',
-        'contractor_email' => 'contact.email',
-        'email' => 'contact.email',
-        'contractor_mobile' => 'contact.mobile',
-        'mobile_no' => 'contact.mobile',
-        'phone' => 'contact.mobile',
-        'mobile' => 'contact.mobile',
-        'office_phone' => 'contact.office_phone',
-        'residence_phone' => 'contact.residence_phone',
-        'fax' => 'contact.fax',
-        'bank_name' => 'bank.bank_name',
-        'bank_branch' => 'bank.branch',
-        'bank_account' => 'bank.account_no',
-        'account_no' => 'bank.account_no',
-        'ifsc' => 'bank.ifsc',
+        'contractor_firm_name' => 'contractor.firm_name',
+        'contractor_firm_type' => 'contractor.firm_type',
+        'contractor_address' => 'contractor.address',
+        'contractor_gst' => 'contractor.gst',
+        'contractor_pan' => 'contractor.pan',
+        'company_name' => 'contractor.firm_name',
+        'dealer_name' => 'contractor.firm_name',
+        'contractor_name' => 'contractor.firm_name',
+        'firm_name' => 'contractor.firm_name',
+        'company_address' => 'contractor.address',
+        'pan_no' => 'contractor.pan',
+        'pan_number' => 'contractor.pan',
+        'gst_no' => 'contractor.gst',
+        'gstin' => 'contractor.gst',
+        'authorized_signatory' => 'contractor.signatory.name',
+        'designation' => 'contractor.signatory.designation',
+        'contractor_email' => 'contractor.contact.email',
+        'email' => 'contractor.contact.email',
+        'contractor_mobile' => 'contractor.contact.mobile',
+        'mobile_no' => 'contractor.contact.mobile',
+        'phone' => 'contractor.contact.mobile',
+        'mobile' => 'contractor.contact.mobile',
+        'office_phone' => 'contractor.contact.office_phone',
+        'residence_phone' => 'contractor.contact.residence_phone',
+        'fax' => 'contractor.contact.fax',
+        'bank_name' => 'contractor.bank.bank_name',
+        'bank_branch' => 'contractor.bank.branch',
+        'bank_account' => 'contractor.bank.account_no',
+        'account_no' => 'contractor.bank.account_no',
+        'ifsc' => 'contractor.bank.ifsc',
     ];
 }
 
@@ -1166,7 +1166,11 @@ function pack_table_field_keys(array $table): array
 {
     $keys = [];
     $columns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
-    foreach ((array)($table['rows'] ?? []) as $row) {
+    $rows = is_array($table['rows'] ?? null) ? $table['rows'] : [];
+    if (!$rows) {
+        $rows = array_fill(0, 3, []);
+    }
+    foreach ($rows as $row) {
         if (!is_array($row)) {
             continue;
         }
@@ -1301,29 +1305,36 @@ function pack_normalize_placeholder_key(string $raw): string
     $key = preg_replace('/^{+\s*/', '', $key);
     $key = preg_replace('/\s*}+$/', '', $key);
     $key = strtolower(trim($key));
+    if (str_starts_with($key, 'field:')) {
+        $key = substr($key, 6);
+    }
+    if (str_starts_with($key, 'table:')) {
+        $tableKey = placeholder_canonical_table_key(substr($key, 6));
+        return 'table:' . $tableKey;
+    }
     $aliases = pack_field_aliases();
-    return $aliases[$key] ?? $key;
+    return $aliases[$key] ?? placeholder_canonical_key($key);
 }
 
 function pack_tender_placeholder_values(array $pack): array
 {
     $fees = is_array($pack['fees'] ?? null) ? $pack['fees'] : [];
     return [
-        'tender_title' => $pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender'),
-        'tender_number' => $pack['tenderNumber'] ?? '',
-        'department_name' => $pack['departmentName'] ?? ($pack['deptName'] ?? ($pack['sourceTender']['deptName'] ?? '')),
-        'submission_deadline' => $pack['submissionDeadline'] ?? ($pack['dates']['submission'] ?? ''),
-        'emd_text' => $fees['emdText'] ?? '',
-        'fee_text' => $fees['tenderFeeText'] ?? '',
-        'sd_text' => $fees['sdText'] ?? '',
-        'pg_text' => $fees['pgText'] ?? '',
-        'officer_name' => $pack['officerName'] ?? '',
-        'office_address' => $pack['officeAddress'] ?? '',
-        'warranty_years' => $pack['warrantyYears'] ?? '',
-        'installation_timeline_days' => $pack['installationTimelineDays'] ?? '',
-        'local_content_percent' => $pack['localContentPercent'] ?? '',
-        'annexure_title' => '',
-        'annexure_code' => '',
+        'tender.title' => $pack['tenderTitle'] ?? ($pack['title'] ?? 'Tender'),
+        'tender.number' => $pack['tenderNumber'] ?? '',
+        'tender.departmentName' => $pack['departmentName'] ?? ($pack['deptName'] ?? ($pack['sourceTender']['deptName'] ?? '')),
+        'tender.submission_deadline' => $pack['submissionDeadline'] ?? ($pack['dates']['submission'] ?? ''),
+        'tender.emd_text' => $fees['emdText'] ?? '',
+        'tender.fee_text' => $fees['tenderFeeText'] ?? '',
+        'tender.sd_text' => $fees['sdText'] ?? '',
+        'tender.pg_text' => $fees['pgText'] ?? '',
+        'tender.officer_name' => $pack['officerName'] ?? '',
+        'tender.office_address' => $pack['officeAddress'] ?? '',
+        'tender.warranty_years' => $pack['warrantyYears'] ?? '',
+        'tender.installation_timeline_days' => $pack['installationTimelineDays'] ?? '',
+        'tender.local_content_percent' => $pack['localContentPercent'] ?? '',
+        'tender.annexure_title' => '',
+        'tender.annexure_code' => '',
     ];
 }
 
@@ -1332,17 +1343,17 @@ function pack_profile_placeholder_values(array $contractor): array
     $keys = array_keys(assisted_v2_canonical_key_set());
 
     $values = [
-        'date' => '',
-        'company.core_expertise' => $contractor['coreExpertise'] ?? '',
-        'company.year_established' => $contractor['yearEstablished'] ?? '',
-        'company.key_licenses' => $contractor['keyLicenses'] ?? '',
-        'experience_summary_table' => '',
-        'manpower_list_table' => '',
-        'equipment_list_table' => '',
-        'turnover_details' => '',
-        'net_worth_as_on' => '',
-        'net_worth_amount' => '',
-        'net_worth_in_words' => '',
+        'contractor.date' => '',
+        'contractor.company.core_expertise' => $contractor['coreExpertise'] ?? '',
+        'contractor.company.year_established' => $contractor['yearEstablished'] ?? '',
+        'contractor.company.key_licenses' => $contractor['keyLicenses'] ?? '',
+        'table.experience_summary' => '',
+        'table.manpower_list' => '',
+        'table.equipment_list' => '',
+        'contractor.turnover_details' => '',
+        'contractor.net_worth_as_on' => '',
+        'contractor.net_worth_amount' => '',
+        'contractor.net_worth_in_words' => '',
     ];
 
     foreach ($keys as $key) {
@@ -1393,19 +1404,23 @@ function pack_placeholder_value_map(array $pack, array $contractor, ?array $cata
     $catalog = $catalog ?? pack_field_meta_catalog($pack);
     foreach (array_keys($catalog) as $key) {
         $value = pack_resolve_field_value($key, $pack, $contractor, true);
-        $map['{{' . $key . '}}'] = $prefill($value, 6);
+        $meta = $catalog[$key] ?? [];
+        if (!empty($meta['isTable'])) {
+            $tableKey = str_starts_with($key, 'table.') ? substr($key, 6) : $key;
+            $map['{{field:table:' . $tableKey . '}}'] = $prefill($value, 6);
+            continue;
+        }
         $map['{{field:' . $key . '}}'] = $prefill($value, 6);
     }
 
     $aliases = pack_field_aliases();
     foreach ($aliases as $alias => $canonical) {
         $value = pack_resolve_field_value($canonical, $pack, $contractor, true);
-        $map['{{' . $alias . '}}'] = $prefill($value, 6);
         $map['{{field:' . $alias . '}}'] = $prefill($value, 6);
     }
 
-    $map['{{annexure_title}}'] = '';
-    $map['{{annexure_code}}'] = '';
+    $map['{{field:tender.annexure_title}}'] = '';
+    $map['{{field:tender.annexure_code}}'] = '';
 
     return $map;
 }
@@ -1435,10 +1450,10 @@ function pack_seed_field_registry(array $pack, array $contractor, array $annexur
 function pack_placeholder_suggestion(string $key, array $pack, array $contractor): string
 {
     $key = pack_normalize_placeholder_key($key);
-    if ($key === 'date') {
+    if ($key === 'contractor.date') {
         return now_kolkata()->format('Y-m-d');
     }
-    if ($key === 'place') {
+    if ($key === 'contractor.place') {
         $place = trim((string)($contractor['placeDefault'] ?? ''));
         if ($place === '') {
             $place = trim((string)($contractor['district'] ?? ''));
@@ -1456,12 +1471,22 @@ function pack_extract_placeholders_from_template(array $template, array &$errors
         $errors[] = 'invalid_body_template';
     } elseif (is_string($body)) {
         $matches = [];
-        $matched = preg_match_all('/{{\s*(?:field:)?([a-z0-9_.]+)\s*}}/i', $body, $matches);
+        $matched = preg_match_all('/{{\s*field:([a-z0-9_.-]+)\s*}}/i', $body, $matches);
         if ($matched === false) {
             $errors[] = 'placeholder_parse_failed';
         } elseif (!empty($matches[1])) {
             foreach ($matches[1] as $raw) {
                 $key = pack_normalize_placeholder_key($raw);
+                if ($key !== '') {
+                    $keys[] = $key;
+                }
+            }
+        }
+        $tableMatches = [];
+        $tableFound = preg_match_all('/{{\s*field:table:([a-z0-9_.-]+)\s*}}/i', $body, $tableMatches);
+        if ($tableFound && !empty($tableMatches[1])) {
+            foreach ($tableMatches[1] as $raw) {
+                $key = pack_normalize_placeholder_key('table.' . $raw);
                 if ($key !== '') {
                     $keys[] = $key;
                 }
@@ -1622,8 +1647,8 @@ function pack_render_field_value_html(string $key, array $pack, array $contracto
         if ($printMode) {
             return '<span class="field-blank">' . $blank . '</span>';
         }
-        $href = '/contractor/pack_view.php?packId=' . urlencode($packId) . '#field-registry';
-        return '<a class="field-blank" href="' . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '" title="Fill ' . htmlspecialchars($meta['label'] ?? $key, ENT_QUOTES, 'UTF-8') . '">' . $blank . '</a>';
+        $label = htmlspecialchars($meta['label'] ?? $key, ENT_QUOTES, 'UTF-8');
+        return '<span class="field-missing">Missing field: ' . $label . '</span>';
     }
     return '<span class="field-value">' . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '</span>';
 }
@@ -1635,7 +1660,7 @@ function pack_template_table_placeholders(array $template): array
         return [];
     }
     $matches = [];
-    $found = preg_match_all('/{{\s*(?:field:)?table:\s*([a-z0-9_.-]+)\s*}}/i', $body, $matches);
+    $found = preg_match_all('/{{\s*field:table:\s*([a-z0-9_.-]+)\s*}}/i', $body, $matches);
     if ($found === false || empty($matches[1])) {
         return [];
     }
@@ -1720,19 +1745,17 @@ function pack_render_annexure_body_html(array $template, array $pack, array $con
 {
     $body = (string)($template['renderTemplate'] ?? ($template['bodyTemplate'] ?? ''));
     $body = str_replace(
-        ['{{annexure_title}}', '{{annexure_code}}'],
-        [(string)($template['title'] ?? ''), (string)($template['annexureCode'] ?? '')],
+        ['{{field:tender.annexure_title}}', '{{field:tender.annexure_code}}', '{{annexure_title}}', '{{annexure_code}}'],
+        [
+            (string)($template['title'] ?? ''),
+            (string)($template['annexureCode'] ?? ''),
+            (string)($template['title'] ?? ''),
+            (string)($template['annexureCode'] ?? ''),
+        ],
         $body
     );
-    $body = preg_replace_callback('/{{\s*(?!field:)([a-z0-9_.]+)\s*}}/i', static function (array $match) use ($catalog): string {
-        $key = pack_normalize_placeholder_key($match[1] ?? '');
-        if ($key !== '' && isset($catalog[$key])) {
-            return '{{field:' . $key . '}}';
-        }
-        return $match[0];
-    }, $body) ?? $body;
-    if (!str_contains($body, '{{field:signatory.name}}') && stripos($body, 'authorized signatory') === false) {
-        $body .= "\n\nAuthorized Signatory\n{{field:signatory.name}}\n{{field:signatory.designation}}\n{{field:firm.name}}\nPlace: {{field:place}}\nDate: {{field:date}}";
+    if (!str_contains($body, '{{field:contractor.signatory.name}}') && stripos($body, 'authorized signatory') === false) {
+        $body .= "\n\nAuthorized Signatory\n{{field:contractor.signatory.name}}\n{{field:contractor.signatory.designation}}\n{{field:contractor.firm_name}}\nPlace: {{field:contractor.place}}\nDate: {{field:contractor.date}}";
     }
     $tableMap = [];
     foreach ((array)($template['tables'] ?? []) as $table) {
@@ -1757,19 +1780,24 @@ function pack_render_annexure_body_html(array $template, array $pack, array $con
             continue;
         }
         $raw = trim((string)$chunk);
-        if (stripos($raw, 'field:') === 0) {
-            $key = pack_normalize_placeholder_key(substr($raw, 6));
-            if (stripos($key, 'table:') === 0) {
-                $tableId = pack_normalize_placeholder_key(substr($key, 6));
-                $html .= $tableMap[$tableId] ?? '<span class="field-blank">' . pack_field_blank_text($catalog, $tableId) . '</span>';
+        if (stripos($raw, 'field:table:') === 0) {
+            $tableId = pack_normalize_placeholder_key(substr($raw, 12));
+            if (isset($tableMap[$tableId])) {
+                $html .= $tableMap[$tableId];
                 continue;
             }
-            $html .= pack_render_field_value_html($key, $pack, $contractor, $catalog, $packId, $printMode);
+            $fieldKey = 'table.' . $tableId;
+            $value = pack_resolve_field_value($fieldKey, $pack, $contractor, true);
+            if (trim($value) !== '') {
+                $html .= '<div class="field-value">' . nl2br(htmlspecialchars($value, ENT_QUOTES, 'UTF-8')) . '</div>';
+                continue;
+            }
+            $html .= '<span class="field-blank">' . pack_field_blank_text($catalog, $fieldKey) . '</span>';
             continue;
         }
-        if (stripos($raw, 'table:') === 0) {
-            $tableId = pack_normalize_placeholder_key(substr($raw, 6));
-            $html .= $tableMap[$tableId] ?? '<span class="field-blank">' . pack_field_blank_text($catalog, $tableId) . '</span>';
+        if (stripos($raw, 'field:') === 0) {
+            $key = pack_normalize_placeholder_key(substr($raw, 6));
+            $html .= pack_render_field_value_html($key, $pack, $contractor, $catalog, $packId, $printMode);
             continue;
         }
         $html .= '<span class="field-blank">' . pack_field_blank_text($catalog, $raw) . '</span>';

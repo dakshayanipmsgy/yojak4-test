@@ -29,6 +29,11 @@ safe_page(function () {
         render_error_page('Template invalid.');
         return;
     }
+    $migrationStats = [];
+    $templateBody = (string)($template['bodyHtml'] ?? '');
+    $migratedBody = migrate_placeholders_to_canonical($templateBody, $migrationStats);
+    $template['bodyHtml'] = $migratedBody;
+    $wasMigrated = $migratedBody !== $templateBody;
 
     $errors = [];
     $placeholderOptions = department_template_placeholders();
@@ -47,6 +52,18 @@ safe_page(function () {
         }
 
         if (!$errors) {
+            $stats = [];
+            $template['bodyHtml'] = migrate_placeholders_to_canonical($template['bodyHtml'], $stats);
+            $validation = validate_placeholders($template['bodyHtml'], placeholder_registry());
+            if (!empty($validation['invalidTokens'])) {
+                $errors[] = 'Invalid placeholders: ' . implode(', ', $validation['invalidTokens']);
+            }
+            if (!empty($validation['unknownKeys'])) {
+                $errors[] = 'Unknown fields: ' . implode(', ', $validation['unknownKeys']);
+            }
+        }
+
+        if (!$errors) {
             $template['placeholders'] = validate_template_placeholders(is_array($template['placeholders']) ? $template['placeholders'] : []);
             save_department_template($deptId, $template);
             append_department_audit($deptId, [
@@ -60,7 +77,7 @@ safe_page(function () {
     }
 
     $title = get_app_config()['appName'] . ' | Edit Template';
-    render_layout($title, function () use ($template, $errors, $placeholderOptions) {
+    render_layout($title, function () use ($template, $errors, $placeholderOptions, $wasMigrated) {
         ?>
         <div class="card">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
@@ -69,10 +86,15 @@ safe_page(function () {
                     <p class="muted" style="margin:0;"><?= sanitize('Update template content.'); ?></p>
                 </div>
                 <a class="btn secondary" href="/department/templates.php"><?= sanitize('Back'); ?></a>
+        </div>
+        <?php if ($wasMigrated): ?>
+            <div class="card" style="margin-top:12px;border-color:#fbbf24;background:#fff8e1;">
+                <strong>Template upgraded:</strong> Placeholder syntax has been migrated to the canonical format. Review and save to keep the changes.
             </div>
-            <?php if ($errors): ?>
-                <div class="flashes" style="margin-top:12px;">
-                    <?php foreach ($errors as $error): ?>
+        <?php endif; ?>
+        <?php if ($errors): ?>
+            <div class="flashes" style="margin-top:12px;">
+                <?php foreach ($errors as $error): ?>
                         <div class="flash error"><?= sanitize($error); ?></div>
                     <?php endforeach; ?>
                 </div>
@@ -83,13 +105,29 @@ safe_page(function () {
                     <label><?= sanitize('Template ID'); ?></label>
                     <div class="pill"><?= sanitize($template['templateId'] ?? ''); ?></div>
                 </div>
-                <div class="field">
-                    <label for="title"><?= sanitize('Title'); ?></label>
-                    <input id="title" name="title" value="<?= sanitize($template['title'] ?? ''); ?>" required>
-                </div>
-                <div class="field">
-                    <label for="bodyHtml"><?= sanitize('Body'); ?></label>
-                    <textarea id="bodyHtml" name="bodyHtml" rows="8" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;"><?= htmlspecialchars($template['bodyHtml'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                <div style="display:grid; gap:12px; grid-template-columns:minmax(0,2fr) minmax(0,1fr);">
+                    <div>
+                        <div class="field">
+                            <label for="title"><?= sanitize('Title'); ?></label>
+                            <input id="title" name="title" value="<?= sanitize($template['title'] ?? ''); ?>" required>
+                        </div>
+                        <div class="field">
+                            <label for="bodyHtml"><?= sanitize('Body'); ?></label>
+                            <textarea id="bodyHtml" name="bodyHtml" rows="8" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;"><?= htmlspecialchars($template['bodyHtml'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                        </div>
+                    </div>
+                    <div class="card" style="padding:12px;">
+                        <strong>Insert Field</strong>
+                        <p class="muted">Click a field to insert placeholder.</p>
+                        <input type="search" id="field-search" placeholder="Search fields..." style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);margin-bottom:8px;">
+                        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                            <?php foreach ($placeholderOptions as $ph): ?>
+                                <button type="button" class="btn secondary field-btn" data-token="<?= sanitize($ph); ?>">
+                                    <?= sanitize($ph); ?>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
                 </div>
                 <div class="field">
                     <label><?= sanitize('Placeholders'); ?></label>
@@ -108,6 +146,33 @@ safe_page(function () {
                 </div>
             </form>
         </div>
+        <script>
+            const fieldButtons = document.querySelectorAll('.field-btn');
+            const bodyEl = document.getElementById('bodyHtml');
+            const searchInput = document.getElementById('field-search');
+            fieldButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (!bodyEl) return;
+                    const token = btn.dataset.token || '';
+                    const start = bodyEl.selectionStart || 0;
+                    const end = bodyEl.selectionEnd || 0;
+                    const text = bodyEl.value || '';
+                    bodyEl.value = text.slice(0, start) + token + text.slice(end);
+                    const pos = start + token.length;
+                    bodyEl.focus();
+                    bodyEl.setSelectionRange(pos, pos);
+                });
+            });
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    const term = (searchInput.value || '').toLowerCase();
+                    fieldButtons.forEach(btn => {
+                        const text = (btn.dataset.token || '').toLowerCase();
+                        btn.style.display = term === '' || text.includes(term) ? '' : 'none';
+                    });
+                });
+            }
+        </script>
         <?php
     });
 });

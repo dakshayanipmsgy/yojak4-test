@@ -18,11 +18,24 @@ safe_page(function () {
 
     $docId = trim($_POST['docId'] ?? '');
     $label = trim($_POST['label'] ?? '');
+    $templateBody = (string)($_POST['templateBody'] ?? '');
+    $stats = [];
+    $templateBody = migrate_placeholders_to_canonical($templateBody, $stats);
+    $registry = placeholder_registry(['scheme' => $draft]);
+    $validation = validate_placeholders($templateBody, $registry);
+    if (!empty($validation['invalidTokens']) || !empty($validation['unknownKeys'])) {
+        $errors = array_merge(
+            array_map(static fn($token) => 'Invalid placeholder: ' . $token, $validation['invalidTokens']),
+            array_map(static fn($token) => 'Unknown field: ' . $token, $validation['unknownKeys'])
+        );
+        set_flash('error', implode(' ', $errors));
+        redirect('/superadmin/schemes/edit.php?schemeCode=' . urlencode($schemeCode) . '&version=draft&tab=documents');
+    }
     if ($docId !== '') {
         $draft = scheme_add_document($draft, [
             'docId' => $docId,
             'label' => $label ?: $docId,
-            'templateBody' => $_POST['templateBody'] ?? '',
+            'templateBody' => $templateBody,
             'autoGenerate' => isset($_POST['autoGenerate']),
             'allowManual' => isset($_POST['allowManual']),
             'allowRegen' => isset($_POST['allowRegen']),
