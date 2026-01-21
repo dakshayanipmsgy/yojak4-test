@@ -729,12 +729,12 @@ function load_global_templates_cache(string $deptId): array
 function department_template_placeholders(): array
 {
     return [
-        '{{deptName}}',
-        '{{tenderId}}',
-        '{{workorderId}}',
-        '{{docDate}}',
-        '{{userName}}',
-        '{{docTitle}}',
+        '{{field:tender.departmentName}}',
+        '{{field:tender.number}}',
+        '{{field:tender.workorder_id}}',
+        '{{field:tender.document_date}}',
+        '{{field:tender.user_name}}',
+        '{{field:tender.document_title}}',
     ];
 }
 

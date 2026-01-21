@@ -20,6 +20,7 @@ safe_page(function () {
     }
 
     $newId = generate_contractor_template_id_v2($yojId);
+    $tokens = template_placeholder_tokens((string)($global['body'] ?? ''));
     $template = [
         'id' => $newId,
         'tplId' => $newId,
@@ -31,8 +32,13 @@ safe_page(function () {
         'description' => $global['description'] ?? '',
         'templateType' => $global['templateType'] ?? 'simple_html',
         'body' => $global['body'] ?? '',
-        'fieldRefs' => $global['fieldRefs'] ?? template_placeholder_tokens((string)($global['body'] ?? '')),
-        'placeholders' => array_map(static fn($key) => '{{field:' . $key . '}}', template_placeholder_tokens((string)($global['body'] ?? ''))),
+        'fieldRefs' => $global['fieldRefs'] ?? array_values(array_filter($tokens, static fn($key) => !str_starts_with($key, 'table:'))),
+        'placeholders' => array_map(static function ($key) {
+            if (str_starts_with($key, 'table:')) {
+                return '{{field:table:' . substr($key, 6) . '}}';
+            }
+            return '{{field:' . $key . '}}';
+        }, $tokens),
         'published' => true,
     ];
 

@@ -18,12 +18,15 @@ safe_page(function () {
     $roles = $draft['roles'] ?? [];
     $modules = $draft['modules'] ?? [];
     $fields = $draft['fieldDictionary'] ?? [];
+    $schemeRegistry = placeholder_registry(['scheme' => $draft]);
+    $schemeFieldCatalog = $schemeRegistry['fields'];
+    $schemeTableCatalog = $schemeRegistry['tables'];
     $packs = $draft['packs'] ?? [];
     $documents = $draft['documents'] ?? [];
     $promptTemplates = scheme_load_prompt_templates();
     $canEditAdvanced = ($actor['type'] ?? '') === 'superadmin' || employee_has_permission($actor, 'scheme_builder_advanced');
 
-    render_layout('Scheme Builder', function () use ($schemeCode, $draft, $tab, $roles, $modules, $fields, $packs, $documents, $actor, $promptTemplates, $canEditAdvanced) {
+    render_layout('Scheme Builder', function () use ($schemeCode, $draft, $tab, $roles, $modules, $fields, $packs, $documents, $actor, $promptTemplates, $canEditAdvanced, $schemeFieldCatalog, $schemeTableCatalog) {
         ?>
         <style>
             .tabs { display:flex; gap:12px; flex-wrap:wrap; margin:16px 0; }
@@ -943,6 +946,31 @@ safe_page(function () {
         <?php } ?>
 
         <?php if ($tab === 'documents') { ?>
+            <?php
+                $groupedFields = [
+                    'Contractor' => [],
+                    'Tender' => [],
+                    'Case/Scheme' => [],
+                    'Module Fields' => [],
+                    'Custom Saved Fields' => [],
+                ];
+                foreach ($schemeFieldCatalog as $key => $meta) {
+                    $label = $meta['label'] ?? $key;
+                    if (str_starts_with($key, 'contractor.')) {
+                        $groupedFields['Contractor'][] = ['key' => $key, 'label' => $label];
+                    } elseif (str_starts_with($key, 'tender.')) {
+                        $groupedFields['Tender'][] = ['key' => $key, 'label' => $label];
+                    } elseif (str_starts_with($key, 'case.')) {
+                        $groupedFields['Case/Scheme'][] = ['key' => $key, 'label' => $label];
+                    } elseif (str_starts_with($key, 'module.') || preg_match('/^[a-z0-9_]+\\./i', $key)) {
+                        $groupedFields['Module Fields'][] = ['key' => $key, 'label' => $label];
+                    } elseif (str_starts_with($key, 'custom.')) {
+                        $groupedFields['Custom Saved Fields'][] = ['key' => $key, 'label' => $label];
+                    } else {
+                        $groupedFields['Case/Scheme'][] = ['key' => $key, 'label' => $label];
+                    }
+                }
+            ?>
             <div class="grid">
                 <div class="card" style="padding:16px;">
                     <h3>Documents Library</h3>
@@ -977,12 +1005,26 @@ safe_page(function () {
                             <div class="sidebar">
                                 <strong>Insert Field</strong>
                                 <p class="muted">Click a field to insert placeholder.</p>
+                                <input type="search" class="field-search" placeholder="Search fields..." style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);margin-bottom:8px;">
                                 <div style="display:grid; gap:8px;">
-                                    <?php foreach ($fields as $field) { ?>
-                                        <button class="placeholder-btn" type="button" data-key="<?= sanitize($field['key']); ?>">
-                                            <span><?= sanitize($field['label']); ?></span>
-                                            <span class="muted">{{field:<?= sanitize($field['key']); ?>}}</span>
-                                        </button>
+                                    <?php foreach ($groupedFields as $groupLabel => $items) { ?>
+                                        <?php if (!$items) { continue; } ?>
+                                        <strong><?= sanitize($groupLabel); ?></strong>
+                                        <?php foreach ($items as $field) { ?>
+                                            <button class="placeholder-btn" type="button" data-key="<?= sanitize($field['key']); ?>">
+                                                <span><?= sanitize($field['label']); ?></span>
+                                                <span class="muted">{{field:<?= sanitize($field['key']); ?>}}</span>
+                                            </button>
+                                        <?php } ?>
+                                    <?php } ?>
+                                    <?php if ($schemeTableCatalog) { ?>
+                                        <strong>Tables</strong>
+                                        <?php foreach ($schemeTableCatalog as $key => $meta) { ?>
+                                            <button class="placeholder-btn table-btn" type="button" data-table-key="<?= sanitize($key); ?>">
+                                                <span><?= sanitize($meta['label'] ?? $key); ?></span>
+                                                <span class="muted">{{field:table:<?= sanitize($key); ?>}}</span>
+                                            </button>
+                                        <?php } ?>
                                     <?php } ?>
                                 </div>
                             </div>
@@ -1032,12 +1074,26 @@ safe_page(function () {
                             <div class="sidebar">
                                 <strong>Insert Field</strong>
                                 <p class="muted">Click a field to insert placeholder.</p>
+                                <input type="search" class="field-search" placeholder="Search fields..." style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);margin-bottom:8px;">
                                 <div style="display:grid; gap:8px;">
-                                    <?php foreach ($fields as $field) { ?>
-                                        <button class="placeholder-btn" type="button" data-key="<?= sanitize($field['key']); ?>">
-                                            <span><?= sanitize($field['label']); ?></span>
-                                            <span class="muted">{{field:<?= sanitize($field['key']); ?>}}</span>
-                                        </button>
+                                    <?php foreach ($groupedFields as $groupLabel => $items) { ?>
+                                        <?php if (!$items) { continue; } ?>
+                                        <strong><?= sanitize($groupLabel); ?></strong>
+                                        <?php foreach ($items as $field) { ?>
+                                            <button class="placeholder-btn" type="button" data-key="<?= sanitize($field['key']); ?>">
+                                                <span><?= sanitize($field['label']); ?></span>
+                                                <span class="muted">{{field:<?= sanitize($field['key']); ?>}}</span>
+                                            </button>
+                                        <?php } ?>
+                                    <?php } ?>
+                                    <?php if ($schemeTableCatalog) { ?>
+                                        <strong>Tables</strong>
+                                        <?php foreach ($schemeTableCatalog as $key => $meta) { ?>
+                                            <button class="placeholder-btn table-btn" type="button" data-table-key="<?= sanitize($key); ?>">
+                                                <span><?= sanitize($meta['label'] ?? $key); ?></span>
+                                                <span class="muted">{{field:table:<?= sanitize($key); ?>}}</span>
+                                            </button>
+                                        <?php } ?>
                                     <?php } ?>
                                 </div>
                             </div>
@@ -1081,6 +1137,17 @@ safe_page(function () {
                     btn.addEventListener('click', () => {
                         const editor = activeEditor || document.querySelector('.template-editor');
                         if (!editor) return;
+                        if (btn.dataset.tableKey) {
+                            const placeholder = `{{field:table:${btn.dataset.tableKey}}}`;
+                            const start = editor.selectionStart || 0;
+                            const end = editor.selectionEnd || 0;
+                            const text = editor.value;
+                            editor.value = text.slice(0, start) + placeholder + text.slice(end);
+                            editor.focus();
+                            const pos = start + placeholder.length;
+                            editor.setSelectionRange(pos, pos);
+                            return;
+                        }
                         const key = btn.dataset.key || '';
                         const placeholder = `{{field:${key}}}`;
                         const start = editor.selectionStart || 0;
@@ -1090,6 +1157,16 @@ safe_page(function () {
                         editor.focus();
                         const pos = start + placeholder.length;
                         editor.setSelectionRange(pos, pos);
+                    });
+                });
+                document.querySelectorAll('.field-search').forEach(searchInput => {
+                    searchInput.addEventListener('input', () => {
+                        const term = (searchInput.value || '').toLowerCase();
+                        const buttons = searchInput.closest('.sidebar').querySelectorAll('.placeholder-btn');
+                        buttons.forEach(btn => {
+                            const text = (btn.textContent || '').toLowerCase();
+                            btn.style.display = term === '' || text.includes(term) ? '' : 'none';
+                        });
                     });
                 });
             </script>

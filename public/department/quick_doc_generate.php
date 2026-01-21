@@ -41,14 +41,16 @@ safe_page(function () {
 
     $department = load_department($deptId);
     $replacements = [
-        '{{deptName}}' => $department['nameEn'] ?? $deptId,
-        '{{tenderId}}' => $tenderId,
-        '{{workorderId}}' => $workorderId,
-        '{{docDate}}' => now_kolkata()->format('d M Y H:i'),
-        '{{userName}}' => $user['displayName'] ?? ($user['username'] ?? ''),
-        '{{docTitle}}' => $docTitle,
+        '{{field:tender.departmentName}}' => $department['nameEn'] ?? $deptId,
+        '{{field:tender.number}}' => $tenderId,
+        '{{field:tender.workorder_id}}' => $workorderId,
+        '{{field:tender.document_date}}' => now_kolkata()->format('d M Y H:i'),
+        '{{field:tender.user_name}}' => $user['displayName'] ?? ($user['username'] ?? ''),
+        '{{field:tender.document_title}}' => $docTitle,
     ];
     $body = $template['bodyHtml'] ?? '';
+    $stats = [];
+    $body = migrate_placeholders_to_canonical($body, $stats);
     $renderedBody = str_replace(array_keys($replacements), array_values($replacements), $body);
 
     $header = $showHeader ? '<div style="padding:12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;">'

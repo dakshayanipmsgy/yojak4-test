@@ -165,12 +165,19 @@ function template_placeholder_tokens(string $body): array
     if ($body === '') {
         return [];
     }
-    preg_match_all('/{{\s*field:([^}]+)}}/i', $body, $matches);
+    preg_match_all('/{{\s*field:([a-z0-9_.-]+)\s*}}/i', $body, $matches);
     $tokens = [];
     foreach ($matches[1] ?? [] as $raw) {
         $key = pack_normalize_placeholder_key((string)$raw);
         if ($key !== '') {
             $tokens[] = $key;
+        }
+    }
+    preg_match_all('/{{\s*field:table:([a-z0-9_.-]+)\s*}}/i', $body, $tableMatches);
+    foreach ($tableMatches[1] ?? [] as $raw) {
+        $tableKey = placeholder_canonical_table_key((string)$raw);
+        if ($tableKey !== '') {
+            $tokens[] = 'table:' . $tableKey;
         }
     }
     return array_values(array_unique($tokens));
