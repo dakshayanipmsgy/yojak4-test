@@ -109,6 +109,124 @@ function department_generated_docs_path(string $deptId): string
     return department_path($deptId) . '/generated_docs';
 }
 
+function department_memory_path(string $deptId): string
+{
+    return department_path($deptId) . '/dept_memory.json';
+}
+
+function department_memory_defaults(): array
+{
+    return [
+        'version' => 1,
+        'fields' => [],
+        'lastUpdatedAt' => null,
+    ];
+}
+
+function department_memory_label_from_key(string $key): string
+{
+    return profile_memory_label_from_key($key);
+}
+
+function load_department_memory(string $deptId): array
+{
+    $path = department_memory_path($deptId);
+    $data = readJson($path);
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $memory = array_merge(department_memory_defaults(), $data);
+    if (!is_array($memory['fields'] ?? null)) {
+        $memory['fields'] = [];
+    }
+    return $memory;
+}
+
+function save_department_memory(string $deptId, array $memory): void
+{
+    writeJsonAtomic(department_memory_path($deptId), $memory);
+}
+
+function department_memory_is_eligible_key(string $key, string $value): bool
+{
+    $normalized = pack_normalize_placeholder_key($key);
+    if ($normalized === '') {
+        return false;
+    }
+    if (preg_match('/^table\\..+\\.(rate|amount)$/', $normalized)) {
+        return false;
+    }
+    if (profile_memory_value_contains_pricing($value)) {
+        return false;
+    }
+    return true;
+}
+
+function department_memory_upsert_entries(string $deptId, array $entries, string $source): int
+{
+    if (!$entries) {
+        return 0;
+    }
+    $memory = load_department_memory($deptId);
+    $fields = is_array($memory['fields'] ?? null) ? $memory['fields'] : [];
+    $now = now_kolkata()->format(DateTime::ATOM);
+    $updated = 0;
+
+    foreach ($entries as $key => $entry) {
+        $normalized = pack_normalize_placeholder_key((string)$key);
+        if ($normalized === '') {
+            continue;
+        }
+        $rawValue = (string)($entry['value'] ?? '');
+        $type = (string)($entry['type'] ?? 'text');
+        $type = $type === 'textarea' ? 'textarea' : ($type === 'number' ? 'number' : ($type === 'choice' ? 'choice' : 'text'));
+        $value = profile_memory_limit_value($rawValue, profile_memory_max_length($type));
+        if ($value === '') {
+            continue;
+        }
+        if (!department_memory_is_eligible_key($normalized, $value)) {
+            continue;
+        }
+        if (!preg_match('/^(department|tender|user|custom)\\./', $normalized)) {
+            $normalized = 'custom.' . $normalized;
+        }
+        $label = trim((string)($entry['label'] ?? ''));
+        if ($label === '') {
+            $label = department_memory_label_from_key($normalized);
+        }
+        $fields[$normalized] = [
+            'label' => $label,
+            'value' => $value,
+            'type' => $type,
+            'updatedAt' => $now,
+            'source' => $source,
+        ];
+        $updated++;
+    }
+
+    $memory['fields'] = $fields;
+    $memory['lastUpdatedAt'] = $now;
+    save_department_memory($deptId, $memory);
+    return $updated;
+}
+
+function department_memory_values(string $deptId): array
+{
+    $memory = load_department_memory($deptId);
+    $values = [];
+    foreach (($memory['fields'] ?? []) as $key => $entry) {
+        $normalized = pack_normalize_placeholder_key((string)$key);
+        if ($normalized === '') {
+            continue;
+        }
+        $value = trim((string)($entry['value'] ?? ''));
+        if ($value !== '') {
+            $values[$normalized] = $value;
+        }
+    }
+    return $values;
+}
+
 function department_docs_path(string $deptId): string
 {
     return department_path($deptId) . '/docs';

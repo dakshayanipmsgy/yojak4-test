@@ -34,6 +34,7 @@ require_once __DIR__ . '/schemes.php';
 require_once __DIR__ . '/guides.php';
 require_once __DIR__ . '/staff_guides.php';
 require_once __DIR__ . '/placeholders.php';
+require_once __DIR__ . '/create_docs.php';
 require_once BASE_PATH . '/lib/branding.php';
 require_once BASE_PATH . '/lib/assisted_v2_normalize.php';
 require_once BASE_PATH . '/lib/field_resolver.php';

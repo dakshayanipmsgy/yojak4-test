@@ -145,6 +145,7 @@ function ensure_data_structure(): void
         DATA_PATH . '/logs/print.log',
         DATA_PATH . '/logs/contractor_profile.log',
         DATA_PATH . '/logs/templates.log',
+        DATA_PATH . '/logs/create_docs.log',
         DATA_PATH . '/logs/site.log',
         DATA_PATH . '/logs/suggestions.log',
         DATA_PATH . '/logs/scheme_runtime.log',
